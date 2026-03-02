@@ -130,7 +130,9 @@ const handleExplosion = (
                 if (z.type === 'HELLHOUND') {
                     ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
                 } else {
-                    ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, false);
+                    // For AoE, direction is from explosion center toward zombie (blast pushes outward)
+                    const blastDir = z.mesh.position.subtract(impactPoint).normalize();
+                    ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, false, undefined, blastDir);
                 }
                 // Bonus points for explosion kills
                 ctx.addPoints(ctx.hasDoublePoints() ? 60 : 30);
@@ -322,7 +324,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                                             ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
                                         } else {
                                             const headPos = z.headMesh ? z.headMesh.absolutePosition : undefined;
-                                            ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos);
+                                            ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos, p.direction);
                                         }
                                    }
                              }

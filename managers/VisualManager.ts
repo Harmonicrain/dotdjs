@@ -8,44 +8,6 @@ interface PooledSplatter {
     observer: BABYLON.Observer<BABYLON.Scene> | null;
 }
 
-/**
- * Configuration for explosion chunk effects
- */
-interface ExplosionChunkConfig {
-    count: number;
-    sizeMin: number;
-    sizeMax: number;
-    color: BABYLON.Color3;
-    emissiveColor: BABYLON.Color3;
-    velocitySpread: number;
-    upwardForce: number;
-    gravity: number;
-    materialName: string;
-}
-
-const ZOMBIE_CHUNK_CONFIG: ExplosionChunkConfig = {
-    count: 8,
-    sizeMin: 0.1,
-    sizeMax: 0.25,
-    color: new BABYLON.Color3(0.4, 0.1, 0.1),
-    emissiveColor: new BABYLON.Color3(0.1, 0.02, 0.02),
-    velocitySpread: 0.1,
-    upwardForce: 0.2,
-    gravity: -0.015,
-    materialName: "zombieResidueMat"
-};
-
-const HEAD_CHUNK_CONFIG: ExplosionChunkConfig = {
-    count: 6,
-    sizeMin: 0.05,
-    sizeMax: 0.15,
-    color: new BABYLON.Color3(0.5, 0.15, 0.1),
-    emissiveColor: new BABYLON.Color3(0.15, 0.04, 0.03),
-    velocitySpread: 0.15,
-    upwardForce: 0.25,
-    gravity: -0.02,
-    materialName: "headChunkMat"
-};
 
 export class VisualManager {
     private bloodPool: PooledSplatter[] = [];
@@ -59,8 +21,12 @@ export class VisualManager {
 
     public lights: BABYLON.PointLight[] = [];
 
-    // Zombie Residue
+    // Zombie Residue (kept for compatibility; no longer stores cube chunks)
     private zombieResidue: { meshes: BABYLON.AbstractMesh[], timestamp: number }[] = [];
+
+    // Floor gore pools (blood pools + scattered flesh bits that persist on the floor)
+    private floorGorePieces: BABYLON.Mesh[] = [];
+    private static readonly MAX_FLOOR_GORE = 60;
 
     // ── Explosion flash light pool ──────────────────────────────────────────
     // Pre-allocated pool avoids creating/disposing PointLights every shot
@@ -171,124 +137,255 @@ export class VisualManager {
     }
 
     /**
-     * Creates explosion chunks with physics simulation.
-     * Shared logic for zombie body and head explosions.
-     * Includes max-lifetime timeout (10s) to guarantee observer cleanup.
+     * Creates flat blood pool discs + scattered flesh bits on the floor at the given position.
+     * These persist for ~30 seconds before fading out, giving the impression of body remains.
      */
-    private createExplosionChunks(pos: BABYLON.Vector3, config: ExplosionChunkConfig): BABYLON.AbstractMesh[] {
-        const meshes: BABYLON.AbstractMesh[] = [];
-        const MAX_LIFETIME_MS = 10000; // 10 second safety timeout
-        const startTime = Date.now();
-        
-        const mat = this.resourceManager.getMaterial(config.materialName, () => {
-            const m = new BABYLON.StandardMaterial(config.materialName, this.scene);
-            m.diffuseColor = config.color.clone();
-            m.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-            m.emissiveColor = config.emissiveColor.clone();
-            m.maxSimultaneousLights = 4;
+    private createFloorGore(pos: BABYLON.Vector3): void {
+        // Find actual floor Y via downward ray
+        const floorRay = new BABYLON.Ray(
+            new BABYLON.Vector3(pos.x, pos.y + 0.5, pos.z),
+            new BABYLON.Vector3(0, -1, 0),
+            10
+        );
+        const floorPick = this.scene.pickWithRay(floorRay, (m) => m.checkCollisions && m.isEnabled());
+        const floorY = (floorPick && floorPick.hit && floorPick.pickedPoint)
+            ? floorPick.pickedPoint.y + 0.005
+            : 0.005;
+
+        // Shared material for all floor gore (transparency controlled per-mesh via visibility)
+        const mat = this.resourceManager.getMaterial("floorGoreMat", () => {
+            const m = new BABYLON.StandardMaterial("floorGoreMat", this.scene);
+            m.diffuseColor = new BABYLON.Color3(0.42, 0.0, 0.0);
+            m.specularColor = new BABYLON.Color3(0.02, 0, 0);
+            m.emissiveColor = new BABYLON.Color3(0.04, 0, 0);
+            m.backFaceCulling = false;
             return m;
         });
 
-        for (let i = 0; i < config.count; i++) {
-            const size = config.sizeMin + Math.random() * (config.sizeMax - config.sizeMin);
-            const chunk = BABYLON.MeshBuilder.CreateBox("chunk_" + i, { size }, this.scene);
-            chunk.material = mat;
-            chunk.position.copyFrom(pos);
-            chunk.position.y += 1.0; // Start from center of body
-            
-            // Random spread
-            chunk.position.x += (Math.random() - 0.5) * 0.5;
-            chunk.position.z += (Math.random() - 0.5) * 0.5;
-            chunk.rotation = new BABYLON.Vector3(
-                Math.random() * Math.PI,
-                Math.random() * Math.PI,
-                Math.random() * Math.PI
+        const pieces: BABYLON.Mesh[] = [];
+
+        // Main blood pool disc
+        const poolRadius = 0.4 + Math.random() * 0.45;
+        const pool = BABYLON.MeshBuilder.CreateDisc("gorePool", {
+            radius: poolRadius,
+            tessellation: 14
+        }, this.scene);
+        pool.material = mat;
+        pool.position.set(
+            pos.x + (Math.random() - 0.5) * 0.2,
+            floorY,
+            pos.z + (Math.random() - 0.5) * 0.2
+        );
+        pool.rotation.x = Math.PI / 2;
+        pool.rotation.y = Math.random() * Math.PI * 2;
+        pool.isPickable = false;
+        pool.visibility = 0.9;
+        pieces.push(pool);
+
+        // Scattered gore bits — irregular low-tessellation discs look like flesh chunks
+        const bitsCount = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < bitsCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 0.15 + Math.random() * poolRadius * 1.1;
+            const bitRadius = 0.05 + Math.random() * 0.12;
+            const bit = BABYLON.MeshBuilder.CreateDisc("goreBit_" + i, {
+                radius: bitRadius,
+                tessellation: 4 + Math.floor(Math.random() * 4) // 4-7 sides → irregular blobs
+            }, this.scene);
+            bit.material = mat;
+            bit.position.set(
+                pos.x + Math.cos(angle) * dist,
+                floorY,
+                pos.z + Math.sin(angle) * dist
             );
+            bit.rotation.x = Math.PI / 2;
+            bit.rotation.y = Math.random() * Math.PI * 2;
+            bit.isPickable = false;
+            bit.visibility = 0.85;
+            pieces.push(bit);
+        }
 
-            // Physics simulation
-            const velocity = new BABYLON.Vector3(
-                (Math.random() - 0.5) * config.velocitySpread,
-                config.upwardForce * (0.5 + Math.random()),
-                (Math.random() - 0.5) * config.velocitySpread
-            );
-            
-            const floorY = 0.05;
-            
-            const observer = this.scene.onBeforeRenderObservable.add(() => {
-                if (chunk.isDisposed()) {
-                    this.scene.onBeforeRenderObservable.remove(observer);
-                    return;
-                }
+        // Register pieces for cap-based cleanup
+        this.floorGorePieces.push(...pieces);
+        while (this.floorGorePieces.length > VisualManager.MAX_FLOOR_GORE) {
+            const old = this.floorGorePieces.shift();
+            if (old && !old.isDisposed()) old.dispose();
+        }
 
-                // Max lifetime safety check
-                if (Date.now() - startTime > MAX_LIFETIME_MS) {
-                    this.scene.onBeforeRenderObservable.remove(observer);
-                    return;
-                }
-
-                velocity.y += config.gravity;
-                chunk.position.addInPlace(velocity);
-                chunk.rotation.addInPlaceFromFloats(0.05, 0.05, 0.05);
-
-                // Floor collision
-                if (chunk.position.y <= floorY) {
-                    chunk.position.y = floorY;
-                    this.scene.onBeforeRenderObservable.remove(observer);
-                    chunk.rotation.x = 0;
-                    chunk.rotation.z = 0;
-                }
+        // Self-contained 30-second fade-out
+        const FADE_MS = 30000;
+        const startTime = Date.now();
+        const startVisibilities = pieces.map(p => p.visibility);
+        const fadeObserver = this.scene.onBeforeRenderObservable.add(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= FADE_MS) {
+                this.scene.onBeforeRenderObservable.remove(fadeObserver);
+                pieces.forEach(p => { if (!p.isDisposed()) p.dispose(); });
+                return;
+            }
+            const t = elapsed / FADE_MS;
+            pieces.forEach((p, idx) => {
+                if (!p.isDisposed()) p.visibility = startVisibilities[idx] * (1 - t);
             });
-
-            meshes.push(chunk);
-        }
-
-        return meshes;
+        });
     }
 
-    public createZombieExplosion(pos: BABYLON.Vector3) {
-        const meshes = this.createExplosionChunks(pos, ZOMBIE_CHUNK_CONFIG);
+    /**
+     * Full body-death explosion: directional blood burst, gore mist, heavy chunk arc,
+     * and a persistent blood pool + gore pile on the floor.
+     * @param hitDir The direction the killing projectile was traveling (optional).
+     */
+    public createZombieExplosion(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
+        const flare = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        // Emit from body center
+        const origin = new BABYLON.Vector3(pos.x, pos.y + 0.8, pos.z);
 
-        this.zombieResidue.push({ meshes, timestamp: Date.now() });
+        // Blood blasts in the direction opposite to bullet travel.
+        // If no direction given, default to a mild upward bias.
+        const bx = hitDir ? -hitDir.x : 0;
+        const by = hitDir ? Math.max(-hitDir.y + 0.8, 0.5) : 1.0;
+        const bz = hitDir ? -hitDir.z : 0;
 
-        // Cleanup old residue
-        if (this.zombieResidue.length > VISUAL_CONFIG.MAX_ZOMBIE_RESIDUE) {
-            const old = this.zombieResidue.shift();
-            if (old) {
-                old.meshes.forEach(m => m.dispose());
-            }
-        }
+        // ── 1. Large directional blood burst ────────────────────────────────
+        const burst = new BABYLON.ParticleSystem("zombieBurst", 60, this.scene);
+        burst.particleTexture = flare;
+        burst.emitter = origin;
+        burst.color1 = new BABYLON.Color4(0.9, 0.02, 0.02, 1);
+        burst.color2 = new BABYLON.Color4(0.6, 0.0, 0.0, 1);
+        burst.colorDead = new BABYLON.Color4(0.15, 0, 0, 0);
+        burst.minSize = 0.04; burst.maxSize = 0.18;
+        burst.minLifeTime = 0.25; burst.maxLifeTime = 0.65;
+        burst.emitRate = 900;
+        burst.targetStopDuration = 0.07;
+        burst.createSphereEmitter(0.15);
+        burst.direction1 = new BABYLON.Vector3(bx - 0.9, by - 0.3, bz - 0.9);
+        burst.direction2 = new BABYLON.Vector3(bx + 0.9, by + 1.2, bz + 0.9);
+        burst.minEmitPower = 7; burst.maxEmitPower = 15;
+        burst.gravity = new BABYLON.Vector3(0, -9.8, 0);
+        burst.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(burst);
+        burst.start();
+
+        // ── 2. Fine blood mist (omnidirectional haze) ───────────────────────
+        const mist = new BABYLON.ParticleSystem("zombieMist", 25, this.scene);
+        mist.particleTexture = flare;
+        mist.emitter = origin;
+        mist.color1 = new BABYLON.Color4(0.75, 0.0, 0.0, 0.9);
+        mist.color2 = new BABYLON.Color4(0.4, 0.0, 0.0, 0.6);
+        mist.colorDead = new BABYLON.Color4(0.1, 0, 0, 0);
+        mist.minSize = 0.02; mist.maxSize = 0.07;
+        mist.minLifeTime = 0.4; mist.maxLifeTime = 1.0;
+        mist.emitRate = 350;
+        mist.targetStopDuration = 0.07;
+        mist.createSphereEmitter(0.25);
+        mist.direction1 = new BABYLON.Vector3(-1, 0.5, -1);
+        mist.direction2 = new BABYLON.Vector3(1, 2.5, 1);
+        mist.minEmitPower = 2; mist.maxEmitPower = 5;
+        mist.gravity = new BABYLON.Vector3(0, -5, 0);
+        mist.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(mist);
+        mist.start();
+
+        // ── 3. Heavy gore chunks (large particles that arc and splat) ────────
+        const chunks = new BABYLON.ParticleSystem("zombieChunks", 10, this.scene);
+        chunks.particleTexture = flare;
+        chunks.emitter = origin;
+        chunks.color1 = new BABYLON.Color4(0.45, 0.05, 0.04, 1);
+        chunks.color2 = new BABYLON.Color4(0.28, 0.03, 0.02, 1);
+        chunks.colorDead = new BABYLON.Color4(0.18, 0.02, 0.01, 0.4);
+        chunks.minSize = 0.12; chunks.maxSize = 0.28;
+        chunks.minLifeTime = 0.6; chunks.maxLifeTime = 1.5;
+        chunks.emitRate = 160;
+        chunks.targetStopDuration = 0.06;
+        chunks.createSphereEmitter(0.2);
+        chunks.direction1 = new BABYLON.Vector3(bx - 1.5, by + 0.5, bz - 1.5);
+        chunks.direction2 = new BABYLON.Vector3(bx + 1.5, by + 3.0, bz + 1.5);
+        chunks.minEmitPower = 5; chunks.maxEmitPower = 11;
+        chunks.gravity = new BABYLON.Vector3(0, -15, 0);
+        chunks.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(chunks);
+        chunks.start();
+
+        // ── 4. Persistent floor blood pool + gore pile ───────────────────────
+        this.createFloorGore(pos);
     }
 
-    public createHeadExplosion(pos: BABYLON.Vector3) {
-        const meshes = this.createExplosionChunks(pos, HEAD_CHUNK_CONFIG);
+    /**
+     * Headshot explosion: intense upward burst, brain-matter chunks, fine mist,
+     * and a floor blood pool.
+     * @param hitDir The direction the killing projectile was traveling (optional).
+     */
+    public createHeadExplosion(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
+        const flare = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        const origin = new BABYLON.Vector3(pos.x, pos.y, pos.z);
 
-        this.zombieResidue.push({ meshes, timestamp: Date.now() });
+        // Headshots have a strong upward bias
+        const bx = hitDir ? -hitDir.x : 0;
+        const by = hitDir ? Math.max(-hitDir.y + 1.2, 1.0) : 1.5;
+        const bz = hitDir ? -hitDir.z : 0;
 
-        if (this.zombieResidue.length > VISUAL_CONFIG.MAX_ZOMBIE_RESIDUE) {
-            const old = this.zombieResidue.shift();
-            if (old) {
-                old.meshes.forEach(m => m.dispose());
-            }
-        }
+        // ── 1. Primary head burst (upward + directional) ─────────────────────
+        const burst = new BABYLON.ParticleSystem("headBurst", 50, this.scene);
+        burst.particleTexture = flare;
+        burst.emitter = origin;
+        burst.color1 = new BABYLON.Color4(0.95, 0.02, 0.02, 1);
+        burst.color2 = new BABYLON.Color4(0.65, 0.0, 0.0, 1);
+        burst.colorDead = new BABYLON.Color4(0.12, 0, 0, 0);
+        burst.minSize = 0.03; burst.maxSize = 0.14;
+        burst.minLifeTime = 0.25; burst.maxLifeTime = 0.6;
+        burst.emitRate = 800;
+        burst.targetStopDuration = 0.06;
+        burst.createSphereEmitter(0.12);
+        burst.direction1 = new BABYLON.Vector3(bx - 0.7, by, bz - 0.7);
+        burst.direction2 = new BABYLON.Vector3(bx + 0.7, by + 1.5, bz + 0.7);
+        burst.minEmitPower = 8; burst.maxEmitPower = 18;
+        burst.gravity = new BABYLON.Vector3(0, -9.8, 0);
+        burst.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(burst);
+        burst.start();
 
-        // Blood spray particles
-        const ps = new BABYLON.ParticleSystem("headBloodPS", 30, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        ps.emitter = pos;
-        ps.color1 = new BABYLON.Color4(0.8, 0.1, 0.1, 1);
-        ps.color2 = new BABYLON.Color4(0.4, 0.05, 0.05, 1);
-        ps.colorDead = new BABYLON.Color4(0.1, 0, 0, 0);
-        ps.minSize = 0.05; ps.maxSize = 0.15;
-        ps.minLifeTime = 0.3; ps.maxLifeTime = 0.6;
-        ps.emitRate = 200;
-        ps.targetStopDuration = 0.1;
-        ps.createSphereEmitter(0.15);
-        ps.direction1 = new BABYLON.Vector3(-1, 1, -1);
-        ps.direction2 = new BABYLON.Vector3(1, 2, 1);
-        ps.minEmitPower = 3; ps.maxEmitPower = 6;
-        ps.gravity = new BABYLON.Vector3(0, -5, 0);
-        this.setupSafeAutoDispose(ps);
-        ps.start();
+        // ── 2. Dark brain-matter chunks ───────────────────────────────────────
+        const brain = new BABYLON.ParticleSystem("headBrain", 8, this.scene);
+        brain.particleTexture = flare;
+        brain.emitter = origin;
+        brain.color1 = new BABYLON.Color4(0.5, 0.05, 0.05, 1);
+        brain.color2 = new BABYLON.Color4(0.32, 0.02, 0.02, 1);
+        brain.colorDead = new BABYLON.Color4(0.18, 0.01, 0.01, 0.3);
+        brain.minSize = 0.08; brain.maxSize = 0.2;
+        brain.minLifeTime = 0.5; brain.maxLifeTime = 1.2;
+        brain.emitRate = 140;
+        brain.targetStopDuration = 0.06;
+        brain.createSphereEmitter(0.1);
+        brain.direction1 = new BABYLON.Vector3(bx - 2, by + 0.5, bz - 2);
+        brain.direction2 = new BABYLON.Vector3(bx + 2, by + 4, bz + 2);
+        brain.minEmitPower = 5; brain.maxEmitPower = 13;
+        brain.gravity = new BABYLON.Vector3(0, -14, 0);
+        brain.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(brain);
+        brain.start();
+
+        // ── 3. Fine blood mist ────────────────────────────────────────────────
+        const mist = new BABYLON.ParticleSystem("headMist", 20, this.scene);
+        mist.particleTexture = flare;
+        mist.emitter = origin;
+        mist.color1 = new BABYLON.Color4(0.8, 0.0, 0.0, 0.85);
+        mist.color2 = new BABYLON.Color4(0.45, 0.0, 0.0, 0.55);
+        mist.colorDead = new BABYLON.Color4(0.1, 0, 0, 0);
+        mist.minSize = 0.015; mist.maxSize = 0.055;
+        mist.minLifeTime = 0.35; mist.maxLifeTime = 0.9;
+        mist.emitRate = 300;
+        mist.targetStopDuration = 0.07;
+        mist.createSphereEmitter(0.18);
+        mist.direction1 = new BABYLON.Vector3(-1.2, 1.0, -1.2);
+        mist.direction2 = new BABYLON.Vector3(1.2, 3.5, 1.2);
+        mist.minEmitPower = 3; mist.maxEmitPower = 8;
+        mist.gravity = new BABYLON.Vector3(0, -6, 0);
+        mist.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+        this.setupSafeAutoDispose(mist);
+        mist.start();
+
+        // ── 4. Floor blood pool ───────────────────────────────────────────────
+        this.createFloorGore(pos);
     }
 
     private initDecalMaterial() {
@@ -599,9 +696,12 @@ export class VisualManager {
     public reset() {
         this.activeDecals.forEach(d => d.dispose());
         this.activeDecals = [];
-        
+
         this.zombieResidue.forEach(r => r.meshes.forEach(m => m.dispose()));
         this.zombieResidue = [];
+
+        this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+        this.floorGorePieces = [];
         
         this.flashLightPool.forEach(l => l.intensity = 0);
         this.flashLightFadeStart.fill(0);
@@ -648,7 +748,10 @@ export class VisualManager {
             ps.dispose(false);
         }
         this.explosionPSPool = [];
-        
+
+        this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+        this.floorGorePieces = [];
+
         this.bloodPool = [];
         this.lights = [];
     }
