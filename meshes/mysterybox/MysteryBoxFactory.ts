@@ -121,7 +121,12 @@ export const createMysteryBox = (scene: BABYLON.Scene) => {
     trigger.parent = root; trigger.position.y = 1; trigger.visibility = 0; trigger.checkCollisions = false;
 
     WEAPON_CONFIGS.forEach((w, i) => {
-        const wm = createWorldWeapon(scene, w.id, weaponAnchor);
+        // GLB weapons use _world transforms designed for flat ground pickup (rotation.x = π/2).
+        // For box display they must be upright — override rotation only.
+        let displayOverride: { rotation: [number, number, number] } | undefined;
+        if (w.id === 'pistol')    displayOverride = { rotation: [0, Math.PI / 2, 0] };
+        else if (w.id === 'ray_gun') displayOverride = { rotation: [0, Math.PI, 0] };
+        const wm = createWorldWeapon(scene, w.id, weaponAnchor, displayOverride);
         wm.setEnabled(false); wm.name = `box_weapon_${i}`; wm.scaling = new BABYLON.Vector3(2, 2, 2); wm.rotation.y = Math.PI / 2;
     });
     

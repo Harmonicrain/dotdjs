@@ -159,7 +159,11 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
 
         let animMesh: BABYLON.TransformNode | null = null;
         if (scene) {
-            animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode);
+            // GLB weapons need upright orientation for PAP display; _world transforms are for ground pickup
+            let papOverride: { rotation: [number, number, number] } | undefined;
+            if (weapon.id === 'pistol')    papOverride = { rotation: [0, Math.PI / 2, 0] };
+            else if (weapon.id === 'ray_gun') papOverride = { rotation: [0, Math.PI, 0] };
+            animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode, papOverride);
             animMesh.parent = null;
             animMesh.position.copyFrom(anchorPos).addInPlace(_tempPapVec);
             if (anchorNode) {
