@@ -31,8 +31,8 @@ export class ZombieManager {
         private camera: BABYLON.UniversalCamera,
         private getZone: (pos: BABYLON.Vector3) => number,
         private createSpawnEffect: (pos: BABYLON.Vector3) => void,
-        private createExplosion: (pos: BABYLON.Vector3) => void,
-        private createHeadExplosion: ((pos: BABYLON.Vector3) => void) | null = null,
+        private createExplosion: (pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3) => void,
+        private createHeadExplosion: ((pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3) => void) | null = null,
         private getRemotePlayerPos: () => BABYLON.Vector3 | null,
         private isConnected: () => boolean,
         private zoneSystem: ZoneSystem,
@@ -90,7 +90,7 @@ export class ZombieManager {
         });
     }
 
-    public onZombieDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST', isHeadshot: boolean = false, headPos?: BABYLON.Vector3) {
+    public onZombieDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST', isHeadshot: boolean = false, headPos?: BABYLON.Vector3, hitDir?: BABYLON.Vector3) {
          if (z.isDead) return;
          z.isDead = true;
          this.gameState.zombiesAlive--;
@@ -108,9 +108,9 @@ export class ZombieManager {
          this.eventBus.emit('ZOMBIE_DEATH', { id: z.id, position: pos });
          
          if (isHeadshot && headPos && z.type === 'ZOMBIE' && this.createHeadExplosion) {
-             this.createHeadExplosion(headPos);
+             this.createHeadExplosion(headPos, hitDir);
          } else {
-             this.createExplosion(pos);
+             this.createExplosion(pos, hitDir);
          }
 
         if (this.spawnPowerUpCallback && Math.random() < this.configManager.powerUps.DROP_CHANCE) {
