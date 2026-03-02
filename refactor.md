@@ -184,7 +184,7 @@ Also, the `getPreviewProps()` switch at lines ~428-510 (82 lines) should be repl
 
 The repeated position-update code at lines ~607-621 should be extracted to `updateEntityPosition(entity)`.
 
-### 14. Pathfinder.ts - Inefficient Linear Open List Search
+### 14. Pathfinder.ts - Inefficient Linear Open List Search ✅ DONE
 **File:** `engine/Pathfinder.ts` (lines ~48-53)
 
 The A* open list uses linear search to find the minimum f-value node (O(n) per iteration). Replace with a binary heap / priority queue for O(log n) performance.
