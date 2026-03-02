@@ -55,7 +55,7 @@ export const WarehouseMapDefinition: MapDefinition = {
             { id: "window_3", zone: 3, pos: [20, 0, 9], rotation: Math.PI / 2 }
         ],
         perks: [
-            { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 35], rotation: Math.PI },
+            { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 39], rotation: Math.PI },
             { type: "speed_cola", id: "speedCola", zone: 3, pos: [28, 0, 2], rotation: -Math.PI / 2 },
             { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-3, 0, -28.9], rotation: 0 }
         ],
