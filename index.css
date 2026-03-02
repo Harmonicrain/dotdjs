@@ -1,0 +1,729 @@
+/* ============================================
+   DOM OF THE DEAD - AAA HUD Animations
+   ============================================ */
+
+/* Base resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ============================================
+   KEYFRAME ANIMATIONS
+   ============================================ */
+
+/* Point float animation */
+@keyframes pointFloat {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.8);
+  }
+}
+
+/* Perk icon pulse */
+@keyframes perkPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+  }
+}
+
+/* Health flash fade */
+@keyframes flashFade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Round tally appearance */
+@keyframes tallyAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Round reveal animation */
+@keyframes roundReveal {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Fade in and out */
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Scale in animation */
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Slide up animation */
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Power up appearance */
+@keyframes powerUpAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-10deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Pulse glow */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+/* Glitch effects */
+@keyframes glitchLeft {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes glitchRight {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(3px);
+  }
+  40% {
+    transform: translateX(-2px);
+  }
+  60% {
+    transform: translateX(2px);
+  }
+  80% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes glitchText {
+  0%, 100% {
+    text-shadow: 0 8px 0 rgba(0,0,0,0.8), 0 0 100px rgba(127,29,29,0.3);
+  }
+  25% {
+    text-shadow: -3px 8px 0 rgba(0,255,255,0.3), 3px 8px 0 rgba(255,0,0,0.3), 0 0 100px rgba(127,29,29,0.3);
+  }
+  50% {
+    text-shadow: 3px 8px 0 rgba(0,255,255,0.3), -3px 8px 0 rgba(255,0,0,0.3), 0 0 100px rgba(127,29,29,0.3);
+  }
+  75% {
+    text-shadow: -2px 8px 0 rgba(0,255,255,0.3), 2px 8px 0 rgba(255,0,0,0.3), 0 0 100px rgba(127,29,29,0.3);
+  }
+}
+
+/* Title reveal */
+@keyframes titleReveal {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+    filter: blur(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Fade slide up */
+@keyframes fadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stat slide in */
+@keyframes statSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Card slide in */
+@keyframes cardSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Blood drip animation */
+@keyframes bloodDrip {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+/* Float particle */
+@keyframes floatParticle {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-10px) translateX(-10px);
+    opacity: 0.3;
+  }
+  75% {
+    transform: translateY(-30px) translateX(5px);
+    opacity: 0.5;
+  }
+}
+
+/* Hit marker pop */
+@keyframes hitMarkerPop {
+  0% {
+    opacity: 1;
+    transform: scale(0.5);
+  }
+  30% {
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* Critical pulse for downed state */
+@keyframes criticalPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Scan lines */
+@keyframes scanLines {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(4px);
+  }
+}
+
+/* Heartbeat ring */
+@keyframes heartbeatRing {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* Shake animation */
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  80% {
+    transform: translateX(1px);
+  }
+}
+
+/* Loading dot */
+@keyframes loadingDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Edge flash */
+@keyframes edgeFlash {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Flash animation */
+@keyframes flash {
+  0% {
+    opacity: 1;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* Spin animation */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Scan line animation */
+@keyframes scanLine {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+/* Ping animation */
+@keyframes ping {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ============================================
+   MAIN MENU ANIMATIONS
+   ============================================ */
+
+/* Drift animation for fog */
+@keyframes drift {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(5%, 3%) rotate(2deg);
+  }
+}
+
+@keyframes drift-slow {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-3%, -2%) rotate(-1deg);
+  }
+}
+
+/* Drip animation for blood effect */
+@keyframes drip {
+  0% {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  50% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+
+/* Expand animations */
+@keyframes expand-right {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  100% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+@keyframes expand-left {
+  0% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+}
+
+/* Title glow animation */
+@keyframes title-glow {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 20px rgba(139, 0, 0, 0.4));
+  }
+  50% {
+    filter: brightness(1.1) drop-shadow(0 0 40px rgba(139, 0, 0, 0.6));
+  }
+}
+
+/* Subtitle flicker */
+@keyframes subtitle-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.8;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.9;
+  }
+  97% {
+    opacity: 1;
+  }
+}
+
+/* Scan line scroll */
+@keyframes scanline {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(3px);
+  }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Animation classes */
+.animate-drift {
+  animation: drift 20s ease-in-out infinite;
+}
+
+.animate-drift-slow {
+  animation: drift-slow 30s ease-in-out infinite;
+}
+
+.animate-drip {
+  animation: drip 4s ease-in-out infinite;
+}
+
+.animate-expand-right {
+  animation: expand-right 1s ease-out forwards;
+}
+
+.animate-expand-left {
+  animation: expand-left 1s ease-out forwards;
+}
+
+.animate-title-glow {
+  animation: title-glow 3s ease-in-out infinite;
+}
+
+.animate-subtitle-flicker {
+  animation: subtitle-flicker 5s ease-in-out infinite;
+}
+
+.animate-scanline {
+  animation: scanline 0.5s linear infinite;
+}
+
+/* HUD point float class (referenced in original code) */
+.hud-point-float {
+  animation: pointFloat 1.5s ease-out forwards;
+}
+
+/* Gradient radial utility */
+.bg-gradient-radial {
+  background: radial-gradient(ellipse at center, var(--tw-gradient-stops));
+}
+
+/* Conic gradient utility */
+.bg-gradient-conic {
+  background: conic-gradient(var(--tw-gradient-stops));
+}
+
+/* Text stroke utility for outlined text */
+.text-stroke {
+  -webkit-text-stroke: 1px currentColor;
+  text-stroke: 1px currentColor;
+}
+
+/* ============================================
+   CUSTOM SCROLLBAR (for menus)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 100, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 150, 0.5);
+}
+
+/* ============================================
+   FONT IMPORTS (for distinctive typography)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* Apply military/tactical fonts */
+.font-display {
+  font-family: 'Bebas Neue', 'Oswald', sans-serif;
+}
+
+.font-tactical {
+  font-family: 'Oswald', sans-serif;
+}
+
+.font-mono {
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+}
+
+/* ============================================
+   ADDITIONAL EFFECTS
+   ============================================ */
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Neon glow text */
+.neon-red {
+  text-shadow: 
+    0 0 5px rgba(220, 38, 38, 0.8),
+    0 0 10px rgba(220, 38, 38, 0.6),
+    0 0 20px rgba(220, 38, 38, 0.4),
+    0 0 40px rgba(220, 38, 38, 0.2);
+}
+
+/* Blood splatter effect (for backgrounds) */
+.blood-splatter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(127, 29, 29, 0.3) 0%, transparent 20%),
+    radial-gradient(circle at 70% 80%, rgba(127, 29, 29, 0.2) 0%, transparent 15%),
+    radial-gradient(circle at 90% 20%, rgba(127, 29, 29, 0.25) 0%, transparent 18%);
+  pointer-events: none;
+}
+
+/* Kill feed slide animation */
+@keyframes killFeedSlide {
+  0% {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Combo counter pulse */
+@keyframes comboPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Hit indicator animation */
+@keyframes hitIndicator {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0) scaleX(0.5);
+  }
+}
+
+/* Kill marker pop animation */
+@keyframes killMarkerPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3) rotate(-20deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5) rotate(0deg);
+  }
+}
+

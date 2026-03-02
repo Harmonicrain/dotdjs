@@ -1,0 +1,5 @@
+{
+  "name": "DOM OF THE DEAD",
+  "description": "A Babylon.js FPS prototype with enhanced atmospheric lighting, grunge textures, and post-processing to mimic the aesthetic of classic zombie survival games.",
+  "requestFramePermissions": []
+}

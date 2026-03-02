@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOM OF THE DEAD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+      /* Hide scrollbar for game immersion */
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #000;
+        user-select: none;
+      }
+      canvas {
+        outline: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@babylonjs/core": "https://esm.sh/@babylonjs/core@^8.50.2",
+    "@babylonjs/addons": "https://esm.sh/@babylonjs/addons@^8.50.2",
+    "@recast-navigation/core": "https://esm.sh/@recast-navigation/core@^1.0.0",
+    "@recast-navigation/generators": "https://esm.sh/@recast-navigation/generators@^1.0.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "path": "https://esm.sh/path@^0.12.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "@babylonjs/loaders": "https://esm.sh/@babylonjs/loaders@^8.50.2",
+    "@babylonjs/loaders/": "https://esm.sh/@babylonjs/loaders@^8.50.2/",
+    "zustand": "https://esm.sh/zustand@^5.0.11"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

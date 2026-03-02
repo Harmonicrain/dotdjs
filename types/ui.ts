@@ -1,0 +1,259 @@
+
+import React from 'react';
+import * as BABYLON from '@babylonjs/core';
+import type { GameEngine } from '../game/GameEngine';
+import type { InputManager } from '../engine/InputManager';
+import type { StateManager } from '../state/StateManager'; 
+import { WeaponState, RemoteGameState } from './player';
+import { MysteryBox, InteractableType, DoorState, WindowBarrierState } from './world';
+import { MysteryBoxSystem, RemotePlayerVisuals } from './systems';
+
+export enum PowerUpType {
+    MAX_AMMO = 'MAX_AMMO',
+    INSTA_KILL = 'INSTA_KILL',
+    DOUBLE_POINTS = 'DOUBLE_POINTS',
+    NUKE = 'NUKE',
+    CARPENTER = 'CARPENTER'
+}
+
+export type PowerUp = {
+    id: string;
+    type: PowerUpType;
+    mesh: BABYLON.TransformNode;
+    position: BABYLON.Vector3;
+    spawnTime: number;
+    isCollected: boolean;
+};
+
+export interface PendingPowerUp {
+    id: string;
+    type: PowerUpType;
+    position: BABYLON.Vector3;
+    spawnTime: number;
+}
+
+// --- LOGICAL STATE SLICES ---
+
+export interface GameFlowState {
+    hasStarted: boolean;
+    isPaused: boolean;
+    isDebugMode?: boolean;
+    isConsoleOpen?: boolean;
+    isGodMode?: boolean;
+    isNoclip?: boolean;
+    startTime: number;
+    isSpectating: boolean;
+    isGameOver: boolean;
+    currentMapId: string;
+}
+
+export interface RoundState {
+    round: number;
+    zombiesToSpawn: number;
+    zombiesSpawned: number;
+    zombiesAlive: number;
+    zombiesKilledInRound: number;
+    totalZombiesInRound: number;
+    lastSpawnTime: number;
+    nextRoundTime: number;
+    isIntermission: boolean;
+    isDogRound: boolean;
+    dogRoundStarted?: boolean;
+    dogRoundStartTime?: number;
+    dogRoundNumber?: number; // Total dog rounds occurred so far
+}
+
+export interface PlayerState {
+    points: number;
+    totalEarnedPoints: number;
+    health: number;
+    maxHealth: number;
+    weapons: WeaponState[];
+    activeWeaponIndex: number;
+    
+    isReloading: boolean;
+    isFiring: boolean;
+    isAiming: boolean;
+    isKnifing: boolean;
+    lastShotTime: number;
+    isPackAPunching: boolean;
+    weaponFiredThisTriggerPull: boolean; 
+    
+    kills: number;
+    shots: number;
+    
+    lastDamageTime: number;
+    lastRegenTime: number;
+    
+    // Perks (Generic System - State tracking)
+    perkStates: Record<string, boolean>;
+    
+    isDowned: boolean;
+    downedStartTime: number;
+    downedTimeLimit: number;
+    isBeingRevived: boolean;
+    isRevivingTeammate: boolean;
+    reviveProgress: number; 
+    quickRevivesRemaining: number;
+
+    playerName: string;
+}
+
+export interface PhysicsState {
+    isGrounded: boolean;
+    verticalVelocity: number;
+    currentVelocity: BABYLON.Vector3;
+    /** External force applied by other systems (e.g., knockback). Applied and decayed by PlayerMovementSystem. */
+    externalForce: BABYLON.Vector3;
+}
+
+export interface WorldState {
+    // Detailed states
+    doorStates: Record<string, DoorState>;
+    windowBarriers: Record<string, WindowBarrierState>;
+    perkStates: Record<string, boolean>;
+    interactableStates: Record<string, boolean>;
+    powerOn: boolean;
+    
+    accumulatedDropPoints: number;
+    nextDropThreshold: number;
+    lastDeathPos: BABYLON.Vector3 | null;
+    activePowerUps: Partial<Record<PowerUpType, number>>;
+    repairPointsRound: number;
+    lastRepairTime: number;
+    
+    powerUps: PowerUp[];
+    pendingPowerUps: PendingPowerUp[];
+}
+
+export interface AssetsState {
+    weaponMeshes: { [key: string]: BABYLON.TransformNode };
+    knifeMesh: BABYLON.AbstractMesh | null;
+}
+
+export type GameStateData = GameFlowState & RoundState & PlayerState & PhysicsState & WorldState & AssetsState;
+
+export interface GameContext {
+    scene: React.MutableRefObject<BABYLON.Scene | null>;
+    camera: React.MutableRefObject<BABYLON.UniversalCamera | null>;
+    gameEngine: React.MutableRefObject<GameEngine | null>;
+    
+    stateManager: React.MutableRefObject<StateManager | null>;
+
+    mysteryBoxSystem: React.MutableRefObject<MysteryBoxSystem | null>;
+    inputManager: React.MutableRefObject<InputManager | null>;
+    
+    gameMode: React.MutableRefObject<string>;
+    connectionStatus: React.MutableRefObject<string>;
+    navPlugin: React.MutableRefObject<BABYLON.RecastJSPlugin | undefined>;
+    
+    remotePlayer: {
+        visual: React.MutableRefObject<RemotePlayerVisuals | null>;
+        name: React.MutableRefObject<string>;
+        weaponId: React.MutableRefObject<string>;
+    };
+
+    map: {
+        powerDoor: React.MutableRefObject<BABYLON.Mesh | null>;
+        powerSwitch: React.MutableRefObject<BABYLON.TransformNode | null>;
+        powerDoorObserver: React.MutableRefObject<BABYLON.Observer<BABYLON.Scene> | null>;
+    };
+}
+
+export interface ZombieSyncData {
+    id: string;
+    type?: string;
+    x: number;
+    y: number;
+    z: number;
+    rot: number;
+    isBurning?: boolean;
+}
+
+export type GameMessage = 
+    | { type: 'READY'; name: string }
+    | { type: 'START_GAME'; mapId: string }
+    | { type: 'PING' }
+    | { 
+        type: 'STATE';
+        /** Monotonic sequence number for gap detection. */
+        _seq: number;
+        /** Present and true on full snapshots; absent on delta packets. */
+        _full?: boolean;
+        // All payload fields optional – absent means "unchanged since last full sync".
+        doors?: Record<string, DoorState>;
+        hostPos?: { x: number; y: number; z: number; rot: number; pitch: number };
+        activeWeaponIndex?: number;
+        activeWeaponId?: string;
+        hostHealth?: number;
+        hostPoints?: number;
+        hostTotalEarned?: number;
+        hostName?: string;
+        hostPerks?: Record<string, boolean>;
+        hostIsDowned?: boolean;
+        hostKills?: number;
+        hostShots?: number;
+        /** Only zombies that moved or are new since the last tick. */
+        zombies?: ZombieSyncData[];
+        /** IDs of zombies that have died since the last tick. */
+        removedZombieIds?: string[];
+        windowStates?: Record<string, number>;
+        activeZombiesCount?: number;
+        totalRoundZombies?: number;
+        round?: number;
+        powerOn?: boolean;
+        isDogRound?: boolean;
+        zombiesSpawned?: number;
+        zombiesKilledInRound?: number;
+        activePowerUps?: PowerUpType[];
+        mysteryBox?: {
+            state: number;
+            locIndex: number;
+            lidAngle: number;
+            weaponId: string | null;
+            rollIndex: number;
+            owner: string | null;
+        };
+      }
+    | {
+        type: 'INPUT';
+        /** Monotonic sequence number for gap detection. */
+        _seq: number;
+        /** Present and true on full snapshots; absent on delta packets. */
+        _full?: boolean;
+        // All payload fields optional – absent means "unchanged since last full sync".
+        pos?: { x: number; y: number; z: number; rot: number; pitch: number };
+        activeWeaponIndex?: number;
+        activeWeaponId?: string;
+        clientHealth?: number;
+        clientPoints?: number;
+        clientTotalEarned?: number;
+        clientPerks?: Record<string, boolean>;
+        clientIsDowned?: boolean;
+        clientName?: string;
+        clientKills?: number;
+        clientShots?: number;
+    }
+    | { 
+        type: 'SHOOT'; 
+        origin: { x: number; y: number; z: number }; 
+        dir: { x: number; y: number; z: number };
+        isPacked?: boolean;
+        isExplosive?: boolean;
+        damage: number; 
+      }
+    | { type: 'INTERACT_DOOR'; doorId: string } 
+    | { type: 'INTERACT_POWER' }
+    | { type: 'INTERACT_WINDOW'; targetId: string }
+    | { type: 'SPAWN_POWERUP'; id: string; pType: PowerUpType; x: number; y: number; z: number }
+    | { type: 'ACTIVATE_POWERUP_EFFECT'; pType: PowerUpType }
+    | { type: 'INTERACT_BOX' }
+    | { type: 'INTERACT_BOX_START'; playerName: string }
+    | { type: 'INTERACT_BOX_TAKE'; playerName: string }
+    | { type: 'HIT_CONFIRM'; amount: number }
+    | { type: 'RESPAWN'; round: number; points: number }
+    | { type: 'PLAYER_DOWNED'; playerName: string; position: { x: number; y: number; z: number } }
+    | { type: 'REVIVE_START'; revivorName: string; downedPlayerName: string }
+    | { type: 'REVIVE_CANCEL'; revivorName: string }
+    | { type: 'REVIVE_COMPLETE'; revivorName: string; downedPlayerName: string }
+    | { type: 'SELF_REVIVE'; playerName: string };

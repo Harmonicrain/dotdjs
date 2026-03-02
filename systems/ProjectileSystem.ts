@@ -1,0 +1,370 @@
+import * as BABYLON from '@babylonjs/core';
+import { GameMessage, PowerUpType, GameStateData, Zombie, Projectile, HellhoundState } from '../types/index';
+import { EventBus } from '../engine/EventBus';
+import { System } from '../types/systems';
+import { COMBAT_CONFIG } from '../config';
+import { TimerManager } from '../engine/TimerManager';
+import { GameEngine } from '../game/GameEngine';
+import { VisualManager } from '../managers/VisualManager';
+import { ZombieManager } from '../managers/ZombieManager';
+import { HellhoundManager } from '../managers/HellhoundManager';
+import { MapConfigManager } from '../managers/MapConfigManager';
+
+export interface IProjectileContext {
+    gameState: GameStateData;
+    scene: BABYLON.Scene;
+    camera: BABYLON.UniversalCamera;
+    gameEngine: GameEngine;
+    timerManager: TimerManager;
+    visualManager: VisualManager;
+    zombieManager: ZombieManager;
+    hellhoundManager: HellhoundManager;
+    eventBus: EventBus;
+    zombies: Zombie[];
+    gameModeRef: { current: string };
+    configManager: MapConfigManager;
+    staticLevelMeshes: Set<BABYLON.AbstractMesh>;
+    debugSelection: {
+        isActive: boolean;
+        selectedMesh: BABYLON.AbstractMesh | null;
+    };
+    send(data: GameMessage): void;
+    addPoints(amount: number): void;
+    hasDoublePoints(): boolean;
+    setDebugInfo(v: any): void;
+    setFlashColor(v: string | null): void;
+    setHealth(v: number): void;
+    setIsDowned(v: boolean): void;
+    setIsGameOver(v: boolean): void;
+}
+
+const COLOR_FLASH_NORMAL = new BABYLON.Color3(1, 0.9, 0.6);
+const COLOR_FLASH_PACKED = new BABYLON.Color3(0.5, 0, 1);
+
+// ── Scratch objects reused every frame to avoid per-projectile allocations ──
+const _rayStart = new BABYLON.Vector3();
+const _scaledDir = new BABYLON.Vector3();
+const _moveStep = new BABYLON.Vector3();
+const _negDir = new BABYLON.Vector3();
+const _reusableRay = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Up(), 1);
+
+/**
+ * Handle explosive projectile impact - deals AoE damage to all nearby zombies
+ */
+const handleExplosion = (
+    impactPoint: BABYLON.Vector3,
+    splashRadius: number,
+    splashDamage: number,
+    selfDamageMultiplier: number | undefined,
+    ctx: IProjectileContext,
+    p: Projectile
+) => {
+    const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
+    if (!isAuthority) return;
+
+    const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
+    const playerPos = ctx.camera.position;
+
+    // Check distance from explosion to player for self-damage
+    const distToPlayer = BABYLON.Vector3.Distance(impactPoint, playerPos);
+    if (distToPlayer < splashRadius) {
+        const damageRatio = 1 - (distToPlayer / splashRadius);
+        const gc = ctx.configManager.gameplay;
+        const rawSelfDamage = splashDamage * (selfDamageMultiplier ?? 0.5) * damageRatio;
+        const selfDamage = Math.min(rawSelfDamage, gc.ZOMBIE_DAMAGE);
+        if (selfDamage > 0 && !ctx.gameState.isGodMode) {
+            ctx.gameState.lastDamageTime = Date.now();
+            ctx.gameState.health = Math.max(0, ctx.gameState.health - selfDamage);
+            ctx.setHealth(ctx.gameState.health);
+            ctx.setFlashColor("rgba(255, 100, 0, 0.5)");
+            ctx.timerManager.schedule('explosion_flash', 100, () => {
+                ctx.setFlashColor(null);
+            });
+
+            if (ctx.gameState.health <= 0 && !ctx.gameState.isDowned) {
+                const isSolo = ctx.gameModeRef.current === 'SOLO';
+                const hasQuickRevive = ctx.gameState.perkStates['quickRevive'];
+
+                if (isSolo && !hasQuickRevive) {
+                    ctx.setHealth(0);
+                    ctx.setIsGameOver(true);
+                } else {
+                    ctx.gameState.isDowned = true;
+                    ctx.gameState.downedStartTime = Date.now();
+                    ctx.gameState.downedTimeLimit = gc.DOWNED_BLEED_OUT_TIME;
+                    ctx.setIsDowned(true);
+                    if (!isSolo) {
+                        ctx.send({ 
+                            type: 'PLAYER_DOWNED', 
+                            playerName: ctx.gameState.playerName || "Survivor",
+                            position: { x: playerPos.x, y: playerPos.y, z: playerPos.z }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Damage all zombies in radius
+    for (const z of ctx.zombies) {
+        if (z.isDead) continue;
+
+        const dist = BABYLON.Vector3.Distance(impactPoint, z.mesh.position);
+        if (dist <= splashRadius) {
+            // Linear falloff - max damage at center, minimum at edge
+            const damageRatio = 1 - (dist / splashRadius);
+            const finalDamage = isInstaKill ? z.maxHealth : (splashDamage * damageRatio);
+            
+            z.lastHitTime = Date.now();
+            z.health -= finalDamage;
+
+            // Check for crawler creation (leg damage from explosion)
+            if (dist > splashRadius * 0.3 && !z.isCrawling && z.type === 'ZOMBIE') {
+                if (finalDamage > 40 || z.health < 40) {
+                    z.isCrawling = true;
+                    z.speed = 0.015;
+                }
+            }
+
+            if (z.health <= 0 && !z.isDead) {
+                if (z.type === 'HELLHOUND') {
+                    ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
+                } else {
+                    ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, false);
+                }
+                // Bonus points for explosion kills
+                ctx.addPoints(ctx.hasDoublePoints() ? 60 : 30);
+            }
+        }
+    }
+};
+
+/**
+ * ProjectileSystem
+ *
+ * Handles projectile movement, collision detection with zombies, and 
+ * remote shoot event synchronization.
+ */
+export const createProjectileSystem = (ctx: IProjectileContext): System => {
+    // Reusable set — cleared each frame instead of re-allocated
+    const hitsProcessed = new Set<string>();
+    
+    // Subscribe to Remote Shoot Events once during setup
+    const handleRemoteShoot = (msg: any) => {
+        const scene = ctx.scene;
+        const engine = ctx.gameEngine;
+        
+        // Muzzle Flash on remote player visual
+        const flash = scene.getLightByName("remoteMuzzleFlash") as BABYLON.PointLight;
+        if (flash) {
+            flash.intensity = 2; 
+            ctx.timerManager.schedule('muzzle_flash_remote', 50, () => { flash.intensity = 0; });
+            flash.diffuse = msg.isPacked ? COLOR_FLASH_PACKED : COLOR_FLASH_NORMAL;
+        }
+
+        if (msg.origin && msg.dir && engine) {
+            const rayOrigin = new BABYLON.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
+            const rayDir = new BABYLON.Vector3(msg.dir.x, msg.dir.y, msg.dir.z);
+
+            engine.spawnProjectile(
+                rayOrigin,
+                rayDir,
+                COMBAT_CONFIG.PROJECTILE_SPEED,
+                0,
+                true,
+                msg.isPacked || false,
+                'CLIENT',
+                msg.isExplosive || false,
+                msg.isExplosive ? 6 : undefined,  // default splash radius for ray gun
+                msg.isExplosive ? 1000 : undefined,  // default splash damage
+                msg.isExplosive ? 0.5 : undefined
+            );
+
+            // Add trail if explosive
+            if (msg.isExplosive) {
+                const p = engine.activeProjectiles[engine.activeProjectiles.length - 1];
+                if (p && p.isExplosive) {
+                    p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, p.isPacked);
+                }
+            }
+        }
+    };
+    ctx.eventBus.on('REMOTE_SHOOT', handleRemoteShoot);
+
+    const findZombieFromMesh = (mesh: BABYLON.AbstractMesh) => {
+        let curr: BABYLON.AbstractMesh | null = mesh;
+        while (curr) {
+            const z = ctx.zombies.find(z => z.mesh === curr);
+            if (z) return z;
+            curr = curr.parent as BABYLON.AbstractMesh | null;
+        }
+        return undefined;
+    };
+
+    return {
+        name: 'projectile',
+        dispose: () => {
+            ctx.eventBus.off('REMOTE_SHOOT', handleRemoteShoot);
+        },
+        update: (dt: number, now: number) => {
+            const isDebugActive = ctx.debugSelection.isActive;
+            if (!ctx.gameState.hasStarted || (ctx.gameState.isPaused && !isDebugActive)) return;
+
+            const scene = ctx.scene;
+            const engine = ctx.gameEngine;
+            if (!scene || !engine) return; 
+            
+            const projectiles = engine.activeProjectiles;
+            const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
+            const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
+            
+            hitsProcessed.clear();
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                
+                let hit = false;
+                let finalImpactPoint: BABYLON.Vector3 | null = null;
+                
+                if (!p.isRemote) { 
+                     // Reuse scratch vectors & ray — zero allocations per projectile per frame
+                     p.direction.scaleToRef(0.5, _scaledDir);
+                     p.mesh.position.subtractToRef(_scaledDir, _rayStart);
+                     const rayLen = p.speed + 0.5;
+
+                     _reusableRay.origin.copyFrom(_rayStart);
+                     _reusableRay.direction.copyFrom(p.direction);
+                     _reusableRay.length = rayLen;
+                     const ray = _reusableRay;
+                     
+                             // ── DEBUG SELECTION ──────────────────────────────────────────
+                             if (ctx.debugSelection.isActive) {
+                                 const debugPick = scene.pickWithRay(ray);
+                                 if (debugPick && debugPick.hit && debugPick.pickedMesh) {
+                                     hit = true;
+                                     
+                                     const mesh = debugPick.pickedMesh;
+                                     ctx.debugSelection.selectedMesh = mesh;
+
+                                     const originalMaterialName = mesh.material?.name || "none";
+
+                                     // Send Info to UI
+                                     ctx.setDebugInfo({
+                                         name: mesh.name,
+                                         position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+                                         rotation: { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z },
+                                         scaling: { x: mesh.scaling.x, y: mesh.scaling.y, z: mesh.scaling.z },
+                                         material: originalMaterialName,
+                                         parent: mesh.parent?.name || "none",
+                                         metadata: mesh.metadata
+                                     });
+                                 }
+                             }
+
+                      const pick = scene.pickWithRay(ray, (mesh) => mesh.name.includes("zombie") || mesh.name.includes("hellhound"));
+                      
+                       if (pick && pick.hit && pick.pickedMesh) {
+                           hit = true;
+                           ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
+                           
+                           // Handle explosive projectile hit on zombie
+                           if (p.isExplosive && p.splashRadius && p.splashDamage) {
+                               ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
+                               handleExplosion(
+                                   pick.pickedPoint!,
+                                   p.splashRadius,
+                                   p.splashDamage,
+                                   p.selfDamageMultiplier,
+                                   ctx,
+                                   p
+                               );
+                           } else if (isAuthority) {
+                             const z = findZombieFromMesh(pick.pickedMesh);
+                             if (z) {
+                                 z.lastHitTime = Date.now();
+                                 
+                                 const isHeadshot = pick.pickedMesh.name.includes("head") || pick.pickedMesh.name.includes("Head");
+                                 const isLegHit = pick.pickedMesh.name.includes("leg");
+                                 
+                                 let multiplier = 1.0;
+                                 if (isHeadshot) multiplier = 1.5;
+                                 else if (isLegHit) multiplier = 0.7;
+                                 
+                                 const dmg = isInstaKill ? z.maxHealth : (p.damage * multiplier);
+                                 z.health -= dmg;
+
+                                 if (isLegHit && !z.isCrawling && z.type === 'ZOMBIE') {
+                                     if (dmg > 40 || z.health < 40) {
+                                         z.isCrawling = true;
+                                         z.speed = 0.015;
+                                         pick.pickedMesh.setEnabled(false);
+                                         if (z.missingLimbs) {
+                                             if (pick.pickedMesh.name.includes("_l")) z.missingLimbs.legL = true;
+                                             else if (pick.pickedMesh.name.includes("_r")) z.missingLimbs.legR = true;
+                                         }
+                                     }
+                                 }
+                                 
+                                 const hitKey = `${z.id}_${p.owner}`;
+                                 if (!hitsProcessed.has(hitKey)) {
+                                     hitsProcessed.add(hitKey);
+                                     
+                                     if (p.owner === 'HOST') {
+                                         const base = isHeadshot ? 20 : 10;
+                                         ctx.addPoints(ctx.hasDoublePoints() ? base * 2 : base);
+                                     } else if (p.owner === 'CLIENT') {
+                                         ctx.send({ type: 'HIT_CONFIRM', amount: (isHeadshot ? 20 : 10) });
+                                     }
+                                 }
+
+                                   if (z.health <= 0 && !z.isDead) {
+                                        if (z.type === 'HELLHOUND') {
+                                            ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
+                                        } else {
+                                            const headPos = z.headMesh ? z.headMesh.absolutePosition : undefined;
+                                            ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos);
+                                        }
+                                   }
+                             }
+                          }
+                         } else {
+                          // Environment Hit
+                          const envPick = scene.pickWithRay(ray, (mesh) => mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger"));
+                          if (envPick && envPick.hit && envPick.pickedMesh) {
+                              hit = true;
+                              finalImpactPoint = envPick.pickedPoint!;
+                              p.direction.scaleToRef(-1, _negDir);
+                              const normal = envPick.getNormal(true) || _negDir;
+                              
+                              ctx.visualManager.createDecal(envPick.pickedPoint!, normal, envPick.pickedMesh);
+                              ctx.visualManager.createImpactParticles(envPick.pickedPoint!, normal);
+                          }
+                      }
+                }
+
+                if (hit) {
+                    // Handle explosive projectile impact for environment hit (zombie hit handled above)
+                    if (p.isExplosive && p.splashRadius && p.splashDamage && finalImpactPoint) {
+                        ctx.visualManager.createPlasmaExplosion(finalImpactPoint, p.isPacked);
+                        handleExplosion(
+                            finalImpactPoint,
+                            p.splashRadius,
+                            p.splashDamage,
+                            p.selfDamageMultiplier,
+                            ctx,
+                            p
+                        );
+                    }
+                    engine.releaseProjectile(p);
+                } else {
+                    p.direction.scaleToRef(p.speed, _moveStep);
+                    p.mesh.position.addInPlace(_moveStep);
+                    p.life--;
+                    if (p.life <= 0) {
+                        engine.releaseProjectile(p);
+                    }
+                }
+            }
+        }
+    };
+};

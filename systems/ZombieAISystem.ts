@@ -1,0 +1,601 @@
+import * as BABYLON from '@babylonjs/core';
+import { ZombieState, HellhoundState, GameStateData, WindowBarrier, RemoteGameState, GameMessage } from '../types/index';
+import { System } from '../types/systems';
+import { Zombie } from '../types/entities';
+import { ZoneSystem } from './ZoneSystem';
+import { EventBus } from '../engine/EventBus';
+import { TimerManager } from '../engine/TimerManager';
+import { ZombieManager } from '../managers/ZombieManager';
+import { HellhoundManager } from '../managers/HellhoundManager';
+import { MapConfigManager } from '../managers/MapConfigManager';
+
+export interface IZombieAIContext {
+    gameState: GameStateData;
+    scene: BABYLON.Scene;
+    camera: BABYLON.UniversalCamera;
+    gameModeRef: { current: string };
+    eventBus: EventBus;
+    timerManager: TimerManager;
+    zombieManager: ZombieManager;
+    hellhoundManager: HellhoundManager;
+    configManager: MapConfigManager;
+    zombies: Zombie[];
+    windows: WindowBarrier[];
+    zoneSystem: ZoneSystem;
+    navPlugin?: BABYLON.RecastJSPlugin;
+    remote: {
+        pos: BABYLON.Vector3;
+        gameState: RemoteGameState;
+    };
+    connectionStatusRef: { current: string };
+    isDoorOpen(doorId: string): boolean;
+    send(data: GameMessage): void;
+    setHealth(v: number): void;
+    setIsDowned(v: boolean): void;
+    setIsGameOver(v: boolean): void;
+    setFlashColor(v: string | null): void;
+}
+
+// Pre-allocated scratch vectors to avoid per-frame allocations
+const _tempNavEndVec = new BABYLON.Vector3();
+const _tempSeparation = new BABYLON.Vector3();
+const _tempDirectDir = new BABYLON.Vector3();
+
+// Constants
+const PATH_UPDATE_INTERVAL = 0.5;
+const PATH_REACH_THRESHOLD = 0.8;
+const ROTATION_SPEED = 0.15;
+
+/**
+ * Computes horizontal distance between two positions (ignoring Y).
+ */
+const getHorizontalDist = (p1: BABYLON.Vector3, p2: BABYLON.Vector3): number => {
+    const dx = p1.x - p2.x;
+    const dz = p1.z - p2.z;
+    return Math.sqrt(dx * dx + dz * dz);
+};
+
+/**
+ * Updates burning damage for a zombie.
+ * Returns true if zombie died.
+ */
+const updateBurningDamage = (
+    z: Zombie,
+    now: number,
+    ctx: IZombieAIContext
+): boolean => {
+    if (!z.isBurning) return false;
+    
+    const zc = ctx.configManager.zombieAI;
+    if (!z.lastBurnTime || now - z.lastBurnTime > zc.BURN_INTERVAL) {
+        z.health -= zc.BURN_DAMAGE;
+        z.lastBurnTime = now;
+        if (z.health <= 0) {
+            if (z.type === 'HELLHOUND') {
+                ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, 'HOST');
+            } else {
+                ctx.zombieManager.onZombieDeath(z, z.mesh.position, 'HOST');
+            }
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * Computes separation force from nearby zombies.
+ * Modifies _tempSeparation in place and returns it.
+ */
+const computeSeparationForce = (
+    z: Zombie,
+    zombies: Zombie[],
+    separationDist: number
+): BABYLON.Vector3 => {
+    _tempSeparation.set(0, 0, 0);
+    let neighbors = 0;
+    
+    for (const other of zombies) {
+        if (other === z || other.isDead) continue;
+        const distSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, other.mesh.position);
+        if (distSq < separationDist) {
+            const pushX = z.mesh.position.x - other.mesh.position.x;
+            const pushZ = z.mesh.position.z - other.mesh.position.z;
+            const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
+            if (len > 0.001) {
+                _tempSeparation.x += pushX / len;
+                _tempSeparation.z += pushZ / len;
+            }
+            neighbors++;
+        }
+    }
+    
+    if (neighbors > 0) {
+        _tempSeparation.scaleInPlace(1.0 / neighbors);
+    }
+    return _tempSeparation;
+};
+
+/**
+ * Computes navmesh path for a zombie.
+ * Updates z.path in place and returns move direction or null.
+ */
+const computeNavPath = (
+    z: Zombie,
+    targetPos: BABYLON.Vector3,
+    dt: number,
+    ctx: IZombieAIContext
+): BABYLON.Vector3 | null => {
+    if (!ctx.navPlugin) {
+        _tempDirectDir.set(targetPos.x - z.mesh.position.x, 0, targetPos.z - z.mesh.position.z);
+        if (_tempDirectDir.lengthSquared() > 0.001) {
+            _tempDirectDir.normalize();
+            return _tempDirectDir;
+        }
+        return null;
+    }
+
+    if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
+    z.pathUpdateTimer -= dt;
+
+    if (!z.path || z.path.length === 0 || z.pathUpdateTimer <= 0) {
+        const navStart = ctx.navPlugin.getClosestPoint(z.mesh.position);
+        _tempNavEndVec.set(targetPos.x, 0, targetPos.z);
+        const navEnd = ctx.navPlugin.getClosestPoint(_tempNavEndVec);
+
+        const distToNavStart = BABYLON.Vector3.Distance(z.mesh.position, navStart);
+        const distToNavEnd = BABYLON.Vector3.Distance(targetPos, navEnd);
+
+        if (distToNavStart > 5 && !z.warnedNavStart) {
+            console.warn(`[ZombieAI] ${z.type} ${z.id}: Start far from navmesh (${distToNavStart.toFixed(2)}m)`);
+            z.warnedNavStart = true;
+        }
+        if (distToNavEnd > 5 && !z.warnedNavEnd) {
+            console.warn(`[ZombieAI] ${z.type} ${z.id}: Target far from navmesh (${distToNavEnd.toFixed(2)}m)`);
+            z.warnedNavEnd = true;
+        }
+
+        const newPath = ctx.navPlugin.computePath(navStart, navEnd);
+        z.pathUpdateTimer = PATH_UPDATE_INTERVAL + (Math.random() * 0.1);
+
+        if (newPath && newPath.length > 0) {
+            z.path = newPath;
+            z.pathfindingFailed = false;
+            if (z.path.length > 0 && BABYLON.Vector3.Distance(z.mesh.position, z.path[0]) < 0.5) {
+                z.path.shift();
+            }
+        } else {
+            if (!z.pathfindingFailed) {
+                console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
+                z.pathfindingFailed = true;
+            }
+        }
+    }
+
+    if (z.path && z.path.length > 0) {
+        const distToNode = BABYLON.Vector3.Distance(z.mesh.position, z.path[0]);
+        if (distToNode < PATH_REACH_THRESHOLD) {
+            z.path.shift();
+        }
+        if (z.path.length > 0) {
+            return z.path[0].subtract(z.mesh.position).normalize();
+        }
+    }
+
+    _tempDirectDir.set(targetPos.x - z.mesh.position.x, 0, targetPos.z - z.mesh.position.z);
+    if (_tempDirectDir.lengthSquared() > 0.001) {
+        _tempDirectDir.normalize();
+        return _tempDirectDir;
+    }
+    return null;
+};
+
+/**
+ * Applies rotation smoothing toward movement direction.
+ */
+const applyRotationSmoothing = (
+    z: Zombie,
+    moveDir: BABYLON.Vector3,
+    frameFactor: number
+): void => {
+    if (moveDir.lengthSquared() > 0.001) {
+        const yaw = Math.atan2(moveDir.x, moveDir.z);
+        const targetRot = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
+        if (!z.mesh.rotationQuaternion) {
+            z.mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(z.mesh.rotation);
+        }
+        z.mesh.rotationQuaternion = BABYLON.Quaternion.Slerp(
+            z.mesh.rotationQuaternion,
+            targetRot,
+            ROTATION_SPEED * frameFactor
+        );
+    }
+};
+
+/**
+ * Gets the best target position (host or client player).
+ */
+const getTargetPosition = (
+    z: Zombie,
+    ctx: IZombieAIContext,
+    targetPosOut: BABYLON.Vector3
+): 'HOST' | 'CLIENT' => {
+    targetPosOut.copyFrom(ctx.camera.position);
+    let targetId: 'HOST' | 'CLIENT' = 'HOST';
+
+    const isLocalActive = !ctx.gameState.isDowned && !ctx.gameState.isGameOver;
+    const isRemoteActive = ctx.gameModeRef.current === 'HOST' &&
+        ctx.connectionStatusRef.current === 'CONNECTED' &&
+        !ctx.remote.gameState.isDowned;
+
+    if (isLocalActive && isRemoteActive) {
+        const distToLocal = BABYLON.Vector3.Distance(z.mesh.position, ctx.camera.position);
+        const distToRemote = BABYLON.Vector3.Distance(z.mesh.position, ctx.remote.pos);
+        if (distToRemote < distToLocal) {
+            targetPosOut.copyFrom(ctx.remote.pos);
+            targetId = 'CLIENT';
+        }
+    } else if (isRemoteActive) {
+        targetPosOut.copyFrom(ctx.remote.pos);
+        targetId = 'CLIENT';
+    }
+
+    return targetId;
+};
+
+/**
+ * ZombieAISystem
+ *
+ * Authority only (HOST or SOLO).
+ * Responsibility: Handles zombie movement, pathfinding (zones/doors), 
+ * wandering when player is downed (SOLO), and barrier interactions.
+ * Uses MapConfigManager for map-specific tuning.
+ */
+export const createZombieAISystem = (ctx: IZombieAIContext): System => {
+    let woodTexture: BABYLON.Texture | null = null;
+    const _targetPos = new BABYLON.Vector3();
+
+    const createWoodDebris = (pos: BABYLON.Vector3, scene: BABYLON.Scene) => {
+        const particleSystem = new BABYLON.ParticleSystem("debris", 20, scene);
+        if (!woodTexture) woodTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/wood.jpg", scene);
+        particleSystem.particleTexture = woodTexture;
+        particleSystem.emitter = pos;
+        particleSystem.minEmitBox = new BABYLON.Vector3(-0.5, -0.2, -0.1);
+        particleSystem.maxEmitBox = new BABYLON.Vector3(0.5, 0.2, 0.1);
+        particleSystem.color1 = new BABYLON.Color4(0.6, 0.5, 0.4, 1.0);
+        particleSystem.color2 = new BABYLON.Color4(0.4, 0.3, 0.2, 1.0);
+        particleSystem.minSize = 0.05;
+        particleSystem.maxSize = 0.15;
+        particleSystem.minLifeTime = 0.5;
+        particleSystem.maxLifeTime = 1.0;
+        particleSystem.emitRate = 100;
+        particleSystem.gravity = new BABYLON.Vector3(0, -9.81, 0);
+        particleSystem.direction1 = new BABYLON.Vector3(-1, 2, -1);
+        particleSystem.direction2 = new BABYLON.Vector3(1, 2, 1);
+        particleSystem.disposeOnStop = true;
+        particleSystem.start();
+    };
+
+    /**
+     * Updates hellhound AI state machine.
+     */
+    const updateHellhoundAI = (
+        z: Zombie,
+        dt: number,
+        separation: BABYLON.Vector3,
+        frameFactor: number
+    ): void => {
+        const hc = ctx.configManager.hellhound;
+        const sc = ctx.configManager.sync;
+        const gc = ctx.configManager.gameplay;
+
+        if (z.stateTimer !== undefined) {
+            z.stateTimer -= dt * 1000;
+        }
+
+        const targetId = getTargetPosition(z, ctx, _targetPos);
+        z.targetPlayerId = targetId;
+
+        if (z.hellhoundState === HellhoundState.SPAWNING) {
+            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
+                z.hellhoundState = HellhoundState.CHASING;
+            }
+            z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+            return;
+        }
+
+        const distToTarget = BABYLON.Vector3.Distance(z.mesh.position, _targetPos);
+        const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
+
+        if (z.hellhoundState === HellhoundState.CHASING) {
+            if (distToTarget <= hc.ATTACK_INITIATE_RANGE && heightDiff < ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+                z.hellhoundState = HellhoundState.ATTACK_WINDUP;
+                z.stateTimer = hc.ATTACK_WINDUP_MIN + Math.random() * (hc.ATTACK_WINDUP_MAX - hc.ATTACK_WINDUP_MIN);
+            } else {
+                const moveDir = computeNavPath(z, _targetPos, dt, ctx);
+                if (moveDir) {
+                    moveDir.y = 0;
+                    applyRotationSmoothing(z, moveDir, frameFactor);
+                    const finalDir = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
+                    z.mesh.moveWithCollisions(finalDir.scale(z.speed * frameFactor));
+                }
+            }
+        } else if (z.hellhoundState === HellhoundState.ATTACK_WINDUP) {
+            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
+                z.hellhoundState = HellhoundState.ATTACKING;
+                z.stateTimer = hc.ATTACK_DURATION_MIN + Math.random() * (hc.ATTACK_DURATION_MAX - hc.ATTACK_DURATION_MIN);
+                z.lungeStartPos = z.mesh.position.clone();
+                z.lungeTargetPos = _targetPos.clone();
+                const lDir = z.lungeTargetPos.subtract(z.lungeStartPos).normalize();
+                lDir.y = 0;
+                const yaw = Math.atan2(lDir.x, lDir.z);
+                z.mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
+            }
+        } else if (z.hellhoundState === HellhoundState.ATTACKING) {
+            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
+                z.hellhoundState = HellhoundState.RECOVERY;
+                z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
+            } else if (z.lungeTargetPos && z.lungeStartPos) {
+                const lDir = z.lungeTargetPos.subtract(z.lungeStartPos).normalize();
+                lDir.y = 0;
+                z.mesh.moveWithCollisions(lDir.scale(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor));
+                
+                const distFromStart = BABYLON.Vector3.Distance(z.mesh.position, z.lungeStartPos);
+                const distToPlayer = BABYLON.Vector3.Distance(z.mesh.position, _targetPos);
+                if (distFromStart >= hc.LUNGE_DISTANCE || distToPlayer <= 1.5) {
+                    z.hellhoundState = HellhoundState.RECOVERY;
+                    z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
+                }
+            }
+        } else if (z.hellhoundState === HellhoundState.RECOVERY) {
+            if (z.lungeStartPos) {
+                const retreatDir = z.lungeStartPos.subtract(z.mesh.position);
+                retreatDir.y = 0;
+                const distBack = retreatDir.length();
+                if (distBack > 0.5) {
+                    z.mesh.moveWithCollisions(retreatDir.normalize().scale(z.speed * frameFactor));
+                } else {
+                    z.hellhoundState = HellhoundState.CHASING;
+                    z.lungeStartPos = undefined;
+                    z.lungeTargetPos = undefined;
+                }
+            }
+            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
+                z.hellhoundState = HellhoundState.CHASING;
+                z.lungeStartPos = undefined;
+                z.lungeTargetPos = undefined;
+            }
+        }
+
+        z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+    };
+
+    /**
+     * Updates zombie wander behavior when player is downed in solo.
+     */
+    const updateSoloDownedWander = (
+        z: Zombie,
+        dt: number,
+        now: number,
+        separation: BABYLON.Vector3,
+        frameFactor: number
+    ): void => {
+        const zc = ctx.configManager.zombieAI;
+        const sc = ctx.configManager.sync;
+        const gc = ctx.configManager.gameplay;
+        const camera = ctx.camera;
+
+        if (!z.wander || now >= z.wander.nextUpdateTime) {
+            const rawAway = z.mesh.position.subtract(camera.position);
+            rawAway.y = 0;
+            const baseAngle = rawAway.lengthSquared() > 0.001
+                ? Math.atan2(rawAway.z, rawAway.x)
+                : Math.random() * Math.PI * 2;
+
+            const spread = (Math.random() - 0.5) * (Math.PI * 140 / 180);
+            const newAngle = baseAngle + spread;
+            const dist = zc.WANDER_DIST_MIN + Math.random() * (zc.WANDER_DIST_MAX - zc.WANDER_DIST_MIN);
+
+            z.wander = {
+                angle: newAngle,
+                nextUpdateTime: now + zc.WANDER_UPDATE_MIN + Math.random() * (zc.WANDER_UPDATE_MAX - zc.WANDER_UPDATE_MIN),
+                wanderTarget: new BABYLON.Vector3(
+                    z.mesh.position.x + Math.cos(newAngle) * dist,
+                    z.mesh.position.y,
+                    z.mesh.position.z + Math.sin(newAngle) * dist
+                ),
+            };
+        }
+
+        const distToTarget = getHorizontalDist(z.mesh.position, z.wander.wanderTarget);
+        if (distToTarget < zc.WANDER_TARGET_THRESHOLD) {
+            z.wander = undefined;
+            return;
+        }
+
+        const ws = z.wander;
+        const toTarget = ws.wanderTarget.subtract(z.mesh.position);
+        toTarget.y = 0;
+        const moveDir = toTarget.lengthSquared() > 0.001
+            ? toTarget.normalize()
+            : new BABYLON.Vector3(Math.cos(ws.angle), 0, Math.sin(ws.angle));
+
+        const blended = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
+        applyRotationSmoothing(z, blended, frameFactor);
+        z.mesh.moveWithCollisions(blended.scale(z.speed * frameFactor));
+        z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+    };
+
+    /**
+     * Updates zombie chase behavior.
+     */
+    const updateZombieChase = (
+        z: Zombie,
+        dt: number,
+        separation: BABYLON.Vector3,
+        frameFactor: number
+    ): void => {
+        const sc = ctx.configManager.sync;
+        const zc = ctx.configManager.zombieAI;
+
+        _targetPos.copyFrom(ctx.camera.position);
+
+        if (ctx.gameModeRef.current === 'HOST' && ctx.connectionStatusRef.current === 'CONNECTED') {
+            const isLocalDown = ctx.gameState.health <= 0 || ctx.gameState.isDowned;
+            const isRemoteDown = ctx.remote.gameState.health <= 0 || ctx.remote.gameState.isDowned;
+
+            if (ctx.remote.pos && !isRemoteDown) {
+                const distToLocal = BABYLON.Vector3.Distance(z.mesh.position, ctx.camera.position);
+                const distToRemote = BABYLON.Vector3.Distance(z.mesh.position, ctx.remote.pos);
+                if (isLocalDown || distToRemote < distToLocal) {
+                    _targetPos.copyFrom(ctx.remote.pos);
+                }
+            }
+        }
+
+        const moveDir = computeNavPath(z, _targetPos, dt, ctx);
+
+        if (moveDir) {
+            moveDir.y = 0;
+            applyRotationSmoothing(z, moveDir, frameFactor);
+
+            const distHorizontal = getHorizontalDist(z.mesh.position, _targetPos);
+            const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
+
+            if (distHorizontal > zc.ATTACK_RANGE * 0.9 || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+                const finalDir = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
+                z.mesh.moveWithCollisions(finalDir.scale(z.speed * frameFactor));
+            }
+        }
+    };
+
+    /**
+     * Updates zombie window/barrier interaction states.
+     */
+    const updateWindowInteraction = (
+        z: Zombie,
+        dt: number,
+        now: number,
+        separation: BABYLON.Vector3,
+        frameFactor: number
+    ): void => {
+        const zc = ctx.configManager.zombieAI;
+        const sc = ctx.configManager.sync;
+        const windows = ctx.windows;
+
+        const targetWindow = z.targetWindowId ? windows.find(w => w.id === z.targetWindowId) : null;
+        if (!targetWindow) {
+            z.state = ZombieState.CHASING;
+            return;
+        }
+
+        if (z.state === ZombieState.APPROACHING_WINDOW) {
+            z.mesh.lookAt(new BABYLON.Vector3(targetWindow.attackPoint.x, z.mesh.position.y, targetWindow.attackPoint.z));
+
+            const dir = targetWindow.attackPoint.subtract(z.mesh.position).normalize();
+            dir.y = 0;
+            const dist = getHorizontalDist(z.mesh.position, targetWindow.attackPoint);
+            const sepFactor = dist < 3.5 ? 0.1 : 1.0;
+            const moveDir = dir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE * sepFactor)).normalize();
+            z.mesh.moveWithCollisions(moveDir.scale(z.speed * frameFactor));
+
+            if (dist < 2.0) {
+                z.state = ZombieState.ATTACKING_BARRIER;
+            } else if (dist < 5.0) {
+                if (!z.lastPosition) z.lastPosition = z.mesh.position.clone();
+                if (!z.stuckTimer) z.stuckTimer = 0;
+                z.stuckTimer += dt;
+                if (z.stuckTimer > 0.5) {
+                    const moveDist = BABYLON.Vector3.Distance(z.mesh.position, z.lastPosition);
+                    if (moveDist < 0.1) z.state = ZombieState.ATTACKING_BARRIER;
+                    z.lastPosition.copyFrom(z.mesh.position);
+                    z.stuckTimer = 0;
+                }
+            }
+        } else if (z.state === ZombieState.ATTACKING_BARRIER) {
+            const activeBoards = targetWindow.boards.filter(b => b.isEnabled());
+            if (activeBoards.length > 0) {
+                z.barrierAttackTimer += dt;
+                if (z.barrierAttackTimer > zc.BARRIER_ATTACK_INTERVAL) {
+                    z.barrierAttackTimer = 0;
+                    const b = activeBoards[Math.floor(Math.random() * activeBoards.length)];
+                    b.setEnabled(false);
+                    ctx.eventBus.emit('BOARD_STATE_CHANGE', { windowId: targetWindow.id });
+                    createWoodDebris(b.position, ctx.scene);
+                }
+                z.mesh.rotation.z = Math.sin(now * 0.01) * 0.15;
+            } else {
+                z.state = ZombieState.ENTERING;
+            }
+        } else if (z.state === ZombieState.ENTERING) {
+            z.mesh.lookAt(new BABYLON.Vector3(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z));
+            const dir = targetWindow.entryPoint.subtract(z.mesh.position).normalize();
+            z.mesh.position.addInPlace(dir.scale(z.speed * frameFactor));
+            if (getHorizontalDist(z.mesh.position, targetWindow.entryPoint) < 0.5) {
+                z.state = ZombieState.CHASING;
+            }
+        }
+    };
+
+    return {
+        name: 'zombieAI',
+        dispose: () => {
+            if (woodTexture) {
+                woodTexture.dispose();
+                woodTexture = null;
+            }
+        },
+        update: (dt: number, now: number) => {
+            if (ctx.gameState.isDebugMode) return;
+            const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
+            if (!isAuthority) return;
+
+            const scene = ctx.scene;
+            const camera = ctx.camera;
+            const zoneSystem = ctx.zoneSystem;
+            if (!scene || !camera || !zoneSystem) return;
+
+            const currentGameMode = ctx.gameModeRef.current;
+            const zombies = ctx.zombies;
+            const frameFactor = dt * 60;
+            const sc = ctx.configManager.sync;
+            const gc = ctx.configManager.gameplay;
+
+            for (const z of zombies) {
+                if (z.isDead) continue;
+
+                // Burning damage
+                if (updateBurningDamage(z, now, ctx)) continue;
+
+                // Compute separation force
+                const separation = computeSeparationForce(z, zombies, sc.ZOMBIE_SEPARATION_DIST);
+
+                // Hellhound AI
+                if (z.type === 'HELLHOUND') {
+                    updateHellhoundAI(z, dt, separation, frameFactor);
+                    continue;
+                }
+
+                // Solo downed wander
+                if (currentGameMode === 'SOLO' && ctx.gameState.isDowned) {
+                    updateSoloDownedWander(z, dt, now, separation, frameFactor);
+                    continue;
+                }
+
+                if (z.wander) z.wander = undefined;
+
+                // Zombie chase or window interaction
+                if (z.state === ZombieState.CHASING) {
+                    updateZombieChase(z, dt, separation, frameFactor);
+                } else if (z.type === 'ZOMBIE') {
+                    updateWindowInteraction(z, dt, now, separation, frameFactor);
+                }
+
+                // Apply gravity (except when entering window)
+                if (z.state !== ZombieState.ENTERING) {
+                    z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+                    if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
+                }
+            }
+        }
+    };
+};

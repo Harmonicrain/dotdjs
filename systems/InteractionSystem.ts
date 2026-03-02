@@ -1,0 +1,465 @@
+import * as BABYLON from '@babylonjs/core';
+import { GameStateData, GameMessage, WindowBarrier, DoorMeshEntry, MapGameplay, MysteryBox, WeaponState, InteractableMetadata } from '../types/index';
+import { InputManager, GameAction, InputDevice } from '../engine/InputManager';
+import { IInteractionSystem, MysteryBoxSystem } from '../types/systems';
+import { createWorldWeapon } from '../meshes';
+import { EventBus } from '../engine/EventBus';
+import { TimerManager } from '../engine/TimerManager';
+import { ResourceManager } from '../managers/ResourceManager';
+import { MapConfigManager } from '../managers/MapConfigManager';
+
+// Decomposed Handlers
+import { InteractionHandler } from './interaction/types';
+import { DoorHandler } from './interaction/handlers/DoorHandler';
+import { PerkHandler } from './interaction/handlers/PerkHandler';
+import { WallBuyHandler } from './interaction/handlers/WallBuyHandler';
+import { PowerHandler } from './interaction/handlers/PowerHandler';
+import { PackAPunchHandler } from './interaction/handlers/PackAPunchHandler';
+import { MysteryBoxHandler } from './interaction/handlers/MysteryBoxHandler';
+import { WindowHandler } from './interaction/handlers/WindowHandler';
+
+import { StateManager } from '../state/StateManager';
+
+/**
+ * InteractionSystem
+ *
+ * Dispatcher for player interactions with the world (doors, perks, mystery box, etc.).
+ * Uses specialized handlers for each interaction type.
+ * Uses MapConfigManager for map-specific tuning.
+ */
+export const createInteractionSystem = (ctx: StateManager): IInteractionSystem => {
+    const _tempInteractVec = new BABYLON.Vector3();
+    const _tempInteractOffset = new BABYLON.Vector3(0, 1.2, 0);
+    const _tempPapVec = new BABYLON.Vector3(0, 0, -0.5);
+
+    const HANDLERS: Record<string, InteractionHandler> = {
+        'DOOR': DoorHandler,
+        'PERK': PerkHandler,
+        'WALLBUY': WallBuyHandler,
+        'POWER': PowerHandler,
+        'PAP': PackAPunchHandler,
+        'MYSTERY_BOX': MysteryBoxHandler
+    };
+
+    // ── Helper Actions (Animations) ──────────────────────────────────
+
+    /**
+     * Animates a door mesh to a target Y position.
+     * @param mesh - The mesh to animate
+     * @param targetY - Target Y position
+     * @param trackObserver - If true, stores observer reference for cleanup (used by regular doors)
+     * @param doorId - Optional door ID for observer tracking and special handling
+     */
+    const animateDoorMeshToY = (
+        mesh: BABYLON.AbstractMesh,
+        targetY: number,
+        trackObserver: boolean = false,
+        doorId?: string
+    ) => {
+        // Handle special door cases that should be disposed instead of animated
+        if (doorId === 'door1' || doorId === 'door2') {
+            if (mesh) mesh.dispose();
+            ctx.mapVisuals.doorMeshes.delete(doorId);
+            return;
+        }
+
+        // Clean up existing observer if tracked
+        if (trackObserver && doorId) {
+            const entry = ctx.mapVisuals.doorMeshes.get(doorId);
+            if (entry?.observer) {
+                ctx.scene.onBeforeRenderObservable.remove(entry.observer);
+                entry.observer = null;
+            }
+        }
+
+        const observer = ctx.scene.onBeforeRenderObservable.add(() => {
+            if (!mesh) return;
+            const diff = targetY - mesh.position.y;
+            if (Math.abs(diff) < 0.05) {
+                mesh.position.y = targetY;
+                ctx.scene.onBeforeRenderObservable.remove(observer);
+                if (trackObserver && doorId) {
+                    const entry = ctx.mapVisuals.doorMeshes.get(doorId);
+                    if (entry) entry.observer = null;
+                }
+            } else {
+                mesh.position.y += diff * 0.1;
+            }
+        });
+
+        // Track observer reference if needed
+        if (trackObserver && doorId) {
+            const entry = ctx.mapVisuals.doorMeshes.get(doorId);
+            if (entry) entry.observer = observer;
+        }
+    };
+
+    const actionOpenDoor = (doorId: string) => {
+        const entry = ctx.mapVisuals.doorMeshes.get(doorId);
+        if (!entry) return;
+        animateDoorMeshToY(entry.mesh, entry.openY, true, doorId);
+    };
+
+    const actionTurnOnPower = () => {
+        ctx.gameState.powerOn = true;
+        if (ctx.mapVisuals.powerSwitchActivate) {
+            ctx.mapVisuals.powerSwitchActivate();
+        } else if (ctx.mapVisuals.powerSwitchHandle) {
+            ctx.mapVisuals.powerSwitchHandle.rotation.x = -Math.PI / 4; 
+        }
+        if (ctx.mapVisuals.powerDoor) {
+            animateDoorMeshToY(ctx.mapVisuals.powerDoor,
+                ctx.mapVisuals.powerDoorOpenY ?? 8);
+        }
+        // Open the power door (zone 1 <-> zone 4 connection)
+        if (ctx.gameState.doorStates["powerDoor"]) {
+            ctx.gameState.doorStates["powerDoor"].isOpen = true;
+        }
+        ctx.setInteractionMsg("POWER ACTIVATED!"); 
+        ctx.timerManager.schedule('power_msg', ctx.configManager.visuals.POWER_HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
+        
+        // Play power on sound
+        ctx.soundManager?.play('power');
+    };
+
+    const performPackAPunch = (targetMachine: BABYLON.AbstractMesh) => {
+        if (ctx.gameState.isPackAPunching) return;
+        const weapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
+        if (weapon.isPacked) return; 
+        
+        ctx.gameState.isPackAPunching = true;
+        const oldMesh = weapon.mesh;
+        if (oldMesh) oldMesh.setEnabled(false);
+
+        _tempInteractVec.copyFrom(targetMachine.absolutePosition).addInPlace(_tempInteractOffset);
+        let anchorPos = _tempInteractVec;
+        let rootNode = targetMachine;
+
+        while (rootNode.parent && rootNode.parent instanceof BABYLON.TransformNode && rootNode.parent.name !== 'levelRoot') {
+            rootNode = rootNode.parent as BABYLON.AbstractMesh;
+        }
+
+        const children   = rootNode.getChildTransformNodes(false);
+        const anchorNode = children.find(c => c.name === 'papWeaponAnchor');
+        if (anchorNode) anchorPos.copyFrom(anchorNode.absolutePosition);
+
+        const scene = ctx.scene;
+        let animMesh: BABYLON.TransformNode | null = null;
+        if (scene) {
+            animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode);
+            animMesh.parent = null;
+            animMesh.position.copyFrom(anchorPos).addInPlace(_tempPapVec);
+            if (anchorNode) {
+                animMesh.parent   = anchorNode;
+                animMesh.position.copyFromFloats(0, 0, -0.5);
+                animMesh.rotation.copyFromFloats(0, Math.PI / 2, 0);
+            }
+
+            let t = 0;
+            const animObs = scene.onBeforeRenderObservable.add(() => {
+                t += scene.getEngine().getDeltaTime() / 1000;
+                if (!animMesh) return;
+                animMesh.rotation.y += 0.1;
+                if (t < 1.0) {
+                    animMesh.position.z = BABYLON.Scalar.Lerp(-0.5, 0.2, t);
+                } else if (t < 2.5) {
+                    animMesh.position.y = Math.sin(t * 5) * 0.05;
+                } else if (t < 3.0) {
+                    animMesh.scaling.scaleInPlace(0.9);
+                }
+            });
+
+            ctx.timerManager.schedule('pap_anim_cleanup', 3000, () => {
+                scene.onBeforeRenderObservable.remove(animObs);
+                if (animMesh) animMesh.dispose();
+            });
+        }
+
+        ctx.timerManager.schedule('pap_upgrade', 3000, () => {
+             const upgradeConfig = ctx.configManager.upgradedWeapons[weapon.id];
+             if (upgradeConfig) { 
+                 Object.assign(weapon, upgradeConfig); 
+                 weapon.currentAmmo = weapon.clipSize; 
+                 weapon.currentReserve = weapon.maxReserve; 
+                 weapon.isPacked = true; 
+             }
+             if (weapon.mesh) {
+                 weapon.mesh.setEnabled(true);
+                 
+                 // Generate the procedural texture ONCE for this upgrade event
+                 const papCamoTex = ctx.resourceManager.getTexture("papCamoTex", () => {
+                     const texSize = 512;
+                     const dynamicTexture = new BABYLON.DynamicTexture("papCamoTex", texSize, ctx.scene, true);
+                     const ctx2d = dynamicTexture.getContext();
+                     
+                     // Transparent base (so it only shows the lightning)
+                     ctx2d.clearRect(0, 0, texSize, texSize);
+                     
+                     // Glowing "Electric" Veins
+                     ctx2d.shadowBlur = 10;
+                     ctx2d.lineWidth = 4;
+                     
+                     for (let i = 0; i < 30; i++) {
+                         const hue = (i / 30) * 360;
+                         const color = `hsl(${hue}, 100%, 50%)`;
+                         ctx2d.shadowColor = color;
+                         ctx2d.strokeStyle = color;
+
+                         ctx2d.beginPath();
+                         let x = Math.random() * texSize;
+                         let y = Math.random() * texSize;
+                         ctx2d.moveTo(x, y);
+                         for (let j = 0; j < 5; j++) {
+                             x += (Math.random() - 0.5) * 150;
+                             y += (Math.random() - 0.5) * 150;
+                             ctx2d.lineTo(x, y);
+                         }
+                         ctx2d.stroke();
+                     }
+
+                     // Techy Squares
+                     ctx2d.shadowBlur = 0;
+                     for (let i = 0; i < 50; i++) {
+                         const hue = Math.random() * 360;
+                         ctx2d.fillStyle = `hsla(${hue}, 100%, 50%, 0.2)`;
+                         const s = 5 + Math.random() * 20;
+                         ctx2d.fillRect(Math.random() * texSize, Math.random() * texSize, s, s);
+                     }
+                     
+                     dynamicTexture.update();
+                     dynamicTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+                     dynamicTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+                     dynamicTexture.hasAlpha = true;
+
+                     // Animation loop for scrolling camo
+                     const obs = ctx.scene.onBeforeRenderObservable.add(() => {
+                         const dt = ctx.scene.getEngine().getDeltaTime() / 1000;
+                         dynamicTexture.uOffset += dt * 0.15;
+                         dynamicTexture.vOffset += dt * 0.1;
+                     });
+
+                     dynamicTexture.onDisposeObservable.add(() => {
+                         ctx.scene.onBeforeRenderObservable.remove(obs);
+                     });
+
+                     return dynamicTexture;
+                 }) as BABYLON.DynamicTexture;
+
+                 weapon.mesh.getChildMeshes().forEach((c: BABYLON.AbstractMesh) => {
+                     if (c instanceof BABYLON.Mesh && c.material) { 
+                         const matName = c.material.name.toLowerCase();
+                         // Skip transparent/emissive parts of wonder weapons
+                         if (matName.includes("glass") || matName.includes("lens") || matName.includes("glow") || matName.includes("effect")) {
+                             return;
+                         }
+                         
+                         // Store original material for restoration on reset
+                         if (!c.metadata?.originalMaterial) {
+                             c.metadata = { ...c.metadata, originalMaterial: c.material };
+                         }
+
+                         // Clone original material to modify it
+                         const papMat = c.material.clone(c.material.name + "_pap") as BABYLON.PBRMaterial | BABYLON.StandardMaterial;
+                         
+                         if (papMat instanceof BABYLON.PBRMaterial) {
+                             papMat.metallic = 1.0;
+                             papMat.roughness = Math.min(papMat.roughness ?? 0.5, 0.2);
+                             papMat.emissiveTexture = papCamoTex;
+                             papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                             
+                             // Pulse effect handled via an observer on the material itself
+                             const timeObs = ctx.scene.onBeforeRenderObservable.add(() => {
+                                 const time = Date.now() / 1000;
+                                 papMat.emissiveIntensity = 1.0 + Math.sin(time * 4) * 0.4;
+                             });
+                             papMat.onDisposeObservable.add(() => ctx.scene.onBeforeRenderObservable.remove(timeObs));
+                         } else if (papMat instanceof BABYLON.StandardMaterial) {
+                             // Fallback for StandardMaterial
+                             papMat.emissiveTexture = papCamoTex;
+                             papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                         }
+
+                         c.material = papMat; 
+                     }
+                 });
+             }
+             
+             ctx.setAmmo(weapon.currentAmmo); 
+             ctx.setReserveAmmo(weapon.currentReserve);
+             ctx.setWeaponName(weapon.name);
+             
+             ctx.gameState.isPackAPunching = false;
+             ctx.setInteractionMsg("WEAPON UPGRADED!"); 
+             
+             ctx.timerManager.schedule('pap_msg_clear', ctx.configManager.visuals.HUD_MSG_DURATION || 2000, () => ctx.setInteractionMsg(null));
+        });
+    };
+
+    const handleWeaponPickup = (weaponId: string) => {
+         const weaponConfig = ctx.configManager.weapons.find(w => w.id === weaponId)!;
+         const weapons = ctx.gameState.weapons;
+         const existingSlot = weapons.findIndex((w: WeaponState) => w.id === weaponId);
+         
+         if (existingSlot !== -1) {
+              const w = weapons[existingSlot];
+              w.currentAmmo = w.clipSize;
+              w.currentReserve = w.maxReserve;
+              if (ctx.gameState.activeWeaponIndex === existingSlot) {
+                  ctx.setAmmo(w.currentAmmo);
+                  ctx.setReserveAmmo(w.currentReserve);
+              }
+              ctx.setInteractionMsg("AMMO REFILLED!");
+         } else {
+              const activeIdx = ctx.gameState.activeWeaponIndex;
+              const currentWeapon = weapons[activeIdx];
+              const newMesh = ctx.gameState.weaponMeshes[weaponId];
+              
+              const newWeaponState = { 
+                  ...weaponConfig, 
+                  currentAmmo: weaponConfig.clipSize, 
+                  currentReserve: weaponConfig.maxReserve, 
+                  mesh: newMesh, 
+                  isPacked: false 
+              };
+              
+              if (currentWeapon.mesh) currentWeapon.mesh.setEnabled(false);
+              
+              if (weapons.length < 2) {
+                  weapons.push(newWeaponState);
+                  const newIndex = weapons.length - 1;
+                  ctx.gameState.activeWeaponIndex = newIndex;
+                  ctx.setActiveWeaponIndex(newIndex);
+                  ctx.setWeaponName(newWeaponState.name);
+              } else {
+                  weapons[activeIdx] = newWeaponState;
+                  ctx.setWeaponName(newWeaponState.name);
+              }
+              
+              if (newWeaponState.mesh) newWeaponState.mesh.setEnabled(true);
+              ctx.setAmmo(newWeaponState.currentAmmo); 
+              ctx.setReserveAmmo(newWeaponState.currentReserve);
+              ctx.setInteractionMsg(`ACQUIRED ${weaponConfig.name}!`);
+         }
+         ctx.timerManager.schedule('clear_pickup_msg', ctx.configManager.visuals.HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
+    };
+
+    // ── Proximity Detection ──────────────────────────────────────────
+
+    const getInteractableAtCrosshair = () => {
+        if (!ctx.camera || !ctx.scene) return null;
+        const ray = ctx.camera.getForwardRay(3);
+        const hit = ctx.scene.pickWithRay(ray);
+        
+        if (hit && hit.hit && hit.pickedMesh) {
+            return { mesh: hit.pickedMesh, metadata: hit.pickedMesh.metadata as InteractableMetadata };
+        }
+        return null;
+    };
+
+    const interact = (isContinuous: boolean = false): boolean => {
+        const target = getInteractableAtCrosshair();
+        if (!target) return false;
+
+        const { mesh, metadata } = target;
+        const now = Date.now();
+        
+        // Window Handler - allow continuous interaction but keep standard cooldown
+        if (WindowHandler.interact({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice })) {
+            ctx.gameState.lastRepairTime = now;
+            return true;
+        }
+
+        // Metadata Based Handlers
+        if (!metadata || !metadata.type) return false;
+        
+        // For other interactions, use standard cooldown unless continuous
+        const cooldown = isContinuous ? 200 : 500;
+        if (now - ctx.gameState.lastRepairTime < cooldown) return false;
+
+        const handler = HANDLERS[metadata.type];
+        if (handler && handler.interact({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice })) {
+            ctx.gameState.lastRepairTime = now;
+            return true;
+        }
+
+        return false;
+    };
+
+    const checkHover = (): string | null => {
+        const target = getInteractableAtCrosshair();
+        if (!target) return null;
+
+        const { mesh, metadata } = target;
+
+        // Window Hover
+        const winHover = WindowHandler.getHoverLabel({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice });
+        if (winHover) return winHover;
+
+        // Metadata Based Hover
+        if (!metadata || !metadata.type) return null;
+        const handler = HANDLERS[metadata.type];
+        return handler ? handler.getHoverLabel({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice }) : null;
+    };
+
+    // ── Throttled hover check (raycasting is expensive) ──────────────
+    let lastHoverCheck = 0;
+    let cachedHoverMsg: string | null = null;
+    const HOVER_CHECK_INTERVAL = 100; // ms
+
+    const update = (dt: number, now: number) => {
+        if (ctx.inputManager?.justPressed(GameAction.INTERACT)) {
+            interact(false);
+        } else if (ctx.inputManager?.isDown(GameAction.INTERACT)) {
+            interact(true);
+        }
+        
+        // Throttle hover check to reduce raycast frequency
+        if (now - lastHoverCheck > HOVER_CHECK_INTERVAL) {
+            lastHoverCheck = now;
+            cachedHoverMsg = checkHover();
+        }
+        ctx.setHoverMsg(cachedHoverMsg);
+    };
+
+    const init = () => {
+        ctx.eventBus.on('DOOR_OPEN_REQUEST', (doorId: string) => {
+            if (ctx.gameState.doorStates[doorId]) {
+                ctx.gameState.doorStates[doorId].isOpen = true;
+            }
+            
+            // Remove NavMesh obstacle if it exists
+            const entry = ctx.mapVisuals.doorMeshes.get(doorId);
+            if (entry && entry.obstacle && ctx.navPlugin) {
+                try {
+                    ctx.navPlugin.removeObstacle(entry.obstacle);
+                    entry.obstacle = null;
+                } catch (e) {
+                    console.error(`Failed to remove nav obstacle for door ${doorId}:`, e);
+                }
+            }
+            
+            actionOpenDoor(doorId);
+        });
+
+        ctx.eventBus.on('POWER_ON_REQUEST', () => {
+            actionTurnOnPower();
+        });
+
+        ctx.eventBus.on('WEAPON_PICKUP_REQUEST', (weaponId: string) => {
+            handleWeaponPickup(weaponId);
+        });
+
+        ctx.eventBus.on('PACK_A_PUNCH_REQUEST', (mesh: BABYLON.AbstractMesh) => {
+            performPackAPunch(mesh);
+        });
+    };
+
+    return {
+        name: 'interaction',
+        init,
+        update,
+        interact,
+        checkHover,
+        handleWeaponPickup
+    };
+};
