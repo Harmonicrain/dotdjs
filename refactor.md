@@ -245,7 +245,7 @@ Constructor and `resetToDefaults()` both have 12 identical spread-copy lines. Ex
 
 Merged `animateDoorMesh()` and `animatePowerDoor()` into single parameterized `animateDoorMeshToY(mesh, targetY, trackObserver, doorId)` function.
 
-### 23. InteractionSystem.ts - performPackAPunch() is 171 Lines
+### 23. InteractionSystem.ts - performPackAPunch() is 171 Lines ✅ DONE
 **File:** `systems/InteractionSystem.ts` (lines ~119-290)
 
 Split into:

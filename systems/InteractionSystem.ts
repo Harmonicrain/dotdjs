@@ -122,15 +122,9 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         ctx.soundManager?.play('power');
     };
 
-    const performPackAPunch = (targetMachine: BABYLON.AbstractMesh) => {
-        if (ctx.gameState.isPackAPunching) return;
-        const weapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
-        if (weapon.isPacked) return; 
-        
-        ctx.gameState.isPackAPunching = true;
-        const oldMesh = weapon.mesh;
-        if (oldMesh) oldMesh.setEnabled(false);
-
+    const findPapAnchorPosition = (
+        targetMachine: BABYLON.AbstractMesh
+    ): BABYLON.Vector3 => {
         _tempInteractVec.copyFrom(targetMachine.absolutePosition).addInPlace(_tempInteractOffset);
         let anchorPos = _tempInteractVec;
         let rootNode = targetMachine;
@@ -139,18 +133,37 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
             rootNode = rootNode.parent as BABYLON.AbstractMesh;
         }
 
-        const children   = rootNode.getChildTransformNodes(false);
+        const children = rootNode.getChildTransformNodes(false);
         const anchorNode = children.find(c => c.name === 'papWeaponAnchor');
         if (anchorNode) anchorPos.copyFrom(anchorNode.absolutePosition);
 
-        const scene = ctx.scene;
+        return anchorPos;
+    };
+
+    const setupPackAPunchAnimation = (
+        targetMachine: BABYLON.AbstractMesh,
+        weapon: WeaponState,
+        anchorPos: BABYLON.Vector3,
+        scene: BABYLON.Scene,
+        ctx: StateManager
+    ) => {
+        const oldMesh = weapon.mesh;
+        if (oldMesh) oldMesh.setEnabled(false);
+
+        let rootNode = targetMachine;
+        while (rootNode.parent && rootNode.parent instanceof BABYLON.TransformNode && rootNode.parent.name !== 'levelRoot') {
+            rootNode = rootNode.parent as BABYLON.AbstractMesh;
+        }
+        const children = rootNode.getChildTransformNodes(false);
+        const anchorNode = children.find(c => c.name === 'papWeaponAnchor');
+
         let animMesh: BABYLON.TransformNode | null = null;
         if (scene) {
             animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode);
             animMesh.parent = null;
             animMesh.position.copyFrom(anchorPos).addInPlace(_tempPapVec);
             if (anchorNode) {
-                animMesh.parent   = anchorNode;
+                animMesh.parent = anchorNode;
                 animMesh.position.copyFromFloats(0, 0, -0.5);
                 animMesh.rotation.copyFromFloats(0, Math.PI / 2, 0);
             }
@@ -174,124 +187,141 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                 if (animMesh) animMesh.dispose();
             });
         }
+    };
+
+    const applyPackAPunchUpgrade = (weapon: WeaponState, ctx: StateManager) => {
+        const upgradeConfig = ctx.configManager.upgradedWeapons[weapon.id];
+        if (upgradeConfig) {
+            Object.assign(weapon, upgradeConfig);
+            weapon.currentAmmo = weapon.clipSize;
+            weapon.currentReserve = weapon.maxReserve;
+            weapon.isPacked = true;
+        }
+    };
+
+    const createPackAPunchTexture = (ctx: StateManager): BABYLON.DynamicTexture => {
+        const texSize = 512;
+        const dynamicTexture = new BABYLON.DynamicTexture("papCamoTex", texSize, ctx.scene, true);
+        const ctx2d = dynamicTexture.getContext();
+
+        ctx2d.clearRect(0, 0, texSize, texSize);
+
+        ctx2d.shadowBlur = 10;
+        ctx2d.lineWidth = 4;
+
+        for (let i = 0; i < 30; i++) {
+            const hue = (i / 30) * 360;
+            const color = `hsl(${hue}, 100%, 50%)`;
+            ctx2d.shadowColor = color;
+            ctx2d.strokeStyle = color;
+
+            ctx2d.beginPath();
+            let x = Math.random() * texSize;
+            let y = Math.random() * texSize;
+            ctx2d.moveTo(x, y);
+            for (let j = 0; j < 5; j++) {
+                x += (Math.random() - 0.5) * 150;
+                y += (Math.random() - 0.5) * 150;
+                ctx2d.lineTo(x, y);
+            }
+            ctx2d.stroke();
+        }
+
+        ctx2d.shadowBlur = 0;
+        for (let i = 0; i < 50; i++) {
+            const hue = Math.random() * 360;
+            ctx2d.fillStyle = `hsla(${hue}, 100%, 50%, 0.2)`;
+            const s = 5 + Math.random() * 20;
+            ctx2d.fillRect(Math.random() * texSize, Math.random() * texSize, s, s);
+        }
+
+        dynamicTexture.update();
+        dynamicTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+        dynamicTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+        dynamicTexture.hasAlpha = true;
+
+        const obs = ctx.scene.onBeforeRenderObservable.add(() => {
+            const dt = ctx.scene.getEngine().getDeltaTime() / 1000;
+            dynamicTexture.uOffset += dt * 0.15;
+            dynamicTexture.vOffset += dt * 0.1;
+        });
+
+        dynamicTexture.onDisposeObservable.add(() => {
+            ctx.scene.onBeforeRenderObservable.remove(obs);
+        });
+
+        return dynamicTexture;
+    };
+
+    const applyPackAPunchMaterial = (
+        ctx: StateManager,
+        weapon: WeaponState,
+        papCamoTex: BABYLON.DynamicTexture
+    ) => {
+        if (!weapon.mesh) return;
+
+        weapon.mesh.setEnabled(true);
+
+        weapon.mesh.getChildMeshes().forEach((c: BABYLON.AbstractMesh) => {
+            if (c instanceof BABYLON.Mesh && c.material) {
+                const matName = c.material.name.toLowerCase();
+                if (matName.includes("glass") || matName.includes("lens") || matName.includes("glow") || matName.includes("effect")) {
+                    return;
+                }
+
+                if (!c.metadata?.originalMaterial) {
+                    c.metadata = { ...c.metadata, originalMaterial: c.material };
+                }
+
+                const papMat = c.material.clone(c.material.name + "_pap") as BABYLON.PBRMaterial | BABYLON.StandardMaterial;
+
+                if (papMat instanceof BABYLON.PBRMaterial) {
+                    papMat.metallic = 1.0;
+                    papMat.roughness = Math.min(papMat.roughness ?? 0.5, 0.2);
+                    papMat.emissiveTexture = papCamoTex;
+                    papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+
+                    const timeObs = ctx.scene.onBeforeRenderObservable.add(() => {
+                        const time = Date.now() / 1000;
+                        papMat.emissiveIntensity = 1.0 + Math.sin(time * 4) * 0.4;
+                    });
+                    papMat.onDisposeObservable.add(() => ctx.scene.onBeforeRenderObservable.remove(timeObs));
+                } else if (papMat instanceof BABYLON.StandardMaterial) {
+                    papMat.emissiveTexture = papCamoTex;
+                    papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                }
+
+                c.material = papMat;
+            }
+        });
+    };
+
+    const performPackAPunch = (targetMachine: BABYLON.AbstractMesh) => {
+        if (ctx.gameState.isPackAPunching) return;
+        const weapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
+        if (weapon.isPacked) return;
+
+        ctx.gameState.isPackAPunching = true;
+        const anchorPos = findPapAnchorPosition(targetMachine);
+        setupPackAPunchAnimation(targetMachine, weapon, anchorPos, ctx.scene, ctx);
 
         ctx.timerManager.schedule('pap_upgrade', 3000, () => {
-             const upgradeConfig = ctx.configManager.upgradedWeapons[weapon.id];
-             if (upgradeConfig) { 
-                 Object.assign(weapon, upgradeConfig); 
-                 weapon.currentAmmo = weapon.clipSize; 
-                 weapon.currentReserve = weapon.maxReserve; 
-                 weapon.isPacked = true; 
-             }
-             if (weapon.mesh) {
-                 weapon.mesh.setEnabled(true);
-                 
-                 // Generate the procedural texture ONCE for this upgrade event
-                 const papCamoTex = ctx.resourceManager.getTexture("papCamoTex", () => {
-                     const texSize = 512;
-                     const dynamicTexture = new BABYLON.DynamicTexture("papCamoTex", texSize, ctx.scene, true);
-                     const ctx2d = dynamicTexture.getContext();
-                     
-                     // Transparent base (so it only shows the lightning)
-                     ctx2d.clearRect(0, 0, texSize, texSize);
-                     
-                     // Glowing "Electric" Veins
-                     ctx2d.shadowBlur = 10;
-                     ctx2d.lineWidth = 4;
-                     
-                     for (let i = 0; i < 30; i++) {
-                         const hue = (i / 30) * 360;
-                         const color = `hsl(${hue}, 100%, 50%)`;
-                         ctx2d.shadowColor = color;
-                         ctx2d.strokeStyle = color;
+            applyPackAPunchUpgrade(weapon, ctx);
 
-                         ctx2d.beginPath();
-                         let x = Math.random() * texSize;
-                         let y = Math.random() * texSize;
-                         ctx2d.moveTo(x, y);
-                         for (let j = 0; j < 5; j++) {
-                             x += (Math.random() - 0.5) * 150;
-                             y += (Math.random() - 0.5) * 150;
-                             ctx2d.lineTo(x, y);
-                         }
-                         ctx2d.stroke();
-                     }
+            const papCamoTex = ctx.resourceManager.getTexture("papCamoTex", () => {
+                return createPackAPunchTexture(ctx);
+            }) as BABYLON.DynamicTexture;
 
-                     // Techy Squares
-                     ctx2d.shadowBlur = 0;
-                     for (let i = 0; i < 50; i++) {
-                         const hue = Math.random() * 360;
-                         ctx2d.fillStyle = `hsla(${hue}, 100%, 50%, 0.2)`;
-                         const s = 5 + Math.random() * 20;
-                         ctx2d.fillRect(Math.random() * texSize, Math.random() * texSize, s, s);
-                     }
-                     
-                     dynamicTexture.update();
-                     dynamicTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
-                     dynamicTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
-                     dynamicTexture.hasAlpha = true;
+            applyPackAPunchMaterial(ctx, weapon, papCamoTex);
 
-                     // Animation loop for scrolling camo
-                     const obs = ctx.scene.onBeforeRenderObservable.add(() => {
-                         const dt = ctx.scene.getEngine().getDeltaTime() / 1000;
-                         dynamicTexture.uOffset += dt * 0.15;
-                         dynamicTexture.vOffset += dt * 0.1;
-                     });
+            ctx.setAmmo(weapon.currentAmmo);
+            ctx.setReserveAmmo(weapon.currentReserve);
+            ctx.setWeaponName(weapon.name);
 
-                     dynamicTexture.onDisposeObservable.add(() => {
-                         ctx.scene.onBeforeRenderObservable.remove(obs);
-                     });
+            ctx.gameState.isPackAPunching = false;
+            ctx.setInteractionMsg("WEAPON UPGRADED!");
 
-                     return dynamicTexture;
-                 }) as BABYLON.DynamicTexture;
-
-                 weapon.mesh.getChildMeshes().forEach((c: BABYLON.AbstractMesh) => {
-                     if (c instanceof BABYLON.Mesh && c.material) { 
-                         const matName = c.material.name.toLowerCase();
-                         // Skip transparent/emissive parts of wonder weapons
-                         if (matName.includes("glass") || matName.includes("lens") || matName.includes("glow") || matName.includes("effect")) {
-                             return;
-                         }
-                         
-                         // Store original material for restoration on reset
-                         if (!c.metadata?.originalMaterial) {
-                             c.metadata = { ...c.metadata, originalMaterial: c.material };
-                         }
-
-                         // Clone original material to modify it
-                         const papMat = c.material.clone(c.material.name + "_pap") as BABYLON.PBRMaterial | BABYLON.StandardMaterial;
-                         
-                         if (papMat instanceof BABYLON.PBRMaterial) {
-                             papMat.metallic = 1.0;
-                             papMat.roughness = Math.min(papMat.roughness ?? 0.5, 0.2);
-                             papMat.emissiveTexture = papCamoTex;
-                             papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-                             
-                             // Pulse effect handled via an observer on the material itself
-                             const timeObs = ctx.scene.onBeforeRenderObservable.add(() => {
-                                 const time = Date.now() / 1000;
-                                 papMat.emissiveIntensity = 1.0 + Math.sin(time * 4) * 0.4;
-                             });
-                             papMat.onDisposeObservable.add(() => ctx.scene.onBeforeRenderObservable.remove(timeObs));
-                         } else if (papMat instanceof BABYLON.StandardMaterial) {
-                             // Fallback for StandardMaterial
-                             papMat.emissiveTexture = papCamoTex;
-                             papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-                         }
-
-                         c.material = papMat; 
-                     }
-                 });
-             }
-             
-             ctx.setAmmo(weapon.currentAmmo); 
-             ctx.setReserveAmmo(weapon.currentReserve);
-             ctx.setWeaponName(weapon.name);
-             
-             ctx.gameState.isPackAPunching = false;
-             ctx.setInteractionMsg("WEAPON UPGRADED!"); 
-             
-             ctx.timerManager.schedule('pap_msg_clear', ctx.configManager.visuals.HUD_MSG_DURATION || 2000, () => ctx.setInteractionMsg(null));
+            ctx.timerManager.schedule('pap_msg_clear', ctx.configManager.visuals.HUD_MSG_DURATION || 2000, () => ctx.setInteractionMsg(null));
         });
     };
 

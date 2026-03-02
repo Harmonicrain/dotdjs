@@ -304,5 +304,6 @@ Open the debug console with **`** (backtick) and enter commands:
 
 *   **Gemini (Google)**: Core Engine Architecture, Map Config System, UI/UX Design.
 *   **Claude (Anthropic)**: ECS System Refactoring, Network Delta Compression, Sound System.
+*   **Big Pickle (opencode.ai)**: Pathfinder Binary Heap Optimization, Bug Fixes, Refactoring.
 
 *Thank you for playing! <3*

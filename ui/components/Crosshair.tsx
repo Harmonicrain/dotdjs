@@ -12,8 +12,10 @@ export const Crosshair: React.FC = () => {
     
     const [showKillMarker, setShowKillMarker] = useState(false);
     const [isHit, setIsHit] = useState(false);
+    const [isFiring, setIsFiring] = useState(false);
     const prevKills = useRef(kills);
     const prevHealth = useRef(health);
+    const prevAmmo = useRef(ammo);
 
     // Detect kill for X animation
     useEffect(() => {
@@ -37,9 +39,20 @@ export const Crosshair: React.FC = () => {
         prevHealth.current = health;
     }, [health]);
 
-    // Gap size increases when hit (spread effect)
-    const gap = isHit ? 6 : 4;
-    const lineLength = isHit ? 10 : 8;
+    // Detect firing for crosshair expansion
+    useEffect(() => {
+        if (ammo < prevAmmo.current) {
+            setIsFiring(true);
+            const timer = setTimeout(() => setIsFiring(false), 100);
+            prevAmmo.current = ammo;
+            return () => clearTimeout(timer);
+        }
+        prevAmmo.current = ammo;
+    }, [ammo]);
+
+    // Gap size increases when hit or firing (spread effect)
+    const gap = isHit ? 6 : isFiring ? 8 : 4;
+    const lineLength = isHit ? 10 : isFiring ? 12 : 8;
 
     return (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 
@@ -68,48 +81,56 @@ export const Crosshair: React.FC = () => {
                     {/* Top line */}
                     <div 
                         className={`absolute left-1/2 -translate-x-1/2 w-[2px] transition-all duration-75
-                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : 'bg-white/90'}`}
+                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : isFiring ? 'bg-white' : 'bg-white/90'}`}
                         style={{ 
                             height: `${lineLength}px`,
                             top: `-${gap + lineLength}px`,
                             boxShadow: isEmpty ? '0 0 6px rgba(239,68,68,0.8)' : 
-                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' : 'none',
+                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' : 
+                                       isFiring ? '0 0 8px rgba(255,255,255,0.6)' : 'none',
+                            opacity: isFiring ? 0.8 : 1,
                         }}
                     />
                     
                     {/* Bottom line */}
                     <div 
                         className={`absolute left-1/2 -translate-x-1/2 w-[2px] transition-all duration-75
-                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : 'bg-white/90'}`}
+                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : isFiring ? 'bg-white' : 'bg-white/90'}`}
                         style={{ 
                             height: `${lineLength}px`,
                             top: `${gap}px`,
                             boxShadow: isEmpty ? '0 0 6px rgba(239,68,68,0.8)' : 
-                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' : 'none',
+                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' :
+                                       isFiring ? '0 0 8px rgba(255,255,255,0.6)' : 'none',
+                            opacity: isFiring ? 0.8 : 1,
                         }}
                     />
                     
                     {/* Left line */}
                     <div 
                         className={`absolute top-1/2 -translate-y-1/2 h-[2px] transition-all duration-75
-                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : 'bg-white/90'}`}
+                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : isFiring ? 'bg-white' : 'bg-white/90'}`}
                         style={{ 
                             width: `${lineLength}px`,
                             left: `-${gap + lineLength}px`,
                             boxShadow: isEmpty ? '0 0 6px rgba(239,68,68,0.8)' : 
-                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' : 'none',
+                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' :
+                                       isFiring ? '0 0 8px rgba(255,255,255,0.6)' : 'none',
+                            opacity: isFiring ? 0.8 : 1,
                         }}
                     />
                     
                     {/* Right line */}
                     <div 
                         className={`absolute top-1/2 -translate-y-1/2 h-[2px] transition-all duration-75
-                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : 'bg-white/90'}`}
+                                   ${isEmpty ? 'bg-red-500' : isHit ? 'bg-red-400' : isFiring ? 'bg-white' : 'bg-white/90'}`}
                         style={{ 
                             width: `${lineLength}px`,
                             left: `${gap}px`,
                             boxShadow: isEmpty ? '0 0 6px rgba(239,68,68,0.8)' : 
-                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' : 'none',
+                                       isHit ? '0 0 4px rgba(248,113,113,0.6)' :
+                                       isFiring ? '0 0 8px rgba(255,255,255,0.6)' : 'none',
+                            opacity: isFiring ? 0.8 : 1,
                         }}
                     />
                     
