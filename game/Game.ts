@@ -7,8 +7,8 @@ import { GameEngine } from './GameEngine';
 import { createWeapons } from '../meshes/WeaponMeshFactory';
 import { createRemotePlayer } from '../meshes/RemotePlayerFactory';
 import { loadMap } from '../managers/MapRegistry';
-import { GAME_CONFIG } from '../config';
-import { WindowBarrier, MysteryBox, GameMessage, Zombie, DoorMeshEntry, MysteryBoxState } from '../types/index';
+import { GAME_CONFIG, WEAPON_CONFIGS } from '../config';
+import { WindowBarrier, MysteryBox, GameMessage, Zombie, DoorMeshEntry, MysteryBoxState, WeaponState } from '../types/index';
 import { StateManager } from '../state/StateManager';
 import { VisualManager } from '../managers/VisualManager';
 import { SoundManager } from '../managers/SoundManager';
@@ -436,9 +436,13 @@ export class Game {
                 if (m instanceof BABYLON.Mesh) {
                     const matName = m.material?.name || "";
                     // Only restore if we are currently using the PaP camo
-                    if (matName.includes("papCamoMat")) {
+                    // The InteractionSystem adds "_pap" suffix to materials
+                    if (matName.includes("_pap")) {
                         if (m.metadata?.originalMaterial) {
+                            const papMat = m.material;
                             m.material = m.metadata.originalMaterial;
+                            // Dispose the cloned PaP material to release memory and remove observers
+                            if (papMat) papMat.dispose();
                         }
                     }
                 }
@@ -447,8 +451,8 @@ export class Game {
         });
         if (this.knifeMesh) this.knifeMesh.setEnabled(false);
 
-        // Cleanup PaP Material from resource cache
-        this.resourceManager.removeMaterial("papCamoMat");
+        // Cleanup PaP Texture from resource cache
+        this.resourceManager.removeTexture("papCamoTex");
     }
 
     /** Reset visual manager and timers */
@@ -460,6 +464,9 @@ export class Game {
 
     /** Reset game state flags */
     private _resetGameStateFlags(sm: StateManager): void {
+        sm.gameState.hasStarted = false;
+        sm.gameState.round = 1;
+        sm.setRound(1);
         sm.gameState.isPackAPunching = false;
         sm.gameState.isReloading = false;
         sm.gameState.isFiring = false;
@@ -475,6 +482,21 @@ export class Game {
         sm.setPoints(GAME_CONFIG.STARTING_POINTS);
         sm.setInteractionMsg(null);
         sm.setHoverMsg(null);
+
+        // Reset weapons to starting state (pistol)
+        sm.gameState.weapons = WEAPON_CONFIGS.filter(w => w.id === 'pistol').map(w => ({
+            ...w,
+            currentAmmo: w.clipSize,
+            currentReserve: w.maxReserve,
+            isPacked: false,
+            mesh: sm.gameState.weaponMeshes[w.id] || null
+        })) as WeaponState[];
+        
+        sm.gameState.activeWeaponIndex = 0;
+        sm.setActiveWeaponIndex(0);
+        sm.setWeaponName(sm.gameState.weapons[0].name);
+        sm.setAmmo(sm.gameState.weapons[0].currentAmmo);
+        sm.setReserveAmmo(sm.gameState.weapons[0].currentReserve);
     }
 
     /** Reset mystery box state */
@@ -546,15 +568,16 @@ export class Game {
         
         // 2. Load New Map
         try {
+            const sm = this.stateManager;
             const onBuildingLoaded = (meshes: BABYLON.AbstractMesh[]) => {
                 for (const m of meshes) {
                     if (m && m.checkCollisions && m.isVisible && !m.name.includes("trigger")) {
-                        this.stateManager.staticLevelMeshes.add(m as BABYLON.Mesh);
+                        sm.staticLevelMeshes.add(m as BABYLON.Mesh);
                     }
                 }
             };
             
-            const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, this.stateManager.windows, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
+            const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, sm.windows, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
             this.currentMapRoot = lvl.root;
             
             if (lvl.doors) {
