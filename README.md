@@ -75,7 +75,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 | Map ID | Name | Description |
 |--------|------|-------------|
 | `warehouse` | WAREHOUSE 115 | An abandoned storage facility with tight corridors. |
-| `map_test` | MAP TEST | A large octagonal stone arena surrounded by gates. |
+| `map_test` | Test Arena | A large octagonal stone arena surrounded by gates. |
 | `barn` | THE BARN | An isolated barn in an octagonal arena. No perks, no mercy. |
 
 ---
@@ -101,7 +101,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 
 ```bash
 ├── config/                 # Global defaults (gameplay, weapons, enemies, maps)
-│   └── weapons/           # Individual weapon configs (pistol, shotgun, rifle, wonderweapons)
+│   └── weapons/           # Individual weapon configs (pistol, shotgun, fullauto, semiauto, wonderweapons)
 ├── documentation/         # Project docs (ARCHITECTURE.md, MAP_CREATION.md, etc.)
 ├── engine/                # Custom Engine core
 │   ├── CommandRegistry.ts # Debug console commands
@@ -153,6 +153,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 ├── public/             # Static assets
 │   └── sounds/        # Audio files (weapons, powerups, ambient)
 ├── state/             # State Management
+│   ├── RemotePlayerState.ts # Remote player state
 │   ├── StateManager.ts # Central game state (Single Source of Truth)
 │   └── UIBridge.ts    # Engine-to-UI communication
 ├── store/            # Zustand store for React UI
@@ -183,8 +184,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 │   ├── GameMenuManager.ts # Menu state management
 │   ├── GameMenus.tsx      # Main menu, host/join lobbies
 │   ├── GameScene.tsx      # Canvas wrapper
-│   ├── HUD.tsx           # Main HUD layout
-│   └── index.tsx         # UI entry point
+│   └── HUD.tsx           # Main HUD layout
 ├── App.tsx           # Root React component
 ├── index.tsx         # Entry point
 ├── vite.config.ts   # Vite configuration
@@ -253,7 +253,6 @@ Open the debug console with **`** (backtick) and enter commands:
 | `/scaleweapon [id]` | Weapon scaling debug tool |
 | `/god` | Toggle god mode (invincibility) |
 | `/noclip` | Toggle noclip mode (fly through walls) |
-| `/build [args]` | Enter map building mode |
 | `/help` | Show all available commands |
 
 ---
@@ -301,7 +300,7 @@ Open the debug console with **`** (backtick) and enter commands:
 
 ## ✒️ Authors & Attribution
 
-**"DOM OF THE ROAD"** was architected and written by Artificial Intelligence.
+**"DOM OF THE DEAD"** was architected and written by Artificial Intelligence.
 
 *   **Gemini (Google)**: Core Engine Architecture, Map Config System, UI/UX Design.
 *   **Claude (Anthropic)**: ECS System Refactoring, Network Delta Compression, Sound System.
