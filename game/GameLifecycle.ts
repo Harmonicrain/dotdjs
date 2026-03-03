@@ -227,6 +227,11 @@ export class GameLifecycle {
         sm.setKills(0);
         sm.setShotsFired(0);
 
+        // Propagate the session game mode to all systems BEFORE GAME_STARTED fires
+        // so that NetworkSystem and RemotePlayerSystem read the correct mode on their
+        // very first tick and inside their GAME_STARTED reset handlers.
+        sm.updateGameMode(mode);
+
         // Reset weapons to starting pistol
         const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');
         if (pistolConfig) {
@@ -292,6 +297,7 @@ export class GameLifecycle {
             sm.gameState.isGameOver   = false;
             sm.gameState.isPaused     = false;
             sm.gameState.isSpectating = false;
+            sm.updateGameMode('SOLO');
         }
 
         callbacks.onStartedChange(false);
