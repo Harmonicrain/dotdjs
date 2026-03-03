@@ -19,7 +19,7 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
     // This node represents where the weapon floats during the upgrade sequence.
     const anchor = new BABYLON.TransformNode("papWeaponAnchor", scene);
     anchor.parent = root;
-    anchor.position = new BABYLON.Vector3(0, 1.4, 0.3); // Positioned slightly front and up
+    anchor.position = new BABYLON.Vector3(-0.7, 1.4, 0.3); // Positioned slightly front and up
 
     // Load 3D Model
     BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.PACK_A_PUNCH, scene)
