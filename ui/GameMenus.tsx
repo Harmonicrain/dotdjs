@@ -407,7 +407,7 @@ export const HostLobby: React.FC<HostLobbyProps> = ({ mapName, roomId, connectio
                             <div className="absolute inset-0 bg-gradient-to-r from-red-900/0 via-red-900/10 to-red-900/0 animate-pulse" />
                             <span className="text-stone-500 text-xs tracking-[0.3em] uppercase block mb-3 font-sans relative">Ritual Code</span>
                             <p className="text-5xl font-mono font-bold text-amber-500 tracking-[0.4em] select-all relative">
-                                {roomId || "----"}
+                                {roomId || "------"}
                             </p>
                         </div>
                         
@@ -508,8 +508,8 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ joinId, onUpdateJoinId, co
                                     value={joinId} 
                                     onChange={e => onUpdateJoinId(e.target.value.toUpperCase())} 
                                     className="w-full bg-black border border-stone-700 p-5 text-center text-4xl font-mono text-amber-500 tracking-[0.5em] uppercase focus:border-amber-700 outline-none placeholder:text-stone-800" 
-                                    placeholder="----" 
-                                    maxLength={4} 
+                                    placeholder="------" 
+                                    maxLength={6} 
                                 />
                             </div>
 
@@ -533,7 +533,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ joinId, onUpdateJoinId, co
                             ) : (
                                 <button 
                                     onClick={onConnect} 
-                                    disabled={joinId.length < 4 || connectionStatus === 'CONNECTING...'} 
+                                    disabled={joinId.length < 6 || connectionStatus === 'CONNECTING...'} 
                                     className="w-full py-5 bg-gradient-to-b from-stone-800 to-stone-900 hover:from-stone-700 hover:to-stone-800 disabled:from-stone-900 disabled:to-stone-950 disabled:text-stone-700 text-stone-200 font-bold tracking-[0.2em] uppercase transition-all disabled:cursor-not-allowed border border-stone-700"
                                 >
                                     {connectionStatus === 'CONNECTING...' ? 'Seeking...' : 'Connect'}
