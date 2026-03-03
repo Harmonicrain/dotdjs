@@ -124,10 +124,9 @@ export const useMultiplayer = (
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
                     { urls: 'stun:global.stun.twilio.com:3478' },
-                    // Note: For production, add your own TURN server here for restrictive NATs
-                    // Example: { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
                 ],
-                sdpSemantics: 'unified-plan'
+                sdpSemantics: 'unified-plan',
+                iceTransportPolicy: 'all'
             }
         });
     };
@@ -169,7 +168,8 @@ export const useMultiplayer = (
         
         cleanup();
 
-        const id = Math.random().toString(36).substring(2, 6).toUpperCase();
+        // Use longer, more unique ID to avoid collisions on PeerJS cloud
+        const id = Math.random().toString(36).substring(2, 8).toUpperCase();
         setRoomId(id);
         
         const peer = createPeer(id);
@@ -187,10 +187,7 @@ export const useMultiplayer = (
         });
 
         peer.on('connection', (conn: DataConnection) => {
-            console.log('Host received connection from:', conn.peer);
-            
-            // Ensure serialization matches client configuration
-            conn.serialization = 'json';
+            console.log('Host: connection event from', conn.peer, 'serialization:', conn.serialization);
             
             if (connRef.current) {
                 try { connRef.current.close(); } catch(e) {}
@@ -199,11 +196,18 @@ export const useMultiplayer = (
             connRef.current = conn;
             updateStatus("CONNECTING...");
 
+            // Log immediate peer connection state
+            setTimeout(() => {
+                const pc = (conn as any).peerConnection;
+                console.log('Host immediate ICE state:', pc?.iceConnectionState);
+            }, 500);
+
             clearConnectionTimeout();
             connectionTimeoutRef.current = setTimeout(() => {
                 if (connRef.current && !connRef.current.open) {
-                    console.warn("Host Connection Timeout");
-                    updateStatus("TIMEOUT");
+                    const pc = (conn as any).peerConnection;
+                    console.warn("Host Connection Timeout - ICE state:", pc?.iceConnectionState);
+                    updateStatus("TIMEOUT - NAT/Firewall blocked");
                     connRef.current.close();
                 }
             }, CONNECTION_TIMEOUT_MS);
@@ -226,7 +230,19 @@ export const useMultiplayer = (
                 updateStatus("WAITING...");
             });
             
-            conn.on('error', (err: PeerError) => console.warn('Conn Error:', err));
+            conn.on('error', (err: PeerError) => {
+                console.warn('Host Conn Error:', err.type, err.message);
+                updateStatus(`ERR: ${err.type || 'CONN'}`);
+            });
+            
+            conn.on('iceConnectionStateChange', () => {
+                const pc = (conn as any).peerConnection;
+                console.log('Host ICE state:', pc?.iceConnectionState);
+                if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
+                    console.warn('Host ICE connection failed/disconnected');
+                    updateStatus("RETRYING...");
+                }
+            });
         });
 
         peer.on('disconnected', () => {
@@ -256,22 +272,30 @@ export const useMultiplayer = (
         }
         
         peerRef.current = peer;
-        updateStatus("CONNECTING...");
+        updateStatus("SEEKING...");
 
         clearConnectionTimeout();
         connectionTimeoutRef.current = setTimeout(() => {
             if (connectionStatusRef.current !== "CONNECTED") {
                 console.warn("Client Connection Timeout");
-                updateStatus("TIMEOUT");
+                updateStatus("TIMEOUT - Check firewall/port forwarding");
                 cleanup();
             }
         }, CONNECTION_TIMEOUT_MS);
 
         peer.on('open', (myId: string) => {
-            console.log('Client initialized:', myId);
+            console.log('Client initialized:', myId, '- connecting to host:', hostId);
             
-            const conn = peer.connect(hostId, { serialization: 'json', reliable: true });
+            const conn = peer.connect(hostId, { serialization: 'json' });
+            console.log('Client: created connection (serialization: json), waiting for open...');
             connRef.current = conn;
+            updateStatus("CONNECTING...");
+
+            // Log immediate peer connection state
+            setTimeout(() => {
+                const pc = (conn as any).peerConnection;
+                console.log('Client immediate ICE state:', pc?.iceConnectionState);
+            }, 500);
 
             conn.on('open', () => {
                 console.log('Client Data Connection Open');
@@ -291,8 +315,17 @@ export const useMultiplayer = (
             });
             
             conn.on('error', (err: PeerError) => {
-                console.warn('Conn Error:', err);
+                console.warn('Client Conn Error:', err.type, err.message);
                 updateStatus(`ERR: ${err.type || 'CONN'}`);
+            });
+            
+            conn.on('iceConnectionStateChange', () => {
+                const pc = (conn as any).peerConnection;
+                console.log('Client ICE state:', pc?.iceConnectionState);
+                if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
+                    console.warn('Client ICE connection failed/disconnected');
+                    updateStatus("RETRYING...");
+                }
             });
         });
 
