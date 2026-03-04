@@ -29,7 +29,7 @@ import {
     createZombieAnimationSystem, createInteractionSystem,
     createPowerUpSystem, createWeaponViewSystem, createRoundSystem,
     createNetworkSystem, createRemotePlayerSystem, createDownedSystem, createReviveSystem,
-    createMysteryBoxSystem
+    createMysteryBoxSystem, createZombieSyncSystem
 } from '../systems';
 
 /** Plain ref-like object so Game.ts stays React-free. */
@@ -331,6 +331,13 @@ export class Game {
             scene: sm.scene,
             zombies: sm.zombies,
             configManager: sm.configManager
+        }));
+        this.systemManager.register(createZombieSyncSystem({
+            scene: sm.scene,
+            gameModeRef: sm.gameModeRef,
+            zombies: sm.zombies,
+            eventBus: sm.eventBus,
+            resourceManager: sm.resourceManager,
         }));
         this.systemManager.register(createPowerUpSystem(sm));
         this.systemManager.register(createWeaponViewSystem(sm));

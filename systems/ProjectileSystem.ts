@@ -175,7 +175,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                 0,
                 true,
                 msg.isPacked || false,
-                'CLIENT',
+                msg.owner || 'CLIENT',
                 msg.isExplosive || false,
                 msg.isExplosive ? 6 : undefined,  // default splash radius for ray gun
                 msg.isExplosive ? 1000 : undefined,  // default splash damage

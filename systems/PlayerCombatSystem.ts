@@ -224,8 +224,8 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                           p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, weapon.isPacked);
                       }
                   }
-                  if (ctx.gameModeRef.current !== 'SOLO') { 
-                      ctx.send({ type: 'SHOOT', origin: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z }, dir: { x: finalDir.x, y: finalDir.y, z: finalDir.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive }); 
+                  if (ctx.gameModeRef.current !== 'SOLO') {
+                      ctx.send({ type: 'SHOOT', origin: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z }, dir: { x: finalDir.x, y: finalDir.y, z: finalDir.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST' });
                  }
              }
 
