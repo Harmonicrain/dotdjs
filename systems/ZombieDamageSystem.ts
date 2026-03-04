@@ -60,6 +60,18 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                 ctx.gameState.downedStartTime = Date.now();
                 ctx.gameState.downedTimeLimit = ctx.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
                 ctx.setIsDowned(true);
+                if (!isSolo) {
+                    ctx.send({
+                        type: 'PLAYER_DOWNED',
+                        playerName: ctx.gameState.playerName || "Survivor",
+                        position: { x: ctx.camera.position.x, y: ctx.camera.position.y, z: ctx.camera.position.z }
+                    });
+
+                    // In multiplayer, if both players are now downed, trigger game over
+                    if (ctx.remote.gameState.isDowned) {
+                        ctx.setIsGameOver(true);
+                    }
+                }
             }
         }
     };
@@ -138,6 +150,11 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                                         playerName: gameState.playerName || "Survivor",
                                         position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }
                                     });
+
+                                    // In multiplayer, if both players are now downed, trigger game over
+                                    if (ctx.remote.gameState.isDowned) {
+                                        ctx.setIsGameOver(true);
+                                    }
                                 }
                             }
                         }

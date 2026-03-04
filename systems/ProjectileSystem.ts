@@ -174,7 +174,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                 rayDir,
                 speed,
                 msg.damage ?? 0,
-                false,
+                true, // Correctly mark as remote
                 msg.isPacked || false,
                 msg.owner || 'CLIENT',
                 msg.isExplosive || false,
@@ -183,12 +183,10 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                 msg.selfDamageMultiplier ?? (msg.isExplosive ? 0.5 : undefined)
             );
 
-            // Add trail if explosive
-            if (msg.isExplosive) {
-                const p = engine.activeProjectiles[engine.activeProjectiles.length - 1];
-                if (p && p.isExplosive) {
-                    p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, p.isPacked);
-                }
+            // Add tracer trail to all remote projectiles for visibility
+            const p = engine.activeProjectiles[engine.activeProjectiles.length - 1];
+            if (p) {
+                p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, p.isPacked);
             }
         }
     };

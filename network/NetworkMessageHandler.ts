@@ -353,8 +353,10 @@ export const createNetworkMessageHandler = (
                 sm.timerManager.schedule('dmg_flash', sm.configManager.visuals.HIT_FLASH_DURATION * 2, () => sm.setFlashColor(null));
 
                 if (sm.gameState.health <= 0 && !sm.gameState.isDowned) {
+                    const isSolo = sm.gameModeRef.current === 'SOLO';
                     const hasQuickRevive = sm.gameState.perkStates['quickRevive'];
-                    if (!hasQuickRevive) {
+                    
+                    if (isSolo && !hasQuickRevive) {
                         sm.setHealth(0);
                         sm.setIsGameOver(true);
                     } else {
@@ -362,6 +364,8 @@ export const createNetworkMessageHandler = (
                         sm.gameState.downedStartTime = now;
                         sm.gameState.downedTimeLimit = sm.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
                         sm.setIsDowned(true);
+                        
+                        // Notify others (host) that we went down
                         sm.send({
                             type: 'PLAYER_DOWNED',
                             playerName: sm.gameState.playerName || 'Unknown',
@@ -396,6 +400,11 @@ export const createNetworkMessageHandler = (
                 sm.remote.gameState.isDowned = true;
                 actions.setInteractionMsg(`${msg.playerName} IS DOWN!`);
                 sm.timerManager.schedule('net_downed_msg_clear', 3000, () => actions.setInteractionMsg(null));
+                
+                // In multiplayer, if both players are now downed, trigger game over on the host
+                if (sm.gameModeRef.current === 'HOST' && sm.gameState.isDowned) {
+                    sm.setIsGameOver(true);
+                }
                 break;
 
             case 'REVIVE_START':

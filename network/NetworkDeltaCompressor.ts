@@ -47,6 +47,7 @@ export interface HostSnapshot {
     round: number;
     powerOn: boolean;
     isDogRound: boolean;
+    isGameOver: boolean;
     activePowerUps: PowerUpType[];
     mysteryBox: MysteryBoxSnapshot;
 }
@@ -169,6 +170,7 @@ export class NetworkDeltaCompressor {
         round: number;
         powerOn: boolean;
         isDogRound: boolean;
+        isGameOver: boolean;
         activePowerUps: PowerUpType[];
         mysteryBox: {
             state: number; locIndex: number; lidAngle: number;
