@@ -225,7 +225,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                       }
                   }
                   if (ctx.gameModeRef.current !== 'SOLO') {
-                      ctx.send({ type: 'SHOOT', origin: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z }, dir: { x: finalDir.x, y: finalDir.y, z: finalDir.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST' });
+                      ctx.send({ type: 'SHOOT', origin: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z }, dir: { x: finalDir.x, y: finalDir.y, z: finalDir.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST', speed: finalSpeed, splashRadius: weapon.splashRadius, splashDamage: weapon.splashDamage, selfDamageMultiplier: weapon.selfDamageMultiplier });
                  }
              }
 
