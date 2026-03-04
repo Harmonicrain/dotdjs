@@ -125,6 +125,9 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                     s.z = z.mesh.position.z;
                     s.rot = z.mesh.rotation.y;
                     s.isBurning = z.isBurning;
+                    s.health = z.health;
+                    s.maxHealth = z.maxHealth;
+                    s.isCrawling = !!z.isCrawling;
                 }
 
                 const delta = compressor.computeHostDelta(now, {

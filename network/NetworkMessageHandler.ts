@@ -192,9 +192,65 @@ export const createNetworkMessageHandler = (
                 sm.eventBus.emit('REMOTE_SHOOT', msg);
                 break;
 
-            case 'INTERACT_DOOR':
-                sm.eventBus.emit('DOOR_OPEN_REQUEST', msg.doorId);
+            case 'INTERACT_DOOR': {
+                // HOST validates CLIENT has enough points before opening
+                const doorState = sm.gameState.doorStates[msg.doorId];
+                if (doorState && !doorState.isOpen) {
+                    const clientPoints = cachedClient.clientPoints;
+                    if (clientPoints >= doorState.cost) {
+                        sm.eventBus.emit('DOOR_OPEN_REQUEST', msg.doorId);
+                        // Deduct points from CLIENT's tracked state and confirm
+                        const newPoints = clientPoints - doorState.cost;
+                        cachedClient.clientPoints = newPoints;
+                        sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                    } else {
+                        sm.send({ type: 'INTERACT_REJECT', interactionType: 'DOOR', points: clientPoints });
+                    }
+                }
                 break;
+            }
+
+            case 'INTERACT_PERK': {
+                // HOST validates CLIENT perk purchase
+                const perkMsg = msg as any;
+                const clientPoints = cachedClient.clientPoints;
+                if (clientPoints >= perkMsg.cost) {
+                    const newPoints = clientPoints - perkMsg.cost;
+                    cachedClient.clientPoints = newPoints;
+                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                } else {
+                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'PERK', points: clientPoints });
+                }
+                break;
+            }
+
+            case 'INTERACT_WALL_BUY': {
+                // HOST validates CLIENT wall buy
+                const wbMsg = msg as any;
+                const clientPoints = cachedClient.clientPoints;
+                if (clientPoints >= wbMsg.cost) {
+                    const newPoints = clientPoints - wbMsg.cost;
+                    cachedClient.clientPoints = newPoints;
+                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                } else {
+                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'WALL_BUY', points: clientPoints });
+                }
+                break;
+            }
+
+            case 'INTERACT_PACK_A_PUNCH': {
+                // HOST validates CLIENT Pack-a-Punch
+                const papMsg = msg as any;
+                const clientPoints = cachedClient.clientPoints;
+                if (clientPoints >= papMsg.cost && sm.gameState.powerOn) {
+                    const newPoints = clientPoints - papMsg.cost;
+                    cachedClient.clientPoints = newPoints;
+                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                } else {
+                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'PACK_A_PUNCH', points: clientPoints });
+                }
+                break;
+            }
 
             case 'INTERACT_POWER':
                 sm.eventBus.emit('POWER_ON_REQUEST', null);
@@ -212,15 +268,31 @@ export const createNetworkMessageHandler = (
 
             case 'INTERACT_BOX':
             case 'INTERACT_BOX_START':
-            case 'INTERACT_BOX_TAKE':
+            case 'INTERACT_BOX_TAKE': {
                 if (sm.mysteryBoxSystem) {
                     const playerName =
                         (msg.type === 'INTERACT_BOX_START' || msg.type === 'INTERACT_BOX_TAKE')
                             ? msg.playerName
                             : undefined;
-                    sm.mysteryBoxSystem.interact(playerName);
+
+                    // For BOX_START, validate CLIENT has enough points
+                    if (msg.type === 'INTERACT_BOX_START') {
+                        const boxCost = sm.configManager.mysteryBox.COST;
+                        const clientPoints = cachedClient.clientPoints;
+                        if (clientPoints >= boxCost) {
+                            const newPoints = clientPoints - boxCost;
+                            cachedClient.clientPoints = newPoints;
+                            sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                            sm.mysteryBoxSystem.interact(playerName);
+                        } else {
+                            sm.send({ type: 'INTERACT_REJECT', interactionType: 'BOX', points: clientPoints });
+                        }
+                    } else {
+                        sm.mysteryBoxSystem.interact(playerName);
+                    }
                 }
                 break;
+            }
 
             case 'SPAWN_POWERUP':
                 sm.gameState.pendingPowerUps.push({
@@ -238,6 +310,20 @@ export const createNetworkMessageHandler = (
 
             case 'HIT_CONFIRM':
                 sm.addPoints(msg.amount);
+                break;
+
+            case 'POINTS_UPDATE':
+                // HOST confirmed a purchase — apply the authoritative point value
+                sm.gameState.points = msg.points;
+                sm.setPoints(msg.points);
+                sm.gameState.totalEarnedPoints = msg.totalEarned;
+                sm.setTotalEarnedPoints(msg.totalEarned);
+                break;
+
+            case 'INTERACT_REJECT':
+                // HOST rejected an interaction — sync CLIENT points to HOST's authoritative value
+                sm.gameState.points = msg.points;
+                sm.setPoints(msg.points);
                 break;
 
             case 'RESPAWN':

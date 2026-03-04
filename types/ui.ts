@@ -168,6 +168,9 @@ export interface ZombieSyncData {
     z: number;
     rot: number;
     isBurning?: boolean;
+    health?: number;
+    maxHealth?: number;
+    isCrawling?: boolean;
 }
 
 export type GameMessage = 
@@ -243,7 +246,10 @@ export type GameMessage =
         damage: number;
         owner?: 'HOST' | 'CLIENT';
       }
-    | { type: 'INTERACT_DOOR'; doorId: string } 
+    | { type: 'INTERACT_DOOR'; doorId: string }
+    | { type: 'INTERACT_PERK'; perkId: string; perkType: string; cost: number }
+    | { type: 'INTERACT_WALL_BUY'; weaponId: string; cost: number }
+    | { type: 'INTERACT_PACK_A_PUNCH'; weaponId: string; cost: number }
     | { type: 'INTERACT_POWER' }
     | { type: 'INTERACT_WINDOW'; targetId: string }
     | { type: 'SPAWN_POWERUP'; id: string; pType: PowerUpType; x: number; y: number; z: number }
@@ -257,4 +263,6 @@ export type GameMessage =
     | { type: 'REVIVE_START'; revivorName: string; downedPlayerName: string }
     | { type: 'REVIVE_CANCEL'; revivorName: string }
     | { type: 'REVIVE_COMPLETE'; revivorName: string; downedPlayerName: string }
-    | { type: 'SELF_REVIVE'; playerName: string };
+    | { type: 'SELF_REVIVE'; playerName: string }
+    | { type: 'POINTS_UPDATE'; points: number; totalEarned: number }
+    | { type: 'INTERACT_REJECT'; interactionType: string; points: number };

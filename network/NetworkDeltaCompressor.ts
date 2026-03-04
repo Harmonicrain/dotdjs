@@ -38,7 +38,7 @@ export interface HostSnapshot {
     hostKills: number;
     hostShots: number;
     /** Per-zombie position cache keyed by zombie id. */
-    zombiePositions: Record<string, { x: number; y: number; z: number; rot: number; isBurning: boolean }>;
+    zombiePositions: Record<string, { x: number; y: number; z: number; rot: number; isBurning: boolean; health: number; maxHealth: number; isCrawling: boolean }>;
     /** Set of zombie ids known to be alive. */
     zombieIds: Set<string>;
     windowStates: Record<string, number>;
@@ -189,6 +189,8 @@ export class NetworkDeltaCompressor {
                 zombiePositions[z.id] = {
                     x: rnd(z.x), y: rnd(z.y), z: rnd(z.z),
                     rot: rnd(z.rot), isBurning: !!z.isBurning,
+                    health: z.health ?? 0, maxHealth: z.maxHealth ?? 0,
+                    isCrawling: !!z.isCrawling,
                 };
             }
 
@@ -238,6 +240,8 @@ export class NetworkDeltaCompressor {
                     id: z.id, type: z.type,
                     x: rnd(z.x), y: rnd(z.y), z: rnd(z.z), rot: rnd(z.rot),
                     isBurning: z.isBurning,
+                    health: z.health, maxHealth: z.maxHealth,
+                    isCrawling: z.isCrawling,
                 })),
                 removedZombieIds: [],
                 windowStates: full.windowStates,
@@ -355,8 +359,8 @@ export class NetworkDeltaCompressor {
 
             if (!prev) {
                 // Brand-new zombie – always include
-                changedZombies.push({ id: z.id, type: z.type, x: rx, y: ry, z: rz, rot: rrot, isBurning: z.isBurning });
-                snap.zombiePositions[z.id] = { x: rx, y: ry, z: rz, rot: rrot, isBurning: !!z.isBurning };
+                changedZombies.push({ id: z.id, type: z.type, x: rx, y: ry, z: rz, rot: rrot, isBurning: z.isBurning, health: z.health, maxHealth: z.maxHealth, isCrawling: z.isCrawling });
+                snap.zombiePositions[z.id] = { x: rx, y: ry, z: rz, rot: rrot, isBurning: !!z.isBurning, health: z.health ?? 0, maxHealth: z.maxHealth ?? 0, isCrawling: !!z.isCrawling };
             } else {
                 const moved =
                     Math.abs(rx - prev.x) > threshold ||
@@ -364,10 +368,12 @@ export class NetworkDeltaCompressor {
                     Math.abs(rz - prev.z) > threshold ||
                     Math.abs(rrot - prev.rot) > threshold;
                 const burnChanged = !!z.isBurning !== prev.isBurning;
+                const healthChanged = (z.health ?? 0) !== prev.health;
+                const crawlChanged = !!z.isCrawling !== prev.isCrawling;
 
-                if (moved || burnChanged) {
-                    changedZombies.push({ id: z.id, type: z.type, x: rx, y: ry, z: rz, rot: rrot, isBurning: z.isBurning });
-                    snap.zombiePositions[z.id] = { x: rx, y: ry, z: rz, rot: rrot, isBurning: !!z.isBurning };
+                if (moved || burnChanged || healthChanged || crawlChanged) {
+                    changedZombies.push({ id: z.id, type: z.type, x: rx, y: ry, z: rz, rot: rrot, isBurning: z.isBurning, health: z.health, maxHealth: z.maxHealth, isCrawling: z.isCrawling });
+                    snap.zombiePositions[z.id] = { x: rx, y: ry, z: rz, rot: rrot, isBurning: !!z.isBurning, health: z.health ?? 0, maxHealth: z.maxHealth ?? 0, isCrawling: !!z.isCrawling };
                 }
             }
         }

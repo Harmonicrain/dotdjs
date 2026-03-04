@@ -23,24 +23,36 @@ export const WallBuyHandler: InteractionHandler = {
         const isPacked = hasWeapon && weapons[existingSlot].isPacked;
         const papAmmoCost = stateManager.configManager.gameplay.PACK_A_PUNCH_AMMO_COST;
         const cost = isPacked ? papAmmoCost : baseCost;
-        
+        const gameMode = stateManager.gameModeRef.current;
+
         if (stateManager.gameState.points >= cost) {
+            if (gameMode === 'CLIENT') {
+                // CLIENT: send request only, do not deduct points — wait for HOST confirmation
+                if (hasWeapon) {
+                    const w = weapons[existingSlot];
+                    if (w.currentAmmo === w.clipSize && w.currentReserve === w.maxReserve) return false;
+                }
+                stateManager.send({ type: 'INTERACT_WALL_BUY', weaponId, cost });
+                return true;
+            }
+
+            // HOST / SOLO: deduct locally and apply
             if (hasWeapon) {
                  const w = weapons[existingSlot];
                  if (w.currentAmmo === w.clipSize && w.currentReserve === w.maxReserve) return false;
-                 stateManager.gameState.points -= cost; 
+                 stateManager.gameState.points -= cost;
                  stateManager.setPoints(stateManager.gameState.points);
-                 w.currentAmmo = w.clipSize; 
+                 w.currentAmmo = w.clipSize;
                  w.currentReserve = w.maxReserve;
                  if (stateManager.gameState.activeWeaponIndex === existingSlot) {
-                     stateManager.setAmmo(w.currentAmmo); 
+                     stateManager.setAmmo(w.currentAmmo);
                      stateManager.setReserveAmmo(w.currentReserve);
                  }
-                 stateManager.setInteractionMsg("AMMO REFILLED!"); 
+                 stateManager.setInteractionMsg("AMMO REFILLED!");
                  stateManager.timerManager.schedule('clear_wallbuy_msg', stateManager.configManager.visuals.HUD_MSG_DURATION, () => stateManager.setInteractionMsg(null));
                  return true;
             } else {
-                 stateManager.gameState.points -= cost; 
+                 stateManager.gameState.points -= cost;
                  stateManager.setPoints(stateManager.gameState.points);
                  stateManager.eventBus.emit('WEAPON_PICKUP_REQUEST', weaponId);
                  return true;
