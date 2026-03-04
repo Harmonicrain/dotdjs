@@ -53,6 +53,7 @@ export const createMysteryBox = (scene: BABYLON.Scene) => {
 
     const box = BABYLON.MeshBuilder.CreateBox("boxBase", {width: 2.2, height: 0.8, depth: 0.8}, scene);
     box.parent = root; box.position.y = 0.4; box.material = woodMat;
+    box.checkCollisions = true;
 
     const strap1 = BABYLON.MeshBuilder.CreateBox("boxStrap1", {width: 0.1, height: 0.82, depth: 0.82}, scene);
     strap1.parent = box; strap1.position.x = -0.9; strap1.material = metalMat;

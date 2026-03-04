@@ -467,6 +467,7 @@ export class Game {
         sm.visualManager.reset();
         sm.timerManager.clear();
         sm.soundManager?.stopAll();
+        sm.soundManager?.resumeAll();
     }
 
     /** Reset game state flags */
