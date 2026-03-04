@@ -70,7 +70,7 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
             if (!gameState.weapons || !gameState.weapons[gameState.activeWeaponIndex]) return;
 
             const currentWeaponId = gameState.weapons[gameState.activeWeaponIndex].id;
-            const localName       = gameState.playerName || 'Survivor';
+            const localName       = gameState.playerName || 'Unknown';
 
             // ── CLIENT → HOST ────────────────────────────────────────────────
             if (mode === 'CLIENT') {

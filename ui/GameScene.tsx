@@ -47,7 +47,10 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
                         setIsClientReady,
                         setRemotePlayerName: (name) => { updateRemote({ remotePlayerName: name }); setRemoteNameLocal(name); },
                         setSelectedMap,
-                        startGameLocal: (mode, mapId) => startGameRef.current(mode as any, mapId),
+                        startGameLocal: (mode, mapId) => {
+                            const currentName = useGameStore.getState().playerName;
+                            startGameRef.current(mode as any, mapId, currentName);
+                        },
                         setInteractionMsg: (msg) => updateGame({ interactionMsg: msg }),
                     });
                 }
@@ -56,13 +59,18 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
             () => { /* on open */ },
         );
 
-    useEffect(() => { updateGame({ connectionStatus }); }, [connectionStatus, updateGame]);
+    useEffect(() => { 
+        updateGame({ connectionStatus }); 
+        if (lifecycleRef.current?.game?.stateManager) {
+            lifecycleRef.current.game.stateManager.updateConnectionStatus(connectionStatus);
+        }
+    }, [connectionStatus, updateGame]);
 
     // ── Start / Stop ──────────────────────────────────────────────────────
     const startGame = useCallback(async (
         overrideMode?: 'SOLO' | 'HOST' | 'CLIENT',
         overrideMapId?: string,
-        playerName = 'Survivor',
+        playerName = 'Unknown',
     ) => {
         const mode  = overrideMode ?? gameMode;
         const mapId = overrideMapId ?? selectedMap;
@@ -70,7 +78,16 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
         updatePlayer({ playerName });
         updateGame({ gameMode: mode, isDogRound: false, isSpectating: false, isGameOver: false, round: 0, showFade: true, isPaused: false });
         const mapDef = MAP_DEFINITIONS[mapId] ?? MAP_DEFINITIONS[DEFAULT_MAP_ID];
-        updatePlayer({ points: mapDef.config?.gameplay?.STARTING_POINTS ?? GAME_CONFIG.STARTING_POINTS });
+        const startPoints = mapDef.config?.gameplay?.STARTING_POINTS ?? GAME_CONFIG.STARTING_POINTS;
+        updatePlayer({ points: startPoints });
+        if (mode !== 'SOLO') {
+            updateRemote({ 
+                remotePoints: startPoints, 
+                remoteTotalEarnedPoints: startPoints,
+                remoteHealth: GAME_CONFIG.PLAYER_BASE_HEALTH,
+                remotePerks: {}
+            });
+        }
 
         await lifecycleRef.current?.start(mapId, mode, playerName);
 
@@ -103,7 +120,10 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
             setIsClientReady,
             setRemotePlayerName: (name) => { updateRemote({ remotePlayerName: name }); setRemoteNameLocal(name); },
             setSelectedMap,
-            startGameLocal: (mode, mapId) => startGameRef.current(mode as any, mapId),
+            startGameLocal: (mode, mapId) => {
+                const currentName = useGameStore.getState().playerName;
+                startGameRef.current(mode as any, mapId, currentName);
+            },
             setInteractionMsg: (msg) => updateGame({ interactionMsg: msg }),
         });
     }, [updateGame, updatePlayer, updateRemote, hasStarted]);
@@ -168,16 +188,16 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
                     remotePlayerName={remoteNameLocal}
                     isClientReady={isClientReady}
                     isMapLoaded={isMapLoaded}
-                    onStartSolo={(name) => startGame('SOLO', selectedMap, name || 'Survivor')}
+                    onStartSolo={(name) => startGame('SOLO', selectedMap, name || 'Player')}
                     onHostInit={initializeHost}
                     onHostStart={(name) => {
-                        startGame('HOST', selectedMap, name || 'Survivor');
+                        startGame('HOST', selectedMap, name || 'Player');
                         send?.({ type: 'START_GAME', mapId: selectedMap });
                     }}
                     onJoinInit={initializeClient}
                     onClientReady={(name) => {
-                        updatePlayer({ playerName: name || 'Survivor' });
-                        send?.({ type: 'READY', name: name || 'Survivor' });
+                        updatePlayer({ playerName: name || 'Player' });
+                        send?.({ type: 'READY', name: name || 'Player' });
                     }}
                     onAbort={cleanup}
                     onGameReset={onGameReset}

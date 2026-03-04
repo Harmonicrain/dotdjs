@@ -6,7 +6,7 @@ import { ReviveEvent } from '../types/systems';
 export interface GameEvents {
     'HELLHOUND_DEATH': { id: string, position: BABYLON.Vector3 };
     'PLAYER_DAMAGE': { amount: number; source: string };
-    'GAME_STARTED': null;
+    'GAME_STARTED': { startPoints: number } | null;
     'BOARD_STATE_CHANGE': { windowId: string };
     'ZOMBIE_DEATH': { id: string, position: BABYLON.Vector3 };
     'GAME_OVER': null;
@@ -21,6 +21,7 @@ export interface GameEvents {
     'REVIVE_EVENT': ReviveEvent;
     'NET_GAME_STATE_UPDATE': CachedHostState;
     'NET_CLIENT_INPUT': CachedClientState;
+    'HOST_LOADED_RECEIVED': null;
 }
 
 type Handler<T> = (data: T) => void;

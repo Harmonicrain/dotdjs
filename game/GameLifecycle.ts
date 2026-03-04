@@ -221,6 +221,7 @@ export class GameLifecycle {
         sm.gameState.maxHealth          = GAME_CONFIG.PLAYER_BASE_HEALTH;
         sm.gameState.kills              = 0;
         sm.gameState.shots              = 0;
+        sm.setPlayerName(playerName);
         sm.setPoints(startPoints);
         sm.setPerks({});
         sm.setHealth(GAME_CONFIG.PLAYER_BASE_HEALTH);
@@ -248,9 +249,28 @@ export class GameLifecycle {
             sm.setReserveAmmo(pistolConfig.maxReserve);
         }
 
+        // ── Multiplayer Handshake ──────────────────────────────────────────
+        // Ensure the client stays on the loading screen until the host is fully ready.
+        if (mode === 'HOST') {
+            sm.send({ type: 'HOST_LOADED' });
+        } else if (mode === 'CLIENT' && !sm.gameState.isHostLoaded) {
+            await new Promise<void>((resolve) => {
+                const onHostLoaded = () => {
+                    sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
+                    resolve();
+                };
+                sm.eventBus.on('HOST_LOADED_RECEIVED', onHostLoaded);
+                // 15s safety timeout
+                setTimeout(() => {
+                    sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
+                    resolve();
+                }, 15000);
+            });
+        }
+
         // Signal all systems (NetworkSystem compressor, NetworkMessageHandler cache)
         // to reset their per-session state before the first tick fires.
-        sm.eventBus.emit('GAME_STARTED', null);
+        sm.eventBus.emit('GAME_STARTED', { startPoints });
 
         // Activate weapon meshes
         sm.gameState.weapons.forEach(w => {
@@ -337,6 +357,7 @@ export class GameLifecycle {
         sm.setPoints(newPoints);
         sm.setPerks({});
         sm.setIsDowned(false);
+        sm.setPlayerName(gs.playerName);
 
         // Reset to pistol
         const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');

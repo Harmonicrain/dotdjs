@@ -45,6 +45,7 @@ export interface GameFlowState {
     isSpectating: boolean;
     isGameOver: boolean;
     currentMapId: string;
+    isHostLoaded?: boolean;
 }
 
 export interface RoundState {
@@ -269,5 +270,6 @@ export type GameMessage =
     | { type: 'REVIVE_CANCEL'; revivorName: string }
     | { type: 'REVIVE_COMPLETE'; revivorName: string; downedPlayerName: string }
     | { type: 'SELF_REVIVE'; playerName: string }
+    | { type: 'HOST_LOADED' }
     | { type: 'POINTS_UPDATE'; points: number; totalEarned: number }
     | { type: 'INTERACT_REJECT'; interactionType: string; points: number };

@@ -34,6 +34,7 @@ export class UIBridge {
         isBeingRevived:     false,
         kills:              -1,
         shotsFired:         -1,
+        playerName:         '',
         debugInfo:          null as DebugInfo | null,
     };
 
@@ -157,6 +158,14 @@ export class UIBridge {
 
     public setFlashColor(v: string | null) {
         this._updatePlayer({ flashColor: v });
+    }
+
+    public setPlayerName(v: string) {
+        this.gameState.playerName = v;
+        if (this.uiCache.playerName !== v) {
+            this.uiCache.playerName = v;
+            this._updatePlayer({ playerName: v });
+        }
     }
 
     // ── Game setters ─────────────────────────────────────────────────────

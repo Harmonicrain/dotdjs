@@ -119,7 +119,7 @@ export const useGameStore = create<GameStore>((set) => ({
   flashColor: null,
   kills: 0,
   shotsFired: 0,
-  playerName: 'Survivor',
+  playerName: 'Unknown',
 
   // Game Defaults
   round: 1,
@@ -162,8 +162,8 @@ export const useGameStore = create<GameStore>((set) => ({
   // Remote Defaults
   remotePlayerName: 'Unknown',
   remoteHealth: 100,
-  remotePoints: 0,
-  remoteTotalEarnedPoints: 0,
+  remotePoints: 500,
+  remoteTotalEarnedPoints: 500,
   remotePerks: {},
   remoteKills: 0,
   remoteShots: 0,

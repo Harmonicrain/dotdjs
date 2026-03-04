@@ -19,7 +19,7 @@ export class RemotePlayerState {
     public weaponId: string = 'pistol';
 
     public gameState: RemoteGameState = {
-        health: 100, points: 0,
+        health: 100, points: 500,
         perks: {},
         isDowned: false,
         kills: 0, shots: 0

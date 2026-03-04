@@ -20,6 +20,7 @@ export interface NetworkHandlerActions {
 // ── Cached full-state types ───────────────────────────────────────────────────
 
 export interface CachedHostState {
+    [key: string]: any;
     doors:              Record<string, DoorState>;
     hostPos:            { x: number; y: number; z: number; rot: number; pitch: number };
     activeWeaponIndex:  number;
@@ -49,6 +50,7 @@ export interface CachedHostState {
 }
 
 export interface CachedClientState {
+    [key: string]: any;
     pos:               { x: number; y: number; z: number; rot: number; pitch: number };
     activeWeaponIndex: number;
     activeWeaponId:    string;
@@ -66,12 +68,12 @@ export interface CachedClientState {
 
 const ZERO_POS = () => ({ x: 0, y: 0, z: 0, rot: 0, pitch: 0 });
 
-function defaultHostCache(): CachedHostState {
+function defaultHostCache(startPoints = 0, name = 'Unknown'): CachedHostState {
     return {
         doors: {}, hostPos: ZERO_POS(),
         activeWeaponIndex: 0, activeWeaponId: 'pistol',
-        hostHealth: 100, hostPoints: 0, hostTotalEarned: 0,
-        hostName: 'Survivor', hostPerks: {}, hostIsDowned: false,
+        hostHealth: 100, hostPoints: startPoints, hostTotalEarned: startPoints,
+        hostName: name, hostPerks: {}, hostIsDowned: false,
         hostKills: 0, hostShots: 0, zombies: [], windowStates: {},
         activeZombiesCount: 0, totalRoundZombies: 0, 
         zombiesSpawned: 0, zombiesKilledInRound: 0,
@@ -81,11 +83,11 @@ function defaultHostCache(): CachedHostState {
     };
 }
 
-function defaultClientCache(): CachedClientState {
+function defaultClientCache(startPoints = 0, name = 'Unknown'): CachedClientState {
     return {
         pos: ZERO_POS(), activeWeaponIndex: 0, activeWeaponId: 'pistol',
-        clientHealth: 100, clientPoints: 0, clientTotalEarned: 0,
-        clientPerks: {}, clientIsDowned: false, clientName: 'Survivor',
+        clientHealth: 100, clientPoints: startPoints, clientTotalEarned: startPoints,
+        clientPerks: {}, clientIsDowned: false, clientName: name,
         clientKills: 0, clientShots: 0,
     };
 }
@@ -135,12 +137,14 @@ function syncRemotePosition(
 function syncRemoteGameState(
     sm: StateManager,
     health: number,
+    points: number,
     isDowned: boolean,
     kills: number,
     shots: number,
     perks: Record<string, boolean>
 ): void {
     sm.remote.gameState.health   = health;
+    sm.remote.gameState.points   = points;
     sm.remote.gameState.isDowned = isDowned;
     sm.remote.gameState.kills    = kills;
     sm.remote.gameState.shots    = shots;
@@ -157,12 +161,35 @@ export const createNetworkMessageHandler = (
     let lastClientSeq = -1;
 
     // On game start / restart wipe cached state so a fresh full-sync is required
-    stateManager.eventBus.on('GAME_STARTED', () => {
-        cachedHost   = defaultHostCache();
-        cachedClient = defaultClientCache();
+    stateManager.eventBus.on('GAME_STARTED', (data: { startPoints?: number } | null) => {
+        const startPoints = data?.startPoints ?? 0;
+        const currentRemoteName = stateManager.remote.name;
+        const localName = stateManager.gameState.playerName;
+
+        cachedHost   = defaultHostCache(startPoints, stateManager.gameModeRef.current === 'HOST' ? localName : currentRemoteName);
+        cachedClient = defaultClientCache(startPoints, stateManager.gameModeRef.current === 'CLIENT' ? localName : currentRemoteName);
+        
         lastHostSeq   = -1;
         lastClientSeq = -1;
         stateManager.remote.interpolationBuffer.clear();
+
+        // Ensure remote state is initialized correctly
+        stateManager.remote.gameState.points = startPoints;
+        stateManager.remote.gameState.health = 100;
+        stateManager.remote.gameState.isDowned = false;
+        stateManager.remote.gameState.kills = 0;
+        stateManager.remote.gameState.shots = 0;
+        stateManager.remote.gameState.perks = {};
+
+        actions.updateRemote({
+            remotePoints: startPoints,
+            remoteTotalEarnedPoints: startPoints,
+            remoteHealth: 100,
+            remoteKills: 0,
+            remoteShots: 0,
+            remotePerks: {},
+            remotePlayerName: currentRemoteName
+        });
     });
 
     return (msg: GameMessage) => {
@@ -180,6 +207,8 @@ export const createNetworkMessageHandler = (
                     actions.setRemotePlayerName(msg.name);
                     sm.remote.name = msg.name;
                     sm.remote.visuals?.updateName(msg.name);
+                    // Update cache so subsequent tick updates don't overwrite with default
+                    cachedClient.clientName = msg.name;
                 }
                 break;
 
@@ -335,7 +364,7 @@ export const createNetworkMessageHandler = (
                         sm.setIsDowned(true);
                         sm.send({
                             type: 'PLAYER_DOWNED',
-                            playerName: sm.gameState.playerName || 'Survivor',
+                            playerName: sm.gameState.playerName || 'Unknown',
                             position: { x: sm.camera.position.x, y: sm.camera.position.y, z: sm.camera.position.z },
                         });
                     }
@@ -389,6 +418,11 @@ export const createNetworkMessageHandler = (
                 sm.remote.gameState.isDowned = false;
                 actions.setInteractionMsg(`${msg.playerName} REVIVED SELF`);
                 sm.timerManager.schedule('net_self_revive_msg_clear', 2000, () => actions.setInteractionMsg(null));
+                break;
+
+            case 'HOST_LOADED':
+                sm.gameState.isHostLoaded = true;
+                sm.eventBus.emit('HOST_LOADED_RECEIVED', null);
                 break;
 
             // ── Tick messages — delta-aware ────────────────────────────────────
@@ -467,6 +501,7 @@ export const createNetworkMessageHandler = (
                 syncRemoteGameState(
                     sm,
                     cachedHost.hostHealth,
+                    cachedHost.hostPoints,
                     cachedHost.hostIsDowned,
                     cachedHost.hostKills,
                     cachedHost.hostShots,
@@ -477,12 +512,14 @@ export const createNetworkMessageHandler = (
                 // zombie positions on the client, WeaponViewSystem for remote weapon, etc.)
                 sm.eventBus.emit('NET_GAME_STATE_UPDATE', cachedHost);
 
-                if (cachedHost.hostTotalEarned !== undefined) {
-                    actions.updateRemote({ remoteTotalEarnedPoints: cachedHost.hostTotalEarned });
-                }
                 actions.updateRemote({
+                    remoteHealth: cachedHost.hostHealth,
+                    remotePoints: cachedHost.hostPoints,
+                    remoteTotalEarnedPoints: cachedHost.hostTotalEarned,
                     remoteKills: cachedHost.hostKills ?? 0,
                     remoteShots: cachedHost.hostShots ?? 0,
+                    remotePerks: cachedHost.hostPerks,
+                    remotePlayerName: cachedHost.hostName
                 });
                 break;
             }
@@ -511,6 +548,7 @@ export const createNetworkMessageHandler = (
                 syncRemoteGameState(
                     sm,
                     cachedClient.clientHealth,
+                    cachedClient.clientPoints,
                     cachedClient.clientIsDowned,
                     cachedClient.clientKills,
                     cachedClient.clientShots,
@@ -520,12 +558,14 @@ export const createNetworkMessageHandler = (
                 // Emit for systems (host uses this for authoritative zombie kill credit, etc.)
                 sm.eventBus.emit('NET_CLIENT_INPUT', cachedClient);
 
-                if (cachedClient.clientTotalEarned !== undefined) {
-                    actions.updateRemote({ remoteTotalEarnedPoints: cachedClient.clientTotalEarned });
-                }
                 actions.updateRemote({
+                    remoteHealth: cachedClient.clientHealth,
+                    remotePoints: cachedClient.clientPoints,
+                    remoteTotalEarnedPoints: cachedClient.clientTotalEarned,
                     remoteKills: cachedClient.clientKills ?? 0,
                     remoteShots: cachedClient.clientShots ?? 0,
+                    remotePerks: cachedClient.clientPerks,
+                    remotePlayerName: cachedClient.clientName
                 });
                 break;
             }

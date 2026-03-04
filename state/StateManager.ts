@@ -132,6 +132,7 @@ export class StateManager {
     public setInteractionMsg(v: string | null) { this.ui.setInteractionMsg(v); }
     public setHoverMsg(v: string | null) { this.ui.setHoverMsg(v); }
     public setFlashColor(v: string | null) { this.ui.setFlashColor(v); }
+    public setPlayerName(v: string) { this.ui.setPlayerName(v); }
     public setRound(v: number) { this.ui.setRound(v); }
     public setShowRoundIntro(v: boolean) { this.ui.setShowRoundIntro(v); }
     public setActivePowerUps(v: Partial<Record<PowerUpType, number>>) { this.ui.setActivePowerUps(v); }
@@ -206,7 +207,7 @@ export class StateManager {
             isRevivingTeammate: false,
             reviveProgress: 0,
             quickRevivesRemaining: GAME_CONFIG.MAX_QUICK_REVIVES_SOLO,
-            playerName: "Survivor"
+            playerName: "Unknown"
         };
 
         this.ui = new UIBridge(this.gameState, updatePlayer, updateGame);
