@@ -41,6 +41,7 @@ export type Zombie = {
     maxHealth: number;
     speed: number;
     lastAttackTime: number;
+    lastRemoteAttackTime?: number;
     isDead: boolean;
     state: ZombieState;
     // Hellhound specific state

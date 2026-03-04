@@ -264,6 +264,7 @@ export type GameMessage =
     | { type: 'HIT_CONFIRM'; amount: number }
     | { type: 'RESPAWN'; round: number; points: number }
     | { type: 'PLAYER_DOWNED'; playerName: string; position: { x: number; y: number; z: number } }
+    | { type: 'ZOMBIE_DAMAGE'; amount: number; isHellhound: boolean }
     | { type: 'REVIVE_START'; revivorName: string; downedPlayerName: string }
     | { type: 'REVIVE_CANCEL'; revivorName: string }
     | { type: 'REVIVE_COMPLETE'; revivorName: string; downedPlayerName: string }
