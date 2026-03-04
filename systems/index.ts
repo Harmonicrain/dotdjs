@@ -15,3 +15,4 @@ export { createRemotePlayerSystem } from './RemotePlayerSystem';
 export { createDownedSystem } from './DownedSystem';
 export { createReviveSystem } from './ReviveSystem';
 export { createMysteryBoxSystem } from './MysteryBoxSystem';
+export { createZombieSyncSystem } from './ZombieSyncSystem';

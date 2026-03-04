@@ -234,13 +234,14 @@ export type GameMessage =
         clientKills?: number;
         clientShots?: number;
     }
-    | { 
-        type: 'SHOOT'; 
-        origin: { x: number; y: number; z: number }; 
+    | {
+        type: 'SHOOT';
+        origin: { x: number; y: number; z: number };
         dir: { x: number; y: number; z: number };
         isPacked?: boolean;
         isExplosive?: boolean;
-        damage: number; 
+        damage: number;
+        owner?: 'HOST' | 'CLIENT';
       }
     | { type: 'INTERACT_DOOR'; doorId: string } 
     | { type: 'INTERACT_POWER' }
