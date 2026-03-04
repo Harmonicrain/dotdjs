@@ -312,6 +312,37 @@ export const createNetworkMessageHandler = (
                 sm.addPoints(msg.amount);
                 break;
 
+            case 'ZOMBIE_DAMAGE': {
+                if (sm.gameState.isGodMode || sm.gameState.isDowned || sm.gameState.isGameOver) break;
+                const now = Date.now();
+                if (now - sm.gameState.lastDamageTime < sm.configManager.gameplay.DAMAGE_IMMUNITY_MS) break;
+
+                sm.gameState.lastDamageTime = now;
+                sm.gameState.health = Math.max(0, sm.gameState.health - msg.amount);
+                sm.setHealth(sm.gameState.health);
+                sm.setFlashColor(msg.isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
+                sm.timerManager.schedule('dmg_flash', sm.configManager.visuals.HIT_FLASH_DURATION * 2, () => sm.setFlashColor(null));
+
+                if (sm.gameState.health <= 0 && !sm.gameState.isDowned) {
+                    const hasQuickRevive = sm.gameState.perkStates['quickRevive'];
+                    if (!hasQuickRevive) {
+                        sm.setHealth(0);
+                        sm.setIsGameOver(true);
+                    } else {
+                        sm.gameState.isDowned = true;
+                        sm.gameState.downedStartTime = now;
+                        sm.gameState.downedTimeLimit = sm.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
+                        sm.setIsDowned(true);
+                        sm.send({
+                            type: 'PLAYER_DOWNED',
+                            playerName: sm.gameState.playerName || 'Survivor',
+                            position: { x: sm.camera.position.x, y: sm.camera.position.y, z: sm.camera.position.z },
+                        });
+                    }
+                }
+                break;
+            }
+
             case 'POINTS_UPDATE':
                 // HOST confirmed a purchase — apply the authoritative point value
                 sm.gameState.points = msg.points;

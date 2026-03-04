@@ -14,6 +14,11 @@ export interface IZombieDamageContext {
     configManager: MapConfigManager;
     zombies: Zombie[];
     eventBus: EventBus;
+    remote: {
+        pos: BABYLON.Vector3;
+        gameState: { isDowned: boolean };
+    };
+    connectionStatusRef: { current: string };
     send(data: GameMessage): void;
     setHealth(v: number): void;
     setIsDowned(v: boolean): void;
@@ -103,11 +108,11 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                         z.lastAttackTime = now;
                         const isHellhound = z.type === 'HELLHOUND';
                         const damage = isHellhound ? hc.DAMAGE : gc.ZOMBIE_DAMAGE;
-                        
+
                         gameState.lastDamageTime = now;
                         gameState.health = Math.max(0, gameState.health - damage);
                         ctx.setHealth(gameState.health);
-                        ctx.setFlashColor(isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)"); 
+                        ctx.setFlashColor(isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
                         ctx.timerManager.schedule('dmg_flash', visuals.HIT_FLASH_DURATION * 2, () => ctx.setFlashColor(null));
 
                         // Apply knockback through externalForce (handled by PlayerMovementSystem)
@@ -128,12 +133,28 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                                 gameState.downedTimeLimit = gc.DOWNED_BLEED_OUT_TIME;
                                 ctx.setIsDowned(true);
                                 if (!isSolo) {
-                                    ctx.send({ 
-                                        type: 'PLAYER_DOWNED', 
+                                    ctx.send({
+                                        type: 'PLAYER_DOWNED',
                                         playerName: gameState.playerName || "Survivor",
                                         position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }
                                     });
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Check proximity to CLIENT player and forward damage via network
+                if (currentGameMode === 'HOST' && ctx.connectionStatusRef.current === 'CONNECTED') {
+                    if (!ctx.remote.gameState.isDowned) {
+                        const distToRemote = getHorizontalDist(z.mesh.position, ctx.remote.pos);
+                        const heightDiffRemote = Math.abs(z.mesh.position.y - ctx.remote.pos.y);
+                        if (distToRemote <= attackRange && heightDiffRemote < combat.ATTACK_HEIGHT_THRESHOLD) {
+                            if (now - (z.lastRemoteAttackTime ?? 0) > attackCooldown) {
+                                z.lastRemoteAttackTime = now;
+                                const isHellhound = z.type === 'HELLHOUND';
+                                const damage = isHellhound ? hc.DAMAGE : gc.ZOMBIE_DAMAGE;
+                                ctx.send({ type: 'ZOMBIE_DAMAGE', amount: damage, isHellhound });
                             }
                         }
                     }
