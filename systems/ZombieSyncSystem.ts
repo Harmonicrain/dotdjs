@@ -59,6 +59,9 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
                 z.mesh.position.set(sd.x, sd.y, sd.z);
                 z.mesh.rotation.y = sd.rot;
                 if (sd.isBurning !== undefined) z.isBurning = sd.isBurning;
+                if (sd.health !== undefined) z.health = sd.health;
+                if (sd.maxHealth !== undefined) z.maxHealth = sd.maxHealth;
+                if (sd.isCrawling !== undefined) z.isCrawling = sd.isCrawling;
             } else {
                 // Spawn a new zombie mesh at the broadcast position
                 const pos = new BABYLON.Vector3(sd.x, sd.y, sd.z);
