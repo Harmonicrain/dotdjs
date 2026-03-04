@@ -245,6 +245,10 @@ export type GameMessage =
         isExplosive?: boolean;
         damage: number;
         owner?: 'HOST' | 'CLIENT';
+        speed?: number;
+        splashRadius?: number;
+        splashDamage?: number;
+        selfDamageMultiplier?: number;
       }
     | { type: 'INTERACT_DOOR'; doorId: string }
     | { type: 'INTERACT_PERK'; perkId: string; perkType: string; cost: number }

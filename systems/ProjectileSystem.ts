@@ -167,19 +167,20 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         if (msg.origin && msg.dir && engine) {
             const rayOrigin = new BABYLON.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
             const rayDir = new BABYLON.Vector3(msg.dir.x, msg.dir.y, msg.dir.z);
+            const speed = msg.speed ?? COMBAT_CONFIG.PROJECTILE_SPEED;
 
             engine.spawnProjectile(
                 rayOrigin,
                 rayDir,
-                COMBAT_CONFIG.PROJECTILE_SPEED,
+                speed,
                 0,
                 true,
                 msg.isPacked || false,
                 msg.owner || 'CLIENT',
                 msg.isExplosive || false,
-                msg.isExplosive ? 6 : undefined,  // default splash radius for ray gun
-                msg.isExplosive ? 1000 : undefined,  // default splash damage
-                msg.isExplosive ? 0.5 : undefined
+                msg.splashRadius ?? (msg.isExplosive ? 6 : undefined),
+                msg.splashDamage ?? (msg.isExplosive ? 1000 : undefined),
+                msg.selfDamageMultiplier ?? (msg.isExplosive ? 0.5 : undefined)
             );
 
             // Add trail if explosive
@@ -342,20 +343,61 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                               ctx.visualManager.createImpactParticles(envPick.pickedPoint!, normal);
                           }
                       }
+                } else {
+                    // ── REMOTE PROJECTILE: visual-only collision (no damage) ──
+                    p.direction.scaleToRef(0.5, _scaledDir);
+                    p.mesh.position.subtractToRef(_scaledDir, _rayStart);
+                    const rayLen = p.speed + 0.5;
+
+                    _reusableRay.origin.copyFrom(_rayStart);
+                    _reusableRay.direction.copyFrom(p.direction);
+                    _reusableRay.length = rayLen;
+                    const ray = _reusableRay;
+
+                    // Check zombie hits (visual only — no damage)
+                    const pick = scene.pickWithRay(ray, (mesh) =>
+                        mesh.name.includes("zombie") || mesh.name.includes("hellhound")
+                    );
+
+                    if (pick && pick.hit && pick.pickedMesh) {
+                        hit = true;
+                        ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
+
+                        if (p.isExplosive && p.splashRadius && p.splashDamage) {
+                            ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
+                        }
+                    } else {
+                        // Check environment hits (visual only — decals + particles)
+                        const envPick = scene.pickWithRay(ray, (mesh) =>
+                            mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger")
+                        );
+
+                        if (envPick && envPick.hit && envPick.pickedMesh) {
+                            hit = true;
+                            finalImpactPoint = envPick.pickedPoint!;
+                            p.direction.scaleToRef(-1, _negDir);
+                            const normal = envPick.getNormal(true) || _negDir;
+
+                            ctx.visualManager.createDecal(envPick.pickedPoint!, normal, envPick.pickedMesh);
+                            ctx.visualManager.createImpactParticles(envPick.pickedPoint!, normal);
+                        }
+                    }
                 }
 
                 if (hit) {
                     // Handle explosive projectile impact for environment hit (zombie hit handled above)
                     if (p.isExplosive && p.splashRadius && p.splashDamage && finalImpactPoint) {
                         ctx.visualManager.createPlasmaExplosion(finalImpactPoint, p.isPacked);
-                        handleExplosion(
-                            finalImpactPoint,
-                            p.splashRadius,
-                            p.splashDamage,
-                            p.selfDamageMultiplier,
-                            ctx,
-                            p
-                        );
+                        if (!p.isRemote) {
+                            handleExplosion(
+                                finalImpactPoint,
+                                p.splashRadius,
+                                p.splashDamage,
+                                p.selfDamageMultiplier,
+                                ctx,
+                                p
+                            );
+                        }
                     }
                     engine.releaseProjectile(p);
                 } else {
