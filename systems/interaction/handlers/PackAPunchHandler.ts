@@ -17,9 +17,17 @@ export const PackAPunchHandler: InteractionHandler = {
     },
     interact: ({ stateManager, mesh, metadata }) => {
         const papCost = metadata.cost || stateManager.configManager.gameplay.PACK_A_PUNCH_COST;
+        const gameMode = stateManager.gameModeRef.current;
         if (stateManager.gameState.points >= papCost && stateManager.gameState.powerOn) {
             const currentW = stateManager.gameState.weapons[stateManager.gameState.activeWeaponIndex];
             if (!currentW.isPacked) {
+                if (gameMode === 'CLIENT') {
+                    // CLIENT: send request only, do not deduct points — wait for HOST confirmation
+                    stateManager.send({ type: 'INTERACT_PACK_A_PUNCH', weaponId: currentW.id, cost: papCost });
+                    return true;
+                }
+
+                // HOST / SOLO: deduct locally and apply
                 stateManager.gameState.points -= papCost;
                 stateManager.setPoints(stateManager.gameState.points);
                 stateManager.eventBus.emit('PACK_A_PUNCH_REQUEST', mesh);

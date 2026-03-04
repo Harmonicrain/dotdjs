@@ -19,9 +19,8 @@ export const MysteryBoxHandler: InteractionHandler = {
              const box = stateManager.mysteryBox;
              if (box.state === MysteryBoxState.BOX_IDLE) {
                  if (stateManager.gameState.points >= boxCost) {
-                     stateManager.gameState.points -= boxCost;
-                     stateManager.setPoints(stateManager.gameState.points);
-                     stateManager.send({ type: 'INTERACT_BOX_START', playerName: stateManager.remote.gameState.isDowned ? "Survivor" : stateManager.gameState.playerName }); 
+                     // CLIENT: send request only, do not deduct points — wait for HOST confirmation
+                     stateManager.send({ type: 'INTERACT_BOX_START', playerName: stateManager.remote.gameState.isDowned ? "Survivor" : stateManager.gameState.playerName });
                      return true;
                  } else {
                      stateManager.setInteractionMsg("NEED " + boxCost + " POINTS");

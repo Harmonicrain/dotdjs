@@ -16,15 +16,18 @@ export const DoorHandler: InteractionHandler = {
         const gameMode = stateManager.gameModeRef.current;
 
         if (doorState && !doorState.isOpen && stateManager.gameState.points >= doorState.cost) {
+            if (gameMode === 'CLIENT') {
+                // CLIENT: send request only, do not deduct points — wait for HOST confirmation via STATE
+                stateManager.send({ type: 'INTERACT_DOOR', doorId });
+                return true;
+            }
+
+            // HOST: deduct locally and open
             stateManager.gameState.points -= doorState.cost;
             stateManager.setPoints(stateManager.gameState.points);
-            
+
             doorState.isOpen = true;
-            
-            // Emit for local and remote animation
             stateManager.eventBus.emit('DOOR_OPEN_REQUEST', doorId);
-            
-            if (gameMode === 'CLIENT') stateManager.send({ type: 'INTERACT_DOOR', doorId });
             return true;
         }
         return false;
