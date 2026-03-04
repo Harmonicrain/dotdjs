@@ -383,6 +383,21 @@ export const createNetworkMessageHandler = (
                     'powerOn', 'isDogRound', 'activePowerUps', 'mysteryBox'
                 ]);
 
+                // ── Sync door states to client game state ───────────────────────
+                if (msg.doors !== undefined) {
+                    for (const [doorId, doorState] of Object.entries(msg.doors)) {
+                        const previousState = sm.gameState.doorStates[doorId];
+                        const wasOpen = previousState?.isOpen ?? false;
+                        const isOpen = doorState.isOpen;
+
+                        sm.gameState.doorStates[doorId] = doorState;
+
+                        if (!wasOpen && isOpen) {
+                            sm.eventBus.emit('DOOR_OPEN_REQUEST', doorId);
+                        }
+                    }
+                }
+
                 // ── Feed merged state to the game ──────────────────────────────
                 actions.updateGame({
                     round: cachedHost.round,
