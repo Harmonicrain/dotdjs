@@ -189,37 +189,34 @@ The repeated position-update code at lines ~607-621 should be extracted to `upda
 
 The A* open list uses linear search to find the minimum f-value node (O(n) per iteration). Replace with a binary heap / priority queue for O(log n) performance.
 
-### 15. PlayerCombatSystem.ts - Vector3 Allocations Per Shot
-**File:** `systems/PlayerCombatSystem.ts` (lines ~141-168)
+### 15. PlayerCombatSystem.ts - Vector3 Allocations Per Shot ✅ DONE
+**File:** `systems/PlayerCombatSystem.ts`
 
-Multiple `new Vector3` / `.clone()` / `.subtract()` / `.add()` calls per shot. Pre-allocate scratch vectors at module scope and use `...ToRef()` methods to avoid garbage:
-- `muzzlePos = ctx.camera.position.clone()` -> use a pre-allocated `_tempMuzzlePos`
-- `targetPos = ctx.camera.position.add(forward.scale(targetDist))` -> use `addToRef` with scratch
-- `const camToMuzzle = muzzlePos.subtract(...)` -> use `subtractToRef`
+Pre-allocated module-level scratch vectors (`_muzzlePos`, `_shootTargetPos`, `_camToMuzzle`, `_baseDir`, `_pelletDir`, `_bulletVel`, `_aimRay`) and converted all per-shot operations to use `copyFrom`, `addInPlaceFromFloats`, `subtractToRef`, `normalizeInPlace`, `scaleInPlace` patterns. Zero allocations per shot/pellet.
 
-### 16. ZombieAISystem.ts - Vector3 Allocations in Hot Loop
-**File:** `systems/ZombieAISystem.ts` (lines ~127-225)
+### 16. ZombieAISystem.ts - Vector3 Allocations in Hot Loop ✅ DONE
+**File:** `systems/ZombieAISystem.ts`
 
-These run per zombie per frame:
-- `const separation = BABYLON.Vector3.Zero();` - allocates every frame per zombie
-- `z.mesh.position.subtract(other.mesh.position).normalize()` - allocates per pair
-- `camera.position.clone()` - allocates per zombie
-
-Pre-allocate scratch vectors and use `subtractToRef()`, `normalizeToRef()`, `copyFrom()` patterns.
+Added pre-allocated scratch vectors (`_tempGravity`, `_tempBlended`, `_tempMoveResult`, `_tempLookAt`, `_tempLungeDir`, `_tempRetreatDir`) and converted all hot-path allocations to in-place operations:
+- Gravity vectors use `_tempGravity.set()` instead of `new Vector3()`
+- Separation blending uses `_tempBlended.copyFrom()` + `addInPlaceFromFloats()` instead of `.add(.scale())`
+- Movement uses `_tempMoveResult.copyFrom()` + `scaleInPlace()` instead of `.scale()`
+- Window lookAt uses `_tempLookAt.set()` instead of `new Vector3()`
+- Lunge/retreat directions use `subtractToRef` + `normalizeInPlace` instead of `.subtract().normalize()`
 
 ---
 
 ## Priority: MEDIUM
 
-### 17. MapConfigManager.ts - Duplicated Config Initialization
-**File:** `managers/MapConfigManager.ts` (lines ~14-27 and ~69-83)
+### 17. MapConfigManager.ts - Duplicated Config Initialization ✅ DONE
+**File:** `managers/MapConfigManager.ts`
 
-Constructor and `resetToDefaults()` both have 12 identical spread-copy lines. Extract a shared `_resetAllConfigs()` private method and call from both.
+Extracted `CONFIG_KEYS` constant array mapping property names to their global defaults. `resetToDefaults()` now iterates `CONFIG_KEYS` instead of repeating 11 spread-copy lines. Constructor uses inline initialization (runs once), while `resetToDefaults()` uses the shared loop.
 
-### 18. MapConfigManager.ts - applyMapConfig() Nested Conditionals
-**File:** `managers/MapConfigManager.ts` (lines ~32-64)
+### 18. MapConfigManager.ts - applyMapConfig() Nested Conditionals ✅ DONE
+**File:** `managers/MapConfigManager.ts`
 
-9 separate `if (mc.X) Object.assign(this.X, mc.X)` checks. Extract an `assignConfigIfPresent(target, source)` helper and call in a loop or chain.
+Replaced 9 individual `if (mc.X) Object.assign(this.X, mc.X)` checks with a single loop over `CONFIG_KEYS`. For `hellhound` and `mysteryBox`, the loop reads from `mc.enemies?.[key]`; for all others it reads from `mc[key]` directly.
 
 ### 19. NetworkDeltaCompressor.ts - Duplicated Comparison Functions
 **File:** `network/NetworkDeltaCompressor.ts` (lines ~70-99)

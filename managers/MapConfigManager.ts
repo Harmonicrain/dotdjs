@@ -3,6 +3,21 @@ import { HELLHOUND_CONFIG, MYSTERY_BOX_CONFIG } from '../config/enemies';
 import { MapDefinition } from '../types/world';
 import { WeaponConfig, WeaponUpgrade } from '../types/player';
 
+/** Config key → [property name on this class, global default] */
+const CONFIG_KEYS = [
+    ['gameplay', GAME_CONFIG],
+    ['round', ROUND_CONFIG],
+    ['controller', CONTROLLER_CONFIG],
+    ['sync', SYNC_CONFIG],
+    ['zombieSpeeds', ZOMBIE_SPEEDS],
+    ['zombieAI', ZOMBIE_CONFIG],
+    ['powerUps', POWERUP_CONFIG],
+    ['combat', COMBAT_CONFIG],
+    ['visuals', VISUAL_CONFIG],
+    ['hellhound', HELLHOUND_CONFIG],
+    ['mysteryBox', MYSTERY_BOX_CONFIG],
+] as const;
+
 /**
  * MapConfigManager
  *
@@ -33,19 +48,13 @@ export class MapConfigManager {
         const mc = def.config;
         if (!mc) return;
 
-        if (mc.gameplay) Object.assign(this.gameplay, mc.gameplay);
-        if (mc.round) Object.assign(this.round, mc.round);
-        if (mc.controller) Object.assign(this.controller, mc.controller);
-        if (mc.sync) Object.assign(this.sync, mc.sync);
-        if (mc.zombieSpeeds) Object.assign(this.zombieSpeeds, mc.zombieSpeeds);
-        if (mc.zombieAI) Object.assign(this.zombieAI, mc.zombieAI);
-        if (mc.powerUps) Object.assign(this.powerUps, mc.powerUps);
-        if (mc.combat) Object.assign(this.combat, mc.combat);
-        if (mc.visuals) Object.assign(this.visuals, mc.visuals);
-        
-        if (mc.enemies) {
-            if (mc.enemies.hellhound) Object.assign(this.hellhound, mc.enemies.hellhound);
-            if (mc.enemies.mysteryBox) Object.assign(this.mysteryBox, mc.enemies.mysteryBox);
+        for (const [key, _default] of CONFIG_KEYS) {
+            const override = key === 'hellhound' || key === 'mysteryBox'
+                ? mc.enemies?.[key]
+                : (mc as Record<string, unknown>)[key];
+            if (override) {
+                Object.assign(this[key], override);
+            }
         }
 
         if (mc.weapons) {
@@ -67,17 +76,9 @@ export class MapConfigManager {
      * Reset configs to global defaults.
      */
     public resetToDefaults(): void {
-        this.gameplay = { ...GAME_CONFIG };
-        this.round = { ...ROUND_CONFIG };
-        this.controller = { ...CONTROLLER_CONFIG };
-        this.sync = { ...SYNC_CONFIG };
-        this.zombieSpeeds = { ...ZOMBIE_SPEEDS };
-        this.zombieAI = { ...ZOMBIE_CONFIG };
-        this.powerUps = { ...POWERUP_CONFIG };
-        this.combat = { ...COMBAT_CONFIG };
-        this.visuals = { ...VISUAL_CONFIG };
-        this.hellhound = { ...HELLHOUND_CONFIG };
-        this.mysteryBox = { ...MYSTERY_BOX_CONFIG };
+        for (const [key, defaultVal] of CONFIG_KEYS) {
+            (this as Record<string, unknown>)[key] = { ...defaultVal };
+        }
         this.weapons = [ ...WEAPON_CONFIGS ];
         this.upgradedWeapons = { ...UPGRADED_WEAPON_CONFIGS };
     }
