@@ -60,8 +60,8 @@ export class UIBridge {
         this.gameState.points = v;
         if (this.uiCache.points !== v) {
             const delta = Math.abs(v - this.uiCache.points);
-            this.uiCache.points = v;
             if (this.checkThrottle('points') || delta > 100) {
+                this.uiCache.points = v;
                 this._updatePlayer({ points: v });
             }
         }
@@ -70,8 +70,8 @@ export class UIBridge {
     public setTotalEarnedPoints(v: number) {
         this.gameState.totalEarnedPoints = v;
         if (this.uiCache.totalEarnedPoints !== v) {
-            this.uiCache.totalEarnedPoints = v;
             if (this.checkThrottle('totalPoints')) {
+                this.uiCache.totalEarnedPoints = v;
                 this._updatePlayer({ totalEarnedPoints: v });
             }
         }
@@ -81,8 +81,8 @@ export class UIBridge {
         const intV = Math.ceil(v);
         this.gameState.health = intV;
         if (this.uiCache.health !== intV) {
-            this.uiCache.health = intV;
-            if (intV <= 0 || this.checkThrottle('health')) {
+            if (intV <= 0 || intV >= this.gameState.maxHealth || this.checkThrottle('health')) {
+                this.uiCache.health = intV;
                 this._updatePlayer({ health: intV });
             }
         }
@@ -90,9 +90,9 @@ export class UIBridge {
 
     public setAmmo(v: number) {
         if (this.uiCache.ammo !== v) {
-            this.uiCache.ammo = v;
             // Throttle ammo updates for automatic weapons
             if (this.checkThrottle('ammo')) {
+                this.uiCache.ammo = v;
                 this._updatePlayer({ ammo: v });
             }
         }
@@ -152,9 +152,9 @@ export class UIBridge {
 
     public setShotsFired(v: number) {
         if (this.uiCache.shotsFired !== v) {
-            this.uiCache.shotsFired = v;
             // Throttle — shots fire at high frequency
             if (this.checkThrottle('shotsFired')) {
+                this.uiCache.shotsFired = v;
                 this._updatePlayer({ shotsFired: v });
             }
         }

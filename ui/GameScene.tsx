@@ -75,7 +75,7 @@ const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
         const mode  = overrideMode ?? gameMode;
         const mapId = overrideMapId ?? selectedMap;
 
-        updatePlayer({ playerName });
+        updatePlayer({ playerName, health: GAME_CONFIG.PLAYER_BASE_HEALTH, isDowned: false, perks: {} });
         updateGame({ gameMode: mode, isDogRound: false, isSpectating: false, isGameOver: false, round: 0, showFade: true, isPaused: false });
         const mapDef = MAP_DEFINITIONS[mapId] ?? MAP_DEFINITIONS[DEFAULT_MAP_ID];
         const startPoints = mapDef.config?.gameplay?.STARTING_POINTS ?? GAME_CONFIG.STARTING_POINTS;
