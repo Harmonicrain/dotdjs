@@ -21,6 +21,7 @@ import { ScaleWeaponOverlay } from './components/ScaleWeaponOverlay';
 import { DeveloperStats } from './components/DeveloperStats';
 import { HitMarker } from './components/HitMarker';
 import { KillFeed } from './components/KillFeed';
+import { FPSCounter } from './components/FPSCounter';
 
 interface HUDProps {
     onResume?: () => void;
@@ -217,6 +218,9 @@ export const HUD: React.FC<HUDProps> = ({ onResume, onQuit, onCommand }) => {
 
             {/* Kill feed */}
             {!isGameOver && <KillFeed />}
+
+            {/* FPS counter - top right */}
+            {!isGameOver && <FPSCounter />}
 
             {/* Round display */}
             {!isGameOver && (

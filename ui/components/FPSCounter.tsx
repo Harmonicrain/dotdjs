@@ -1,63 +1,56 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 
 /**
- * FPSCounter - A lightweight FPS display for the top-right corner.
- * Uses requestAnimationFrame for accurate measurement with minimal overhead.
+ * FPSCounter - A lightweight, zero-rerender FPS display for the top-right corner.
+ * Uses direct DOM manipulation via refs to avoid React re-render overhead.
+ * Samples frame times and updates the display every ~500ms.
  */
 export const FPSCounter: React.FC = () => {
-    const [fps, setFps] = useState(0);
-    const frameTimesRef = useRef<number[]>([]);
+    const valueRef = useRef<HTMLSpanElement>(null);
     const lastTimeRef = useRef(performance.now());
+    const frameCountRef = useRef(0);
     const rafIdRef = useRef<number>(0);
 
-    useEffect(() => {
-        const measureFPS = (now: number) => {
-            const delta = now - lastTimeRef.current;
+    const tick = useCallback((now: number) => {
+        frameCountRef.current++;
+        const elapsed = now - lastTimeRef.current;
+
+        // Update display every ~500ms for stability
+        if (elapsed >= 500) {
+            const fps = Math.round((frameCountRef.current / elapsed) * 1000);
+            frameCountRef.current = 0;
             lastTimeRef.current = now;
 
-            // Store last 30 frame times for smoothing
-            frameTimesRef.current.push(delta);
-            if (frameTimesRef.current.length > 30) {
-                frameTimesRef.current.shift();
+            const el = valueRef.current;
+            if (el) {
+                el.textContent = String(fps);
+                // Color based on thresholds using game palette
+                el.style.color = fps >= 55 ? '#a8a29e' : fps >= 30 ? '#f59e0b' : '#dc2626';
             }
+        }
 
-            // Update display every ~500ms to avoid jitter
-            if (frameTimesRef.current.length >= 30) {
-                const avgDelta = frameTimesRef.current.reduce((a, b) => a + b, 0) / frameTimesRef.current.length;
-                const currentFps = Math.round(1000 / avgDelta);
-                setFps(currentFps);
-            }
-
-            rafIdRef.current = requestAnimationFrame(measureFPS);
-        };
-
-        rafIdRef.current = requestAnimationFrame(measureFPS);
-
-        return () => {
-            if (rafIdRef.current) {
-                cancelAnimationFrame(rafIdRef.current);
-            }
-        };
+        rafIdRef.current = requestAnimationFrame(tick);
     }, []);
 
-    // Color based on FPS thresholds
-    const getFpsColor = () => {
-        if (fps >= 55) return 'text-green-500';
-        if (fps >= 30) return 'text-yellow-500';
-        return 'text-red-500';
-    };
+    useEffect(() => {
+        rafIdRef.current = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafIdRef.current);
+    }, [tick]);
 
     return (
-        <div className="absolute top-8 right-10 pointer-events-none select-none z-30">
-            <div className="flex flex-col items-end">
-                <div className={`font-serif text-2xl font-bold tracking-tight ${getFpsColor()}`}
-                     style={{ textShadow: '2px 2px 0px rgba(0,0,0,0.8)' }}>
-                    {fps}
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className="text-stone-500 text-xs tracking-[0.3em] uppercase font-bold">FPS</span>
-                    <div className="h-[2px] w-8 bg-stone-700/50"></div>
-                </div>
+        <div className="absolute top-6 right-6 pointer-events-none select-none z-30">
+            <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded px-2.5 py-1
+                          border-r-2 border-stone-700/50">
+                <span className="text-stone-600 text-[9px] tracking-[0.3em] uppercase font-bold font-mono">
+                    FPS
+                </span>
+                <span
+                    ref={valueRef}
+                    className="text-sm font-bold font-mono tabular-nums"
+                    style={{ color: '#a8a29e', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                >
+                    --
+                </span>
             </div>
         </div>
     );
