@@ -44,6 +44,18 @@ const _up      = new BABYLON.Vector3(0, 1, 0);
 const _knifeRay = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(), 1);
 const _knifeDir = new BABYLON.Vector3();
 
+// Pre-allocated scratch vectors/ray for performShoot — avoids per-shot and per-pellet allocations
+const _fwd        = new BABYLON.Vector3();
+const _rgt        = new BABYLON.Vector3();
+const _upd        = new BABYLON.Vector3();
+const _muzzlePos  = new BABYLON.Vector3();
+const _shootTargetPos = new BABYLON.Vector3();
+const _camToMuzzle = new BABYLON.Vector3();
+const _baseDir    = new BABYLON.Vector3();
+const _pelletDir  = new BABYLON.Vector3();
+const _bulletVel  = new BABYLON.Vector3();
+const _aimRay     = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(), 500);
+
 /**
  * PlayerCombatSystem
  *
@@ -131,101 +143,121 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
         const cc = ctx.configManager.combat;
         if (ctx.camera && ctx.gameEngine) {
              const spread = ctx.gameState.isAiming ? 0 : cc.HIP_FIRE_SPREAD;
-             
+
              // Always calculate from camera to avoid weapon mesh lerping lag
              const isAds = ctx.gameState.isAiming && !ctx.gameState.isReloading;
              const offset = isAds ? weapon.adsPos : weapon.hipPos;
-             const forward = ctx.camera.getDirection(_forward);
-             const right = ctx.camera.getDirection(_right);
-             const up = ctx.camera.getDirection(_up);
-             
+
+             // Write camera directions into pre-allocated scratch vectors
+             ctx.camera.getDirectionToRef(_forward, _fwd);
+             ctx.camera.getDirectionToRef(_right,   _rgt);
+             ctx.camera.getDirectionToRef(_up,      _upd);
+
              // Calculate muzzle position using barrelLength from config
              const barrelLen = weapon.barrelLength;
-             let muzzlePos = ctx.camera.position.clone()
-                 .add(right.scale(offset.x))
-                 .add(up.scale(offset.y))
-                 .add(forward.scale(offset.z + barrelLen));
-             
+             const fwdOff = offset.z + barrelLen;
+             _muzzlePos.copyFrom(ctx.camera.position);
+             _muzzlePos.addInPlaceFromFloats(
+                 _rgt.x * offset.x + _upd.x * offset.y + _fwd.x * fwdOff,
+                 _rgt.y * offset.x + _upd.y * offset.y + _fwd.y * fwdOff,
+                 _rgt.z * offset.x + _upd.z * offset.y + _fwd.z * fwdOff,
+             );
+
              // Per-weapon hip-fire origin correction
              if (!isAds && weapon.hipFireOriginCorrection) {
-                 muzzlePos.addInPlace(up.scale(weapon.hipFireOriginCorrection.up));
-                 muzzlePos.addInPlace(right.scale(weapon.hipFireOriginCorrection.right));
+                 const corrUp = weapon.hipFireOriginCorrection.up;
+                 const corrRight = weapon.hipFireOriginCorrection.right;
+                 _muzzlePos.addInPlaceFromFloats(
+                     _upd.x * corrUp + _rgt.x * corrRight,
+                     _upd.y * corrUp + _rgt.y * corrRight,
+                     _upd.z * corrUp + _rgt.z * corrRight,
+                 );
              }
-             
+
              // Compensate muzzle position for player movement so bullets appear from barrel center
              // Without this, bullets visually spawn behind the barrel when strafing because the
              // camera has moved by the time the projectile is rendered on the next frame
              if (ctx.gameState.currentVelocity) {
-                 muzzlePos.addInPlace(ctx.gameState.currentVelocity);
+                 _muzzlePos.addInPlace(ctx.gameState.currentVelocity);
              }
-             
+
              // BULLET CONVERGENCE: Cast ray from camera center to find actual target point
              // This ensures bullets go exactly where the crosshair points regardless of muzzle offset
              const maxTargetDist = 500;
-             const aimRay = new BABYLON.Ray(ctx.camera.position, forward, maxTargetDist);
-             const aimHit = ctx.scene.pickWithRay(aimRay, (mesh) => {
+             _aimRay.origin.copyFrom(ctx.camera.position);
+             _aimRay.direction.copyFrom(_fwd);
+             _aimRay.length = maxTargetDist;
+             const aimHit = ctx.scene.pickWithRay(_aimRay, (mesh) => {
                  // Ignore weapon meshes, projectiles, and non-collidable objects
-                 return mesh.isPickable && 
-                        !mesh.name.includes("weapon") && 
+                 return mesh.isPickable &&
+                        !mesh.name.includes("weapon") &&
                         !mesh.name.includes("projectile") &&
                         !mesh.name.includes("knife") &&
                         mesh !== ctx.gameState.knifeMesh;
              });
-             
+
              // Use hit point if found, otherwise use far point along camera forward
-             let targetPos: BABYLON.Vector3;
              if (aimHit && aimHit.hit && aimHit.pickedPoint) {
-                 targetPos = aimHit.pickedPoint.clone();
+                 _shootTargetPos.copyFrom(aimHit.pickedPoint);
              } else {
-                 targetPos = ctx.camera.position.add(forward.scale(maxTargetDist));
+                 _shootTargetPos.copyFrom(ctx.camera.position);
+                 _shootTargetPos.addInPlaceFromFloats(_fwd.x * maxTargetDist, _fwd.y * maxTargetDist, _fwd.z * maxTargetDist);
              }
-             
+
              // Compensate target position for player movement so aim direction stays accurate
              if (ctx.gameState.currentVelocity) {
-                 targetPos.addInPlace(ctx.gameState.currentVelocity);
+                 _shootTargetPos.addInPlace(ctx.gameState.currentVelocity);
              }
-             
-             const MIN_SPAWN_DIST = cc.MIN_PROJECTILE_SPAWN_DIST; 
-             const camToMuzzle = muzzlePos.subtract(ctx.camera.position);
-             const forwardDist = BABYLON.Vector3.Dot(camToMuzzle, forward);
-             if (forwardDist < MIN_SPAWN_DIST) muzzlePos = muzzlePos.add(forward.scale(MIN_SPAWN_DIST - forwardDist));
 
-             const baseDir = targetPos.subtract(muzzlePos).normalize();
+             const MIN_SPAWN_DIST = cc.MIN_PROJECTILE_SPAWN_DIST;
+             _muzzlePos.subtractToRef(ctx.camera.position, _camToMuzzle);
+             const forwardDist = BABYLON.Vector3.Dot(_camToMuzzle, _fwd);
+             if (forwardDist < MIN_SPAWN_DIST) {
+                 const adj = MIN_SPAWN_DIST - forwardDist;
+                 _muzzlePos.addInPlaceFromFloats(_fwd.x * adj, _fwd.y * adj, _fwd.z * adj);
+             }
+
+             _shootTargetPos.subtractToRef(_muzzlePos, _baseDir);
+             _baseDir.normalizeInPlace();
+
              for(let i=0; i < weapon.pellets; i++) {
-                 const dir = baseDir.clone();
-                 if (spread > 0) { 
-                     dir.x += (Math.random() - 0.5) * spread; dir.y += (Math.random() - 0.5) * spread; dir.z += (Math.random() - 0.5) * spread; 
-                     dir.normalize(); 
+                 _pelletDir.copyFrom(_baseDir);
+                 if (spread > 0) {
+                     _pelletDir.x += (Math.random() - 0.5) * spread;
+                     _pelletDir.y += (Math.random() - 0.5) * spread;
+                     _pelletDir.z += (Math.random() - 0.5) * spread;
+                     _pelletDir.normalizeInPlace();
                  }
-                 const bulletVel = dir.scale(cc.PROJECTILE_SPEED);
-                  // Inherit player velocity even in ADS to prevent visual "drag" or "curving" when strafing
-                  if (ctx.gameState.currentVelocity) {
-                      bulletVel.addInPlace(ctx.gameState.currentVelocity);
-                  }
-                  const finalSpeed = weapon.projectileSpeedOverride ?? bulletVel.length();
-                  const finalDir = bulletVel.normalize();
-                  ctx.gameEngine.spawnProjectile(
-                      muzzlePos, 
-                      finalDir, 
-                      finalSpeed, 
-                      weapon.damage, 
-                      false, 
-                      weapon.isPacked, 
-                      ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST',
-                      weapon.isExplosive,
-                      weapon.splashRadius,
-                      weapon.splashDamage,
-                      weapon.selfDamageMultiplier
-                  );
-                  
-                  if (weapon.isExplosive) {
-                      const p = ctx.gameEngine.activeProjectiles[ctx.gameEngine.activeProjectiles.length - 1];
-                      if (p && p.isExplosive) {
-                          p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, weapon.isPacked);
-                      }
-                  }
-                  if (ctx.gameModeRef.current !== 'SOLO') {
-                      ctx.send({ type: 'SHOOT', origin: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z }, dir: { x: finalDir.x, y: finalDir.y, z: finalDir.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST', speed: finalSpeed, splashRadius: weapon.splashRadius, splashDamage: weapon.splashDamage, selfDamageMultiplier: weapon.selfDamageMultiplier });
+                 _bulletVel.copyFrom(_pelletDir);
+                 _bulletVel.scaleInPlace(cc.PROJECTILE_SPEED);
+                 // Inherit player velocity even in ADS to prevent visual "drag" or "curving" when strafing
+                 if (ctx.gameState.currentVelocity) {
+                     _bulletVel.addInPlace(ctx.gameState.currentVelocity);
+                 }
+                 const finalSpeed = weapon.projectileSpeedOverride ?? _bulletVel.length();
+                 _bulletVel.normalizeInPlace();
+                 ctx.gameEngine.spawnProjectile(
+                     _muzzlePos,
+                     _bulletVel,
+                     finalSpeed,
+                     weapon.damage,
+                     false,
+                     weapon.isPacked,
+                     ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST',
+                     weapon.isExplosive,
+                     weapon.splashRadius,
+                     weapon.splashDamage,
+                     weapon.selfDamageMultiplier
+                 );
+
+                 if (weapon.isExplosive) {
+                     const p = ctx.gameEngine.activeProjectiles[ctx.gameEngine.activeProjectiles.length - 1];
+                     if (p && p.isExplosive) {
+                         p.trailParticleSystem = ctx.visualManager.createProjectileTrail(p.mesh, weapon.isPacked);
+                     }
+                 }
+                 if (ctx.gameModeRef.current !== 'SOLO') {
+                     ctx.send({ type: 'SHOOT', origin: { x: _muzzlePos.x, y: _muzzlePos.y, z: _muzzlePos.z }, dir: { x: _bulletVel.x, y: _bulletVel.y, z: _bulletVel.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST', speed: finalSpeed, splashRadius: weapon.splashRadius, splashDamage: weapon.splashDamage, selfDamageMultiplier: weapon.selfDamageMultiplier });
                  }
              }
 

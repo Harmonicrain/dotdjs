@@ -372,3 +372,144 @@ Only `camera.minZ = 0.1` is set; `maxZ` defaults to Babylon's 10,000 units. For 
 **File:** `maps/barn/mapDefinition.ts`
 
 Only warehouse defines `navFloors` for navmesh generation. The field is optional in the type, but if barn uses zombie pathfinding, missing navFloors may cause broken or missing nav meshes. Verify whether pathfinding works on barn and add navFloors if needed.
+
+---
+
+## Performance Investigation — Slowdown & Stutter Sources
+
+This section documents all code identified as likely contributors to frame-rate drops or stuttering. Issues are ordered by estimated impact. Many relate to per-frame allocations that trigger garbage collection pauses, or O(n) operations in hot paths.
+
+---
+
+### P1. GameEngine.ts — Remote Projectile Count Uses `.filter()` in Hot Path
+**File:** `game/GameEngine.ts` (line ~134)
+
+```typescript
+if (isRemote && this.activeProjectiles.filter(p => p.isRemote).length > 50) {
+```
+
+Item 32 replaced a manual loop with `.filter()`, but `.filter()` still allocates a new array every call. This runs on every remote projectile spawn. Replace with a maintained `remoteProjectileCount` integer that is incremented on spawn and decremented on recycle.
+
+---
+
+### P2. ZombieAISystem.ts — Per-Frame Vector Allocations in Path Following ✅ DONE
+**File:** `systems/ZombieAISystem.ts` (line ~180)
+
+```typescript
+const dir = z.path[0].subtract(z.mesh.position).normalize();
+```
+
+`.subtract()` and `.normalize()` each allocate a new `Vector3`. This runs every frame for every zombie following a path. With 100 zombies all path-following, that is 200+ allocations per frame from this line alone. Replace with `subtractToRef` / `normalizeToRef` using pre-allocated scratch vectors (a pair per zombie or module-level scratch vectors guarded by sequential use).
+
+---
+
+### P3. ZombieAISystem.ts — Wander Target Allocates New Vector3 Each Wander Tick ✅ DONE
+**File:** `systems/ZombieAISystem.ts` (lines ~401–405)
+
+```typescript
+z.wander.wanderTarget = new BABYLON.Vector3(...);
+```
+
+A fresh `Vector3` is created every time a zombie picks a new wander target. Reuse a pooled vector per zombie or assign component values into an existing `wanderTarget` vector using `.set()` / `copyFromFloats()`.
+
+---
+
+### P4. PlayerCombatSystem.ts — Multiple Vector3 Allocations Per Pellet Per Shot ✅ DONE
+**File:** `systems/PlayerCombatSystem.ts` (lines ~141–228)
+
+The firing path clones and allocates several vectors per shot, and the shotgun pellet loop (up to 8 pellets) calls `baseDir.clone()` per pellet:
+
+```typescript
+const spreadDir = baseDir.clone(); // × 8 pellets per shotgun shot
+```
+
+At a fast fire rate (10 shots/sec × 8 pellets) this is 80+ `Vector3` allocations per second from the spread loop alone. Pre-allocate `_muzzlePos`, `_targetPos`, `_camToMuzzle`, `_spreadDir`, and `_pelletDir` at module scope. Use `addToRef`, `subtractToRef`, `scaleToRef`, and `normalizeToRef` throughout. (Item 15 covers this but has not been implemented yet.)
+
+---
+
+### P5. RemotePlayerSystem.ts — `Vector3.Lerp()` Allocates Every Frame ✅ DONE
+**File:** `systems/RemotePlayerSystem.ts` (lines ~51–55)
+
+```typescript
+mesh.position = BABYLON.Vector3.Lerp(mesh.position, target, t);
+```
+
+`Vector3.Lerp` returns a new `Vector3` every call and then immediately writes it to `mesh.position`. Replace with `BABYLON.Vector3.LerpToRef(mesh.position, target, t, mesh.position)` to update in-place with zero allocation.
+
+---
+
+### P6. PowerUpSystem.ts — Rotating Meshes Dirtied Every Frame
+**File:** `systems/PowerUpSystem.ts` (line ~89)
+
+```typescript
+p.mesh.rotation.y += 0.02;
+```
+
+Mutating `mesh.rotation` every frame forces Babylon to recompute the world matrix for that mesh on every tick. For static-geometry power-up orbs, use a Babylon `Animation` or an `AnimationGroup` driven by the engine's animation system, which is batch-processed and avoids per-frame world matrix invalidation.
+
+---
+
+### P7. PowerUpSystem.ts — Pending Power-Up Lookup is O(n)
+**File:** `systems/PowerUpSystem.ts` (lines ~44–59)
+
+```typescript
+gameState.powerUps.find(p => p.id === pending.id)
+```
+
+For each item in `pendingPowerUps`, the code scans the entire `powerUps` array. As both lists grow this becomes quadratic. Replace with a `Set<string>` of active power-up IDs that is kept in sync with `gameState.powerUps`, enabling O(1) membership checks.
+
+---
+
+### P8. ZombieManager.ts — Window List Filtered on Every Zombie Spawn
+**File:** `managers/ZombieManager.ts` (line ~144)
+
+```typescript
+this.windows.filter(w => accessibleZones.has(w.zone))
+```
+
+This creates a new filtered array each time a zombie is spawned. During intense rounds with rapid spawning this runs tens of times per second. Pre-compute and cache a `windowsByZone: Map<string, WindowDefinition[]>` structure when zones change, and look up the relevant subset directly.
+
+---
+
+### P9. ProjectileSystem.ts — 2–3 Scene Raycasts Per Active Projectile Per Frame
+**File:** `systems/ProjectileSystem.ts` (lines ~224–410)
+
+Each active projectile calls `scene.pickWithRay()` two to three times per frame (zombie hit, environment hit, sometimes a secondary confirmation cast). Babylon's `pickWithRay` tests against the full scene hierarchy by default. With 50 concurrent projectiles that is up to 150 raycasts per frame. Mitigations in increasing effort:
+- Pass a predicate to `pickWithRay` to exclude meshes that projectiles cannot interact with (UI planes, decorative geometry, the player mesh).
+- Consolidate the zombie and environment picks into a single cast with a layered predicate.
+- Consider lowering `MAX_REMOTE_PROJECTILES` and `MAX_LOCAL_PROJECTILES` further to cap worst-case cost.
+
+---
+
+### P10. NetworkDeltaCompressor.ts — Full State Comparison on Every Network Tick
+**File:** `network/NetworkDeltaCompressor.ts` (lines ~75–117)
+
+`doorsChanged()`, `perksChanged()`, `windowsChanged()`, and `powerUpsChanged()` each iterate all keys in their respective records or arrays every 50 ms (20 Hz tick). With 20 doors, 10 perks, and 5 windows that is ~35 key comparisons per tick, 700 per second, before zombie position comparisons are included. Introduce dirty-flag tracking: mark state records dirty when mutations occur and skip the comparison entirely when no dirty flag is set.
+
+---
+
+### P11. InteractionSystem.ts — Pack-a-Punch Material Observer Leaks on Re-Pack
+**File:** `systems/InteractionSystem.ts` (lines ~265–269)
+
+The pulsing emissive observer on PAP materials is registered on `papMat.onDisposeObservable` for cleanup. If `performPackAPunch()` is called on a weapon that is already Pack-a-Punched (or if the material reference is replaced rather than disposed), the old observer is never removed. Each re-pack adds another `onBeforeRenderObservable` listener. Store the observer reference explicitly and call `.remove()` on it at the start of `performPackAPunch()` before registering a new one. (Also noted in item 34.)
+
+---
+
+### P12. ZombieAISystem.ts — `getHorizontalDist()` Allocates in Window Interaction Hot Path
+**File:** `systems/ZombieAISystem.ts` (lines ~491–537, helper at ~52–56)
+
+`getHorizontalDist(a, b)` calls `a.subtract(b)` which allocates a temporary vector, then takes the length of the XZ components. This is called multiple times per zombie per frame during window-approach behaviour. Replace with an inline squared-distance check on X and Z components only (no vector allocation, no `Math.sqrt`), then only call the allocating version when an actual distance value is needed (e.g., for animation blending).
+
+---
+
+### P13. CommandRegistry.ts — Debug Pathfinding Allocates New Material Per Zombie
+**File:** `engine/CommandRegistry.ts` (lines ~173–273)
+
+The `show_pathfinding` debug command creates a new `StandardMaterial` per zombie for its tube mesh. With 100 zombies that is 100 extra material objects alive simultaneously. Create a single shared `StandardMaterial` for all debug tubes and reuse it. This does not affect production performance but avoids confusion when profiling since extra materials inflate draw-call counts in the Babylon inspector.
+
+---
+
+### P14. MapRegistry.ts — 13 Lines of navmesh Debug Logging in Production
+**File:** `managers/MapRegistry.ts` (lines ~70–113)
+
+Thirteen `console.log` / `console.warn` calls run unconditionally during navmesh construction. String formatting and `console` I/O are surprisingly expensive when the renderer is already under load (navmesh baking occurs during level load). Gate these behind a `DEBUG` / `DEV` constant or a configurable log-level flag. (Also noted in item 39.)
