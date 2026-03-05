@@ -123,6 +123,21 @@ function mysteryBoxChanged(a: MysteryBoxSnapshot, b: MysteryBoxSnapshot): boolea
  * and produces minimal delta messages each tick.
  *
  * Call reset() on game start/restart to clear stale state.
+ *
+ * ### Dirty-flag optimisation
+ * `doors` and `windows` are Record comparisons with O(n) key iteration.
+ * Both change very rarely (door open, board break) relative to the 20 Hz
+ * network tick. Dirty flags skip the key-by-key loop entirely on ticks where
+ * no mutation has been signalled, reducing ~700 comparisons/sec to near zero
+ * during normal gameplay.
+ *
+ * Flags start `true` (unknown state → must compare on first tick).
+ * They are reset to `false` once a comparison confirms no change.
+ * Call `markHostDirty('doors' | 'windows')` from NetworkSystem event handlers
+ * whenever the underlying data mutates.
+ * All flags are forced back to `true` on `reset()` and whenever a forced
+ * full-sync fires, so the 5-second full-sync acts as a safety net for any
+ * missed signals.
  */
 export class NetworkDeltaCompressor {
     private hostSnap: HostSnapshot | null = null;
@@ -132,6 +147,22 @@ export class NetworkDeltaCompressor {
     private lastFullHostAt = 0;
     private lastFullClientAt = 0;
 
+    // ── Dirty flags for expensive O(n) host-side Record comparisons ──────────
+    // Start true so first tick always compares (establishes baseline snapshot).
+    private _doorsDirty   = true;
+    private _windowsDirty = true;
+
+    /**
+     * Mark a slow-changing host field as dirty so the next tick will
+     * re-run its key comparison. Safe to call speculatively (e.g. on a door
+     * open request that might be rejected — the comparison will just confirm
+     * no change and reset the flag).
+     */
+    public markHostDirty(field: 'doors' | 'windows'): void {
+        if (field === 'doors')   this._doorsDirty   = true;
+        if (field === 'windows') this._windowsDirty = true;
+    }
+
     public reset(): void {
         this.hostSnap = null;
         this.clientSnap = null;
@@ -139,6 +170,9 @@ export class NetworkDeltaCompressor {
         this.clientSeq = 0;
         this.lastFullHostAt = 0;
         this.lastFullClientAt = 0;
+        // Reset dirty flags — next tick will compare everything fresh.
+        this._doorsDirty   = true;
+        this._windowsDirty = true;
     }
 
     // ── HOST → CLIENT (STATE) ────────────────────────────────────────────────
@@ -221,6 +255,10 @@ export class NetworkDeltaCompressor {
                 mysteryBox: { ...full.mysteryBox },
             };
             this.lastFullHostAt = now;
+            // Full sync sent — snapshot is up to date, no need to compare on
+            // the next tick unless a mutation is signalled first.
+            this._doorsDirty   = false;
+            this._windowsDirty = false;
 
             return {
                 type: 'STATE',
@@ -330,13 +368,28 @@ export class NetworkDeltaCompressor {
             delta.hostPerks = full.hostPerks;
             snap.hostPerks = { ...full.hostPerks };
         }
-        if (doorsChanged(full.doors, snap.doors)) {
-            delta.doors = full.doors;
-            snap.doors = { ...full.doors };
+
+        // Doors: O(n) key iteration — only run when flagged dirty.
+        // Dirty flag set by markHostDirty('doors'); cleared once comparison
+        // confirms no change. Full-sync resets it to false after sending.
+        if (this._doorsDirty) {
+            if (doorsChanged(full.doors, snap.doors)) {
+                delta.doors = full.doors;
+                snap.doors = { ...full.doors };
+                // Stay dirty until next tick confirms the new snapshot is stable
+            } else {
+                this._doorsDirty = false; // Snapshot matches — skip until next mutation
+            }
         }
-        if (windowsChanged(full.windowStates, snap.windowStates)) {
-            delta.windowStates = full.windowStates;
-            snap.windowStates = { ...full.windowStates };
+
+        // Windows: same pattern as doors.
+        if (this._windowsDirty) {
+            if (windowsChanged(full.windowStates, snap.windowStates)) {
+                delta.windowStates = full.windowStates;
+                snap.windowStates = { ...full.windowStates };
+            } else {
+                this._windowsDirty = false;
+            }
         }
 
         if (powerUpsChanged(full.activePowerUps, snap.activePowerUps)) {

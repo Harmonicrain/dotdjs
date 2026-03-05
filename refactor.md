@@ -139,7 +139,7 @@ Split into focused private methods: `_clearZombies()`, `_clearPowerUps()`, `_cle
 
 Replaced five repetitive `loadSound().catch()` calls with data-driven `soundsToLoad` array and loop.
 
-### 7. GameLifecycle.ts - start() is 163 Lines + Duplicated Weapon Setup
+### 7. GameLifecycle.ts - start() is 163 Lines + Duplicated Weapon Setup ⬜ STILL RELEVANT
 **File:** `game/GameLifecycle.ts` (lines ~103-266)
 
 Extract:
@@ -172,8 +172,8 @@ Extracted `mergeIfDefined(target, source, fields[])` helper. Both STATE and INPU
 
 Extracted `syncRemotePosition(sm, pos)` and `syncRemoteGameState(sm, health, isDowned, kills, shots, perks)` helpers. Both STATE and INPUT handlers now use these shared functions.
 
-### 13. MapBuilder.ts - 207-line update() Method
-**File:** `engine/MapBuilder.ts` (lines ~376-583)
+### 13. MapBuilder.ts - 207-line update() Method ⬜ STILL RELEVANT (reduced to ~111 lines but sub-methods not extracted)
+**File:** `engine/MapBuilder.ts` (lines ~520-630)
 
 Split into:
 - `updateKeyboardInput()`
@@ -218,19 +218,19 @@ Extracted `CONFIG_KEYS` constant array mapping property names to their global de
 
 Replaced 9 individual `if (mc.X) Object.assign(this.X, mc.X)` checks with a single loop over `CONFIG_KEYS`. For `hellhound`, the loop reads from `mc.enemies?.[key]`; for all others (including `mysteryBox`, now a top-level config alongside `powerUps`) it reads from `mc[key]` directly.
 
-### 19. NetworkDeltaCompressor.ts - Duplicated Comparison Functions
+### 19. NetworkDeltaCompressor.ts - Duplicated Comparison Functions ⬜ STILL RELEVANT
 **File:** `network/NetworkDeltaCompressor.ts` (lines ~70-99)
 
 `perksChanged()`, `doorsChanged()`, `windowsChanged()` have nearly identical logic (compare record keys + values). Extract a generic `recordChanged<T>(a, b, compareFn?)` helper.
 
-### 20. InputManager.ts - Duplicated Device Switching + Deadzone Logic
+### 20. InputManager.ts - Duplicated Device Switching + Deadzone Logic ⬜ STILL RELEVANT
 **File:** `engine/InputManager.ts`
 
 - Device switching logic at lines ~202-211, ~274-275, ~288-290 is repeated. Extract `clearNonActiveDeviceState(device)`.
 - Deadzone application at lines ~578-588 is duplicated for X and Y axes. Extract `applyDeadzoneAndSensitivity(raw, threshold, sensitivity)`.
 - Pointer lock conditionals at lines ~342-351 are convoluted and overlapping. Simplify with boolean algebra.
 
-### 21. GameLoop.ts - 181-line createGameLoop + Duplicated Scale UI Updates
+### 21. GameLoop.ts - 181-line createGameLoop + Duplicated Scale UI Updates ⬜ STILL RELEVANT
 **File:** `game/GameLoop.ts` (lines ~35-216)
 
 - Extract wheel handler and keydown handler for scale-weapon mode into separate functions.
@@ -255,7 +255,7 @@ Split into:
 
 Extracted each state case into focused methods: `handleBoxIdle()`, `handleBoxOpening()`, `handleBoxRolling()`, `handleBoxWeaponPresent()`, `handleBoxClosing()`, `handleBoxTeddyReveal()`, `handleBoxTeddyWait()`, `handleBoxTeleportOut()`, `handleBoxRelocating()`. Also extracted `updateWeaponDisplay()` and `updateGlow()` helpers.
 
-### 25. ProjectileSystem.ts - 165-line update() with Deep Nesting
+### 25. ProjectileSystem.ts - 165-line update() with Deep Nesting ⬜ STILL RELEVANT
 **File:** `systems/ProjectileSystem.ts` (lines ~174-339)
 
 Extract:
@@ -263,7 +263,7 @@ Extract:
 - `handleZombieHit(proj, zombie)`
 - `handleEnvironmentHit(proj, pickInfo)`
 
-### 26. useMultiplayer.ts - 307-line Hook
+### 26. useMultiplayer.ts - 307-line Hook ⬜ STILL RELEVANT (now 358 lines; BENIGN_NETWORK_ERRORS extracted ✅ but hook not split)
 **File:** `network/useMultiplayer.ts` (lines ~10-316)
 
 Consider splitting into smaller hooks:
@@ -273,12 +273,12 @@ Consider splitting into smaller hooks:
 
 ~~Also, line ~144 has an overly long OR chain for error types. Extract to a `BENIGN_NETWORK_ERRORS` constant array and use `.includes()`.~~ ✅ DONE - Extracted `BENIGN_NETWORK_ERRORS` constant.
 
-### 27. ZombieManager.ts + HellhoundManager.ts - Overlapping Death Handlers
+### 27. ZombieManager.ts + HellhoundManager.ts - Overlapping Death Handlers ⬜ STILL RELEVANT
 **Files:** `managers/ZombieManager.ts` (lines ~93-119) and `managers/HellhoundManager.ts` (lines ~73-114)
 
 Both have nearly identical `onDeath()` logic: increment kills, emit events, handle power-up drops, create explosions. Extract a shared `handleEnemyDeath(enemy, pos, killer, callbacks)` utility.
 
-### 28. ZombieManager.ts - 92-line Deeply Nested Spawn Function
+### 28. ZombieManager.ts - 92-line Deeply Nested Spawn Function ⬜ STILL RELEVANT
 **File:** `managers/ZombieManager.ts` (lines ~121-213)
 
 Extract:
@@ -286,7 +286,7 @@ Extract:
 - `tryPlaySpawnSound(pos)` - sound cooldown logic
 - `createZombieEntity(spawnPos, window, round)` - entity creation
 
-### 29. CommandRegistry.ts - 100-line show_pathfinding Command
+### 29. CommandRegistry.ts - 100-line show_pathfinding Command ⬜ STILL RELEVANT
 **File:** `engine/CommandRegistry.ts` (lines ~173-273)
 
 Extract the pathfinding visualization observer into a separate `PathfindingDebugger` class or utility function. Also, each zombie creates a new material for its debug tube - reuse a single shared material.
@@ -311,7 +311,7 @@ Replaced manual for-loop with `this.activeProjectiles.filter(p => p.isRemote).le
 
 Added `clear()` method to remove all handlers and `clearEvent(event)` to remove handlers for a specific event type.
 
-### 34. InteractionSystem.ts - PAP Material Observer Relies on Dispose
+### 34. InteractionSystem.ts - PAP Material Observer Relies on Dispose ⬜ STILL RELEVANT
 **File:** `systems/InteractionSystem.ts` (lines ~265-269)
 
 The pulsing emissive observer on Pack-a-Punch materials is cleaned up via `papMat.onDisposeObservable`. If materials are reassigned rather than explicitly disposed, the observer persists indefinitely. Each Pack-a-Punch creates a new observer, so re-packing a weapon leaks the old one.
@@ -320,55 +320,55 @@ The pulsing emissive observer on Pack-a-Punch materials is cleaned up via `papMa
 
 ## Priority: LOW
 
-### 35. StateManager.ts - null! Assertions
+### 35. StateManager.ts - null! Assertions ⬜ STILL RELEVANT
 **File:** `state/StateManager.ts` (lines ~98-108)
 
 Five properties use `null!` non-null assertion without initialization guarantees. Consider making them properly nullable or initializing in constructor.
 
-### 36. maps/MapTextureResolver.ts - Dead registerMapFolder() Function
+### 36. maps/MapTextureResolver.ts - Dead registerMapFolder() Function ⬜ STILL RELEVANT (no call sites exist — safe to delete)
 **File:** `maps/MapTextureResolver.ts` (line ~19)
 
 `registerMapFolder()` is a no-op stub kept for "call-site compatibility." Find and remove all call sites, then delete the function.
 
-### 37. ZombieDamageSystem.ts + ZombieAISystem.ts - Math.sqrt for Distance Comparisons
-**Files:** `systems/ZombieDamageSystem.ts` (line ~32), `systems/ZombieAISystem.ts` (line ~74)
+### 37. ZombieDamageSystem.ts + ZombieAISystem.ts - Math.sqrt for Distance Comparisons ⬜ STILL RELEVANT
+**Files:** `systems/ZombieDamageSystem.ts` (line ~42 uses `Math.pow`), `systems/ZombieAISystem.ts` (line ~92, `getHorizontalDist` still uses `Math.sqrt` — note `getHorizontalDistSq` exists and is used in most hot paths, but `getHorizontalDist` is now unused and can be removed)
 
 Uses `Math.sqrt(Math.pow(...))` for distance comparisons where only relative ordering matters. Use squared distance instead and compare against squared thresholds.
 
-### 38. GameEngine.ts - Projectile Pool Reset Fields
-**File:** `game/GameEngine.ts` (lines ~56-61)
+### 38. GameEngine.ts - Projectile Pool Reset Fields ⬜ STILL RELEVANT
+**File:** `game/GameEngine.ts` (lines ~104-107)
 
 Resetting fields to `undefined` during pool return. Consider resetting to typed defaults (`false`, `0`, `1`) instead for type safety.
 
-### 39. MapRegistry.ts - Excessive Console Logging
+### 39. MapRegistry.ts - Excessive Console Logging ⬜ STILL RELEVANT (11 unconditional console calls)
 **File:** `managers/MapRegistry.ts` (lines ~70-113)
 
 13 lines of navmesh debug logging in production code. Wrap in a `DEV` environment check or use a configurable log level.
 
-### 40. UIBridge.ts - Cache Update Before Throttle Check
-**File:** `state/UIBridge.ts` (lines ~58-66)
+### 40. UIBridge.ts - Cache Update Before Throttle Check ✖ NOT RELEVANT
+**File:** `state/UIBridge.ts`
 
-`setPoints()` updates `uiCache.points` before checking the throttle condition, which means the delta check on the next call will always be 0. Move cache update to after the condition passes.
+`setPoints()` was intentionally refactored to skip throttling entirely (points are event-driven, not per-frame). The comment in the code explains this was a deliberate fix to prevent the UI delta animation from showing wrong values. The original issue no longer applies.
 
-### 41. ZombieAISystem.ts - Unused Scratch Vector
-**File:** `systems/ZombieAISystem.ts` (line ~50)
+### 41. ZombieAISystem.ts - Unused Scratch Vector ✖ NOT RELEVANT
+**File:** `systems/ZombieAISystem.ts`
 
-`_tempTargetVec` is allocated but never used anywhere in the file. Only `_tempNavStartVec` and `_tempNavEndVec` are used (at lines ~194-195, ~385-386). Remove it.
+`_tempTargetVec` no longer exists in the file — it was already removed as part of the scratch vector refactor (item 16). Not present in current codebase.
 
-### 42. Game.ts - camera.speed is Dead Code
-**File:** `game/Game.ts` (line ~129)
+### 42. Game.ts - camera.speed is Dead Code ⬜ STILL RELEVANT
+**File:** `game/Game.ts` (line ~138)
 
 `camera.speed` is set to `GAME_CONFIG.WALK_SPEED` but PlayerMovementSystem drives movement entirely via `camera.cameraDirection` — Babylon's built-in `camera.speed` property is never consulted. Remove the assignment to avoid confusion.
 
-### 43. Game.ts - Missing maxZ (Far Plane)
-**File:** `game/Game.ts` (line ~131)
+### 43. Game.ts - Missing maxZ (Far Plane) ⬜ STILL RELEVANT
+**File:** `game/Game.ts` (line ~140)
 
 Only `camera.minZ = 0.1` is set; `maxZ` defaults to Babylon's 10,000 units. For indoor maps this is excessive and reduces depth buffer precision, increasing risk of z-fighting. Set `camera.maxZ = 500` (sufficient for all current maps).
 
-### 44. Barn Map - Missing navFloors Definition
+### 44. Barn Map - Missing navFloors Definition ✖ NOT RELEVANT
 **File:** `maps/barn/mapDefinition.ts`
 
-Only warehouse defines `navFloors` for navmesh generation. The field is optional in the type, but if barn uses zombie pathfinding, missing navFloors may cause broken or missing nav meshes. Verify whether pathfinding works on barn and add navFloors if needed.
+`LevelBuilder.ts` explicitly handles the missing `navFloors` case: when `hasNavFloors` is false, all walkable geometry groups are added to the navmesh instead. Barn pathfinding falls back to this path and works correctly. No fix needed unless barn-specific navmesh tuning is desired.
 
 ---
 
@@ -432,36 +432,24 @@ mesh.position = BABYLON.Vector3.Lerp(mesh.position, target, t);
 
 ---
 
-### P6. PowerUpSystem.ts — Rotating Meshes Dirtied Every Frame
-**File:** `systems/PowerUpSystem.ts` (line ~89)
+### P6. PowerUpSystem.ts — Rotating Meshes Dirtied Every Frame ⬜ STILL RELEVANT
+**File:** `systems/PowerUpSystem.ts` (line ~100)
 
-```typescript
-p.mesh.rotation.y += 0.02;
-```
-
-Mutating `mesh.rotation` every frame forces Babylon to recompute the world matrix for that mesh on every tick. For static-geometry power-up orbs, use a Babylon `Animation` or an `AnimationGroup` driven by the engine's animation system, which is batch-processed and avoids per-frame world matrix invalidation.
+`p.mesh.rotation.y += 0.02 * (dt * 60)` — now frame-rate independent but still mutates `rotation` every frame, forcing a world matrix recompute per power-up orb per tick. A Babylon `Animation` would batch this.
 
 ---
 
-### P7. PowerUpSystem.ts — Pending Power-Up Lookup is O(n)
-**File:** `systems/PowerUpSystem.ts` (lines ~44–59)
+### P7. PowerUpSystem.ts — Pending Power-Up Lookup is O(n) ✅ DONE
+**File:** `systems/PowerUpSystem.ts`
 
-```typescript
-gameState.powerUps.find(p => p.id === pending.id)
-```
-
-For each item in `pendingPowerUps`, the code scans the entire `powerUps` array. As both lists grow this becomes quadratic. Replace with a `Set<string>` of active power-up IDs that is kept in sync with `gameState.powerUps`, enabling O(1) membership checks.
+`activePowerUpIds` is now a `Set<string>` used for O(1) membership checks in the pending loop. No longer O(n²).
 
 ---
 
-### P8. ZombieManager.ts — Window List Filtered on Every Zombie Spawn
-**File:** `managers/ZombieManager.ts` (line ~144)
+### P8. ZombieManager.ts — Window List Filtered on Every Zombie Spawn ✅ DONE
+**File:** `managers/ZombieManager.ts`
 
-```typescript
-this.windows.filter(w => accessibleZones.has(w.zone))
-```
-
-This creates a new filtered array each time a zombie is spawned. During intense rounds with rapid spawning this runs tens of times per second. Pre-compute and cache a `windowsByZone: Map<string, WindowDefinition[]>` structure when zones change, and look up the relevant subset directly.
+`windowsByZone: Map<number, WindowBarrier[]>` is now pre-computed at init. Spawn logic uses `windowsByZone.get(zoneId)` lookups instead of filtering the full array each time.
 
 ---
 
@@ -473,35 +461,33 @@ Consolidated zombie and environment picks into a single `pickWithRay` cast per p
 
 ---
 
-### P10. NetworkDeltaCompressor.ts — Full State Comparison on Every Network Tick
-**File:** `network/NetworkDeltaCompressor.ts` (lines ~75–117)
+### P10. NetworkDeltaCompressor.ts — Full State Comparison on Every Network Tick ✅ DONE
+**File:** `network/NetworkDeltaCompressor.ts`, `systems/NetworkSystem.ts`
 
-`doorsChanged()`, `perksChanged()`, `windowsChanged()`, and `powerUpsChanged()` each iterate all keys in their respective records or arrays every 50 ms (20 Hz tick). With 20 doors, 10 perks, and 5 windows that is ~35 key comparisons per tick, 700 per second, before zombie position comparisons are included. Introduce dirty-flag tracking: mark state records dirty when mutations occur and skip the comparison entirely when no dirty flag is set.
-
----
-
-### P11. InteractionSystem.ts — Pack-a-Punch Material Observer Leaks on Re-Pack
-**File:** `systems/InteractionSystem.ts` (lines ~265–269)
-
-The pulsing emissive observer on PAP materials is registered on `papMat.onDisposeObservable` for cleanup. If `performPackAPunch()` is called on a weapon that is already Pack-a-Punched (or if the material reference is replaced rather than disposed), the old observer is never removed. Each re-pack adds another `onBeforeRenderObservable` listener. Store the observer reference explicitly and call `.remove()` on it at the start of `performPackAPunch()` before registering a new one. (Also noted in item 34.)
+Added dirty flags `_doorsDirty` and `_windowsDirty` inside the compressor. Both start `true`, are reset to `false` once a comparison confirms no change, and are set back to `true` via `markHostDirty('doors' | 'windows')`. NetworkSystem calls `markHostDirty('doors')` on `DOOR_OPEN_REQUEST` and `markHostDirty('windows')` on `BOARD_STATE_CHANGE`. The 5-second forced full-sync resets both flags to `false` after sending, acting as a safety net. `perks`, `powerUps`, and `mysteryBox` are left as always-checking since they are cheap (≤6 comparisons each) and have no dedicated mutation events.
 
 ---
 
-### P12. ZombieAISystem.ts — `getHorizontalDist()` Allocates in Window Interaction Hot Path
-**File:** `systems/ZombieAISystem.ts` (lines ~491–537, helper at ~52–56)
+### P11. InteractionSystem.ts — Pack-a-Punch Material Observer Leaks on Re-Pack ⬜ STILL RELEVANT
+**File:** `systems/InteractionSystem.ts` (lines ~292–296)
 
-`getHorizontalDist(a, b)` calls `a.subtract(b)` which allocates a temporary vector, then takes the length of the XZ components. This is called multiple times per zombie per frame during window-approach behaviour. Replace with an inline squared-distance check on X and Z components only (no vector allocation, no `Math.sqrt`), then only call the allocating version when an actual distance value is needed (e.g., for animation blending).
-
----
-
-### P13. CommandRegistry.ts — Debug Pathfinding Allocates New Material Per Zombie
-**File:** `engine/CommandRegistry.ts` (lines ~173–273)
-
-The `show_pathfinding` debug command creates a new `StandardMaterial` per zombie for its tube mesh. With 100 zombies that is 100 extra material objects alive simultaneously. Create a single shared `StandardMaterial` for all debug tubes and reuse it. This does not affect production performance but avoids confusion when profiling since extra materials inflate draw-call counts in the Babylon inspector.
+`timeObs` is registered and only cleaned up via `papMat.onDisposeObservable`. If a weapon is re-packed (material replaced rather than disposed), the old `timeObs` is never removed. Each re-pack adds another `onBeforeRenderObservable` listener. `timeObs` needs to be stored and explicitly removed at the start of `performPackAPunch()`.
 
 ---
 
-### P14. MapRegistry.ts — 13 Lines of navmesh Debug Logging in Production
+### P12. ZombieAISystem.ts — `getHorizontalDist()` Allocates in Window Interaction Hot Path ✖ NOT RELEVANT
+**File:** `systems/ZombieAISystem.ts`
+
+`getHorizontalDist()` (the allocating version) is no longer called anywhere in the file — all hot-path distance checks now use `getHorizontalDistSq()`. The function is dead code and can simply be deleted.
+
+---
+
+### P13. CommandRegistry.ts — Debug Pathfinding Allocates New Material Per Zombie ⬜ STILL RELEVANT
+**File:** `engine/CommandRegistry.ts` (line ~263)
+
+`new BABYLON.StandardMaterial("pathMat_" + z.id, sm.scene)` still creates one material per zombie for debug tube rendering. A single shared material should be created once and reused.
+
+---
+
+### P14. MapRegistry.ts — 13 Lines of navmesh Debug Logging in Production ⬜ STILL RELEVANT (11 unconditional console calls confirmed)
 **File:** `managers/MapRegistry.ts` (lines ~70–113)
-
-Thirteen `console.log` / `console.warn` calls run unconditionally during navmesh construction. String formatting and `console` I/O are surprisingly expensive when the renderer is already under load (navmesh baking occurs during level load). Gate these behind a `DEBUG` / `DEV` constant or a configurable log-level flag. (Also noted in item 39.)

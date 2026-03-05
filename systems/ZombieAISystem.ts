@@ -319,6 +319,20 @@ const getTargetPosition = (
 export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const _targetPos = new BABYLON.Vector3();
 
+    // ── O(1) window lookup ────────────────────────────────────────────────────
+    // windows.find() was called every frame per zombie in window interaction states.
+    // A Map keyed by window ID reduces that from O(n*windows) to O(n) per frame.
+    // The map is rebuilt lazily whenever ctx.windows grows (windows are registered
+    // after the system is created, so we can't build it once at factory time).
+    const windowMap = new Map<string, (typeof ctx.windows)[0]>();
+
+    const ensureWindowMap = () => {
+        if (windowMap.size === ctx.windows.length) return;
+        windowMap.clear();
+        for (const w of ctx.windows) {
+            windowMap.set(w.id, w);
+        }
+    };
     /**
      * Updates hellhound AI state machine.
      */
@@ -572,9 +586,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     ): void => {
         const zc = ctx.configManager.zombieAI;
         const sc = ctx.configManager.sync;
-        const windows = ctx.windows;
 
-        const targetWindow = z.targetWindowId ? windows.find(w => w.id === z.targetWindowId) : null;
+        const targetWindow = z.targetWindowId ? windowMap.get(z.targetWindowId) ?? null : null;
         if (!targetWindow) {
             z.state = ZombieState.CHASING;
             return;
@@ -667,6 +680,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
             // Build spatial grid once — O(n); each zombie then does O(k) neighbour check
             buildSeparationGrid(zombies);
+            // Sync window map if new windows were registered since last frame
+            ensureWindowMap();
 
             for (const z of zombies) {
                 if (z.isDead) continue;

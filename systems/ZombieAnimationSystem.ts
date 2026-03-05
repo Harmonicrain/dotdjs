@@ -11,6 +11,14 @@ export interface IZombieAnimationContext {
     configManager: MapConfigManager;
 }
 
+// ── Fire particle pool constants ─────────────────────────────────────────────
+const FIRE_POOL_SIZE = 4;
+
+// Pre-allocated static vectors used by the fire pool — zero runtime allocations.
+const _fireMinBox = new BABYLON.Vector3(-0.2, 0, -0.2);
+const _fireMaxBox = new BABYLON.Vector3(0.2, 1.5, 0.2);
+const _fireGravity = new BABYLON.Vector3(0, 3, 0);
+
 /**
  * ZombieAnimationSystem
  *
@@ -20,11 +28,59 @@ export interface IZombieAnimationContext {
  */
 export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): System => {
 
+    // ── Fire particle system pool ─────────────────────────────────────────────
+    // Pre-allocate a small pool so that igniting a zombie never triggers a Babylon
+    // shader recompile (which happens on the first new ParticleSystem in a scene).
+    const firePool: BABYLON.ParticleSystem[] = [];
+    let fireCursor = 0;
     let fireTexture: BABYLON.Texture | null = null;
+
+    const initFirePool = () => {
+        const scene = ctx.scene;
+        if (!scene || firePool.length > 0) return;
+
+        fireTexture = new BABYLON.Texture('https://playground.babylonjs.com/textures/flare.png', scene);
+
+        for (let i = 0; i < FIRE_POOL_SIZE; i++) {
+            const fs = new BABYLON.ParticleSystem(`zombieFire_${i}`, 50, scene);
+            fs.particleTexture = fireTexture;
+            fs.minEmitBox = _fireMinBox;
+            fs.maxEmitBox = _fireMaxBox;
+            fs.color1 = new BABYLON.Color4(1, 0.5, 0, 1);
+            fs.color2 = new BABYLON.Color4(1, 0.2, 0, 0.5);
+            fs.minSize = 0.2; fs.maxSize = 0.5;
+            fs.minLifeTime = 0.3; fs.maxLifeTime = 0.6;
+            fs.emitRate = 30;
+            fs.gravity = _fireGravity;
+            fs.disposeOnStop = false;
+            // Do NOT start — acquired on demand
+            firePool.push(fs);
+        }
+    };
+
+    /**
+     * Acquires a fire PS from the pool, attaches it to a mesh, and starts it.
+     * Uses round-robin eviction so a heavily-burning wave never exhausts the pool.
+     */
+    const acquireFirePS = (mesh: BABYLON.AbstractMesh): BABYLON.ParticleSystem => {
+        initFirePool();
+        const idx = fireCursor % FIRE_POOL_SIZE;
+        fireCursor++;
+        const fs = firePool[idx];
+        if (fs.isStarted()) { fs.stop(); fs.reset(); }
+        fs.emitter = mesh;
+        fs.start();
+        return fs;
+    };
 
     return {
         name: 'zombieAnim',
         dispose: () => {
+            for (const fs of firePool) {
+                if (fs.isStarted()) fs.stop();
+                fs.dispose(false);
+            }
+            firePool.length = 0;
             if (fireTexture) {
                 fireTexture.dispose();
                 fireTexture = null;
@@ -148,23 +204,9 @@ export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): Syste
 
                 // --- FIRE PARTICLES ---
                 if (z.isBurning) {
-                    if (!z.fireSystem && scene) {
-                        const fs = new BABYLON.ParticleSystem("zombieFire", 50, scene);
-                        if (!fireTexture) {
-                            fireTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/flare.png", scene);
-                        }
-                        fs.particleTexture = fireTexture;
-                        fs.emitter = z.mesh;
-                        fs.minEmitBox = new BABYLON.Vector3(-0.2, 0, -0.2);
-                        fs.maxEmitBox = new BABYLON.Vector3(0.2, 1.5, 0.2);
-                        fs.color1 = new BABYLON.Color4(1, 0.5, 0, 1);
-                        fs.color2 = new BABYLON.Color4(1, 0.2, 0, 0.5);
-                        fs.minSize = 0.2; fs.maxSize = 0.5;
-                        fs.minLifeTime = 0.3; fs.maxLifeTime = 0.6;
-                        fs.emitRate = 30;
-                        fs.gravity = new BABYLON.Vector3(0, 3, 0);
-                        fs.start();
-                        z.fireSystem = fs;
+                    if (!z.fireSystem) {
+                        // Acquire from pool — no new ParticleSystem allocation, no shader recompile
+                        z.fireSystem = acquireFirePS(z.mesh);
                     }
                 }
             }

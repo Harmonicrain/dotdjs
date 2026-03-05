@@ -137,7 +137,8 @@ export class Game {
         this.camera.inertia = 0;   // Disable Babylon's built-in inertia; movement is fully driven by PlayerMovementSystem
         this.camera.speed = GAME_CONFIG.WALK_SPEED; 
         this.camera.angularSensibility = 800;
-        this.camera.minZ = 0.1; 
+        this.camera.minZ = 0.1;
+        this.camera.maxZ = 500; // Indoor maps need nowhere near Babylon's 10,000 default; tighter far plane = better depth buffer precision, less z-fighting
         // Disable all built-in camera inputs — InputManager + PlayerMovementSystem handle
         // all keyboard/mouse input. The default FreeCamera constructor adds keyboard & mouse
         // handlers that would otherwise run checkInputs() every frame and could write to

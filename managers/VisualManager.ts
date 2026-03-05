@@ -104,6 +104,15 @@ export class VisualManager {
     // ── Shared scratch objects (zero-alloc hot path) ────────────────────────
     private static readonly _scratchColor3 = new BABYLON.Color3();
 
+    // Reusable ray + direction vector for floor raycasts — avoids two allocations
+    // per bullet hit (createBloodSplatter) and per zombie death (createFloorGore).
+    private static readonly _floorRayDir = new BABYLON.Vector3(0, -1, 0);
+    private static readonly _floorRayUp  = new BABYLON.Vector3(0,  1,  0);
+    private static readonly _floorRayOrigin = new BABYLON.Vector3();
+    private static readonly _floorRay = new BABYLON.Ray(
+        new BABYLON.Vector3(), BABYLON.Vector3.Down(), 10
+    );
+
     private static readonly _explosionDirMin = new BABYLON.Vector3(-1, 1, -1);
     private static readonly _explosionDirMax = new BABYLON.Vector3(1, 1, 1);
     private static readonly _explosionGravity = new BABYLON.Vector3(0, -2, 0);
@@ -469,12 +478,12 @@ export class VisualManager {
      * Recycled from a pre-allocated pool to avoid runtime mesh generation.
      */
     private createFloorGore(pos: BABYLON.Vector3): void {
-        const floorRay = new BABYLON.Ray(
-            new BABYLON.Vector3(pos.x, pos.y + 0.5, pos.z),
-            new BABYLON.Vector3(0, -1, 0),
-            10
-        );
-        const floorPick = this.scene.pickWithRay(floorRay, (m) => m.checkCollisions && m.isEnabled());
+        // Reuse static ray — zero allocations
+        VisualManager._floorRayOrigin.set(pos.x, pos.y + 0.5, pos.z);
+        VisualManager._floorRay.origin.copyFrom(VisualManager._floorRayOrigin);
+        VisualManager._floorRay.direction.copyFrom(VisualManager._floorRayDir);
+        VisualManager._floorRay.length = 10;
+        const floorPick = this.scene.pickWithRay(VisualManager._floorRay, (m) => m.checkCollisions && m.isEnabled());
         const floorY = (floorPick && floorPick.hit && floorPick.pickedPoint)
             ? floorPick.pickedPoint.y + 0.005
             : 0.005;
@@ -690,21 +699,14 @@ export class VisualManager {
         decal.setParent(target);
 
         this.activeDecals.push(decal);
-        
+
+        // Ring-buffer eviction: dispose the oldest decal once the cap is hit.
+        // This is sufficient — no setTimeout needed, which would accumulate
+        // hundreds of stale callbacks under sustained full-auto fire.
         if (this.activeDecals.length > this.MAX_DECALS) {
             const oldest = this.activeDecals.shift();
             if (oldest) oldest.dispose();
         }
-
-        // Fade out and dispose after 10s
-        setTimeout(() => {
-            if (decal && !decal.isDisposed()) {
-                // For performance we just dispose, but could lerp alpha if decal had unique mat
-                const idx = this.activeDecals.indexOf(decal);
-                if (idx !== -1) this.activeDecals.splice(idx, 1);
-                decal.dispose();
-            }
-        }, 10000);
     }
 
     public createImpactParticles(pos: BABYLON.Vector3, normal: BABYLON.Vector3) {
@@ -771,11 +773,14 @@ export class VisualManager {
             this.createBloodDecalOnMesh(pos, normal, targetMesh);
         }
 
-        // Try to find floor for blood pool
-        const floorRay = new BABYLON.Ray(pos.add(new BABYLON.Vector3(0, 0.1, 0)), new BABYLON.Vector3(0, -1, 0), 10);
-        const floorPick = this.scene.pickWithRay(floorRay, (m) => m.checkCollisions && m.isEnabled());
+        // Floor blood decal: reuse static ray — zero allocations per bullet hit
+        VisualManager._floorRayOrigin.set(pos.x, pos.y + 0.1, pos.z);
+        VisualManager._floorRay.origin.copyFrom(VisualManager._floorRayOrigin);
+        VisualManager._floorRay.direction.copyFrom(VisualManager._floorRayDir);
+        VisualManager._floorRay.length = 10;
+        const floorPick = this.scene.pickWithRay(VisualManager._floorRay, (m) => m.checkCollisions && m.isEnabled());
         if (floorPick && floorPick.hit && floorPick.pickedPoint && floorPick.pickedMesh) {
-            this.createBloodDecalOnMesh(floorPick.pickedPoint, new BABYLON.Vector3(0, 1, 0), floorPick.pickedMesh);
+            this.createBloodDecalOnMesh(floorPick.pickedPoint, VisualManager._floorRayUp, floorPick.pickedMesh);
         }
     }
 

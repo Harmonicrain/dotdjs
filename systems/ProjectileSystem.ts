@@ -196,10 +196,22 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
     };
     ctx.eventBus.on('REMOTE_SHOOT', handleRemoteShoot);
 
+    // ── O(1) zombie mesh lookup ───────────────────────────────────────────────
+    // Rebuilt once per frame (O(n)) at the top of update() so every in-flight
+    // raycast hit resolves in O(1) instead of O(n * chain_depth).
+    const zombieMeshMap = new Map<BABYLON.AbstractMesh, Zombie>();
+
+    const rebuildZombieMeshMap = () => {
+        zombieMeshMap.clear();
+        for (const z of ctx.zombies) {
+            zombieMeshMap.set(z.mesh, z);
+        }
+    };
+
     const findZombieFromMesh = (mesh: BABYLON.AbstractMesh) => {
         let curr: BABYLON.AbstractMesh | null = mesh;
         while (curr) {
-            const z = ctx.zombies.find(z => z.mesh === curr);
+            const z = zombieMeshMap.get(curr);
             if (z) return z;
             curr = curr.parent as BABYLON.AbstractMesh | null;
         }
@@ -214,6 +226,9 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         update: (dt: number, now: number) => {
             const isDebugActive = ctx.debugSelection.isActive;
             if (!ctx.gameState.hasStarted || (ctx.gameState.isPaused && !isDebugActive)) return;
+
+            // Rebuild mesh→zombie map once per frame — O(n) here, O(1) per hit below
+            rebuildZombieMeshMap();
 
             const scene = ctx.scene;
             const engine = ctx.gameEngine;

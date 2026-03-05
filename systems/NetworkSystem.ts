@@ -49,6 +49,14 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
     // Listen for board changes to mark windows dirty
     ctx.eventBus.on('BOARD_STATE_CHANGE', () => {
         windowsDirty = true;
+        compressor.markHostDirty('windows');
+    });
+
+    // Door state changes when a door open request is processed.
+    // Marking dirty here is safe even if the request is ultimately rejected —
+    // the comparison will just confirm no change and clear the flag again.
+    ctx.eventBus.on('DOOR_OPEN_REQUEST', () => {
+        compressor.markHostDirty('doors');
     });
 
     return {
