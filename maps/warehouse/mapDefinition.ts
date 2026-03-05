@@ -121,9 +121,9 @@ export const WarehouseMapDefinition: MapDefinition = {
     
     config: {
         gameplay: warehouseGameplay,
+        mysteryBox: warehouseMysteryBox,
         enemies: {
             hellhound: warehouseHellhound,
-            mysteryBox: warehouseMysteryBox
         },
         weapons: warehouseWeapons
     }

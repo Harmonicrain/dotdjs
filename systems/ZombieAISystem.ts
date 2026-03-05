@@ -40,6 +40,12 @@ export interface IZombieAIContext {
 const _tempNavEndVec = new BABYLON.Vector3();
 const _tempSeparation = new BABYLON.Vector3();
 const _tempDirectDir = new BABYLON.Vector3();
+const _tempGravity = new BABYLON.Vector3();
+const _tempBlended = new BABYLON.Vector3();
+const _tempMoveResult = new BABYLON.Vector3();
+const _tempLookAt = new BABYLON.Vector3();
+const _tempLungeDir = new BABYLON.Vector3();
+const _tempRetreatDir = new BABYLON.Vector3();
 
 // Constants
 const PATH_UPDATE_INTERVAL = 0.5;
@@ -301,7 +307,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             if (z.stateTimer !== undefined && z.stateTimer <= 0) {
                 z.hellhoundState = HellhoundState.CHASING;
             }
-            z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+            _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
+            z.mesh.moveWithCollisions(_tempGravity);
             return;
         }
 
@@ -317,8 +324,16 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 if (moveDir) {
                     moveDir.y = 0;
                     applyRotationSmoothing(z, moveDir, frameFactor);
-                    const finalDir = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
-                    z.mesh.moveWithCollisions(finalDir.scale(z.speed * frameFactor));
+                    _tempBlended.copyFrom(moveDir);
+                    _tempBlended.addInPlaceFromFloats(
+                        separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+                        separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+                        separation.z * sc.ZOMBIE_SEPARATION_FORCE
+                    );
+                    _tempBlended.normalizeInPlace();
+                    _tempMoveResult.copyFrom(_tempBlended);
+                    _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+                    z.mesh.moveWithCollisions(_tempMoveResult);
                 }
             }
         } else if (z.hellhoundState === HellhoundState.ATTACK_WINDUP) {
@@ -327,9 +342,10 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 z.stateTimer = hc.ATTACK_DURATION_MIN + Math.random() * (hc.ATTACK_DURATION_MAX - hc.ATTACK_DURATION_MIN);
                 z.lungeStartPos = z.mesh.position.clone();
                 z.lungeTargetPos = _targetPos.clone();
-                const lDir = z.lungeTargetPos.subtract(z.lungeStartPos).normalize();
-                lDir.y = 0;
-                const yaw = Math.atan2(lDir.x, lDir.z);
+                z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
+                _tempLungeDir.normalizeInPlace();
+                _tempLungeDir.y = 0;
+                const yaw = Math.atan2(_tempLungeDir.x, _tempLungeDir.z);
                 z.mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
             }
         } else if (z.hellhoundState === HellhoundState.ATTACKING) {
@@ -337,9 +353,12 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 z.hellhoundState = HellhoundState.RECOVERY;
                 z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
             } else if (z.lungeTargetPos && z.lungeStartPos) {
-                const lDir = z.lungeTargetPos.subtract(z.lungeStartPos).normalize();
-                lDir.y = 0;
-                z.mesh.moveWithCollisions(lDir.scale(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor));
+                z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
+                _tempLungeDir.normalizeInPlace();
+                _tempLungeDir.y = 0;
+                _tempMoveResult.copyFrom(_tempLungeDir);
+                _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
+                z.mesh.moveWithCollisions(_tempMoveResult);
                 
                 const distFromStart = BABYLON.Vector3.Distance(z.mesh.position, z.lungeStartPos);
                 const distToPlayer = BABYLON.Vector3.Distance(z.mesh.position, _targetPos);
@@ -350,11 +369,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         } else if (z.hellhoundState === HellhoundState.RECOVERY) {
             if (z.lungeStartPos) {
-                const retreatDir = z.lungeStartPos.subtract(z.mesh.position);
-                retreatDir.y = 0;
-                const distBack = retreatDir.length();
+                z.lungeStartPos.subtractToRef(z.mesh.position, _tempRetreatDir);
+                _tempRetreatDir.y = 0;
+                const distBack = _tempRetreatDir.length();
                 if (distBack > 0.5) {
-                    z.mesh.moveWithCollisions(retreatDir.normalize().scale(z.speed * frameFactor));
+                    _tempRetreatDir.normalizeInPlace();
+                    _tempMoveResult.copyFrom(_tempRetreatDir);
+                    _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+                    z.mesh.moveWithCollisions(_tempMoveResult);
                 } else {
                     z.hellhoundState = HellhoundState.CHASING;
                     z.lungeStartPos = undefined;
@@ -368,7 +390,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         }
 
-        z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+        _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
+        z.mesh.moveWithCollisions(_tempGravity);
     };
 
     /**
@@ -431,10 +454,19 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         }
         const moveDir = _tempDirectDir;
 
-        const blended = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
-        applyRotationSmoothing(z, blended, frameFactor);
-        z.mesh.moveWithCollisions(blended.scale(z.speed * frameFactor));
-        z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+        _tempBlended.copyFrom(moveDir);
+        _tempBlended.addInPlaceFromFloats(
+            separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+            separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+            separation.z * sc.ZOMBIE_SEPARATION_FORCE
+        );
+        _tempBlended.normalizeInPlace();
+        applyRotationSmoothing(z, _tempBlended, frameFactor);
+        _tempMoveResult.copyFrom(_tempBlended);
+        _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+        z.mesh.moveWithCollisions(_tempMoveResult);
+        _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
+        z.mesh.moveWithCollisions(_tempGravity);
     };
 
     /**
@@ -474,8 +506,16 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
 
             if (distHorizontal > zc.ATTACK_RANGE * 0.9 || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
-                const finalDir = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
-                z.mesh.moveWithCollisions(finalDir.scale(z.speed * frameFactor));
+                _tempBlended.copyFrom(moveDir);
+                _tempBlended.addInPlaceFromFloats(
+                    separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+                    separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+                    separation.z * sc.ZOMBIE_SEPARATION_FORCE
+                );
+                _tempBlended.normalizeInPlace();
+                _tempMoveResult.copyFrom(_tempBlended);
+                _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+                z.mesh.moveWithCollisions(_tempMoveResult);
             }
         }
     };
@@ -501,19 +541,30 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         }
 
         if (z.state === ZombieState.APPROACHING_WINDOW) {
-            z.mesh.lookAt(new BABYLON.Vector3(targetWindow.attackPoint.x, z.mesh.position.y, targetWindow.attackPoint.z));
+            _tempLookAt.set(targetWindow.attackPoint.x, z.mesh.position.y, targetWindow.attackPoint.z);
+            z.mesh.lookAt(_tempLookAt);
 
-            const dir = targetWindow.attackPoint.subtract(z.mesh.position).normalize();
-            dir.y = 0;
+            targetWindow.attackPoint.subtractToRef(z.mesh.position, _tempDirectDir);
+            _tempDirectDir.normalizeInPlace();
+            _tempDirectDir.y = 0;
             const dist = getHorizontalDist(z.mesh.position, targetWindow.attackPoint);
             const sepFactor = dist < 3.5 ? 0.1 : 1.0;
-            const moveDir = dir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE * sepFactor)).normalize();
-            z.mesh.moveWithCollisions(moveDir.scale(z.speed * frameFactor));
+            const sepForce = sc.ZOMBIE_SEPARATION_FORCE * sepFactor;
+            _tempBlended.copyFrom(_tempDirectDir);
+            _tempBlended.addInPlaceFromFloats(
+                separation.x * sepForce,
+                separation.y * sepForce,
+                separation.z * sepForce
+            );
+            _tempBlended.normalizeInPlace();
+            _tempMoveResult.copyFrom(_tempBlended);
+            _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+            z.mesh.moveWithCollisions(_tempMoveResult);
 
             if (dist < 2.0) {
                 z.state = ZombieState.ATTACKING_BARRIER;
             } else if (dist < 5.0) {
-                if (!z.lastPosition) z.lastPosition = z.mesh.position.clone();
+                if (!z.lastPosition) { z.lastPosition = new BABYLON.Vector3(); z.lastPosition.copyFrom(z.mesh.position); }
                 if (!z.stuckTimer) z.stuckTimer = 0;
                 z.stuckTimer += dt;
                 if (z.stuckTimer > 0.5) {
@@ -539,9 +590,13 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 z.state = ZombieState.ENTERING;
             }
         } else if (z.state === ZombieState.ENTERING) {
-            z.mesh.lookAt(new BABYLON.Vector3(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z));
-            const dir = targetWindow.entryPoint.subtract(z.mesh.position).normalize();
-            z.mesh.position.addInPlace(dir.scale(z.speed * frameFactor));
+            _tempLookAt.set(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z);
+            z.mesh.lookAt(_tempLookAt);
+            targetWindow.entryPoint.subtractToRef(z.mesh.position, _tempDirectDir);
+            _tempDirectDir.normalizeInPlace();
+            _tempMoveResult.copyFrom(_tempDirectDir);
+            _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+            z.mesh.position.addInPlace(_tempMoveResult);
             if (getHorizontalDist(z.mesh.position, targetWindow.entryPoint) < 0.5) {
                 z.state = ZombieState.CHASING;
             }
@@ -604,7 +659,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 // Apply gravity (except when entering window)
                 if (z.state !== ZombieState.ENTERING) {
-                    z.mesh.moveWithCollisions(new BABYLON.Vector3(0, gc.GRAVITY * 3 * frameFactor, 0));
+                    _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
+                    z.mesh.moveWithCollisions(_tempGravity);
                     if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
                 }
             }

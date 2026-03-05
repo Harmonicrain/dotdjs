@@ -102,9 +102,9 @@ export const MapTestDefinition: MapDefinition = {
     
     config: {
         gameplay: mapTestGameplay,
+        mysteryBox: mapTestMysteryBox,
         enemies: {
             hellhound: mapTestHellhound,
-            mysteryBox: mapTestMysteryBox
         },
         weapons: mapTestWeapons
     }
