@@ -216,7 +216,7 @@ Extracted `CONFIG_KEYS` constant array mapping property names to their global de
 ### 18. MapConfigManager.ts - applyMapConfig() Nested Conditionals ✅ DONE
 **File:** `managers/MapConfigManager.ts`
 
-Replaced 9 individual `if (mc.X) Object.assign(this.X, mc.X)` checks with a single loop over `CONFIG_KEYS`. For `hellhound` and `mysteryBox`, the loop reads from `mc.enemies?.[key]`; for all others it reads from `mc[key]` directly.
+Replaced 9 individual `if (mc.X) Object.assign(this.X, mc.X)` checks with a single loop over `CONFIG_KEYS`. For `hellhound`, the loop reads from `mc.enemies?.[key]`; for all others (including `mysteryBox`, now a top-level config alongside `powerUps`) it reads from `mc[key]` directly.
 
 ### 19. NetworkDeltaCompressor.ts - Duplicated Comparison Functions
 **File:** `network/NetworkDeltaCompressor.ts` (lines ~70-99)
