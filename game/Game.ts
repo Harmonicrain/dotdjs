@@ -205,8 +205,10 @@ export class Game {
             sm.zoneSystem,
             sm.configManager,
             this.resourceManager,
-            sm.eventBus
+            sm.eventBus,
+            visualManager
         );
+
 
         const powerUpManager = new PowerUpManager(
             this.scene,

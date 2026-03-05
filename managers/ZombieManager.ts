@@ -1,6 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
-import { createZombieMesh, ZombieMeshResult } from '../meshes';
+import { createZombieMesh, ZombieMeshResult, preWarmTemplates } from '../meshes';
 import { Zombie, ZombieState, WindowBarrier, GameStateData, GameMessage } from '../types/index';
+
 import { ZoneSystem } from '../systems/ZoneSystem';
 import { MapConfigManager } from './MapConfigManager';
 import { ResourceManager } from './ResourceManager';
@@ -71,13 +72,13 @@ export class ZombieManager {
     }
 
     /**
-     * Pre-initializes and compiles all materials used for zombies.
+     * Pre-initializes and compiles all materials and mesh templates used for zombies.
      */
     public async preWarmAssets() {
         const sm = this.scene;
         const rm = this.resourceManager;
 
-        // Force creation/caching of zombie materials
+        // 1. Pre-warm materials
         const bodyMat = rm.getMaterial("zombieBodyMat", () => {
             const mat = new BABYLON.StandardMaterial("zombieBodyMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.12);
@@ -103,7 +104,10 @@ export class ZombieManager {
             return mat;
         });
 
-        // Force compilation if a mesh is available
+        // 2. Pre-warm Mesh Templates
+        preWarmTemplates(sm, rm);
+
+        // 3. Force compilation if a mesh is available
         const compilerMesh = sm.meshes[0];
         if (compilerMesh) {
             bodyMat.forceCompilation(compilerMesh);
@@ -111,6 +115,7 @@ export class ZombieManager {
             eyeMat.forceCompilation(compilerMesh);
         }
     }
+
 
     public onZombieDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST', isHeadshot: boolean = false, headPos?: BABYLON.Vector3, hitDir?: BABYLON.Vector3) {
          if (z.isDead) return;

@@ -1,10 +1,11 @@
 import * as BABYLON from '@babylonjs/core';
-import { createHellhoundMesh, ZombieMeshResult } from '../meshes';
+import { createHellhoundMesh, ZombieMeshResult, preWarmTemplates } from '../meshes';
 import { Zombie, ZombieState, HellhoundState, GameStateData, GameMessage, PowerUpType } from '../types/index';
 import { ZoneSystem } from '../systems/ZoneSystem';
 import { MapConfigManager } from './MapConfigManager';
 import { ResourceManager } from './ResourceManager';
 import { EventBus } from '../engine/EventBus';
+import { VisualManager } from './VisualManager';
 
 /**
  * HellhoundManager
@@ -35,8 +36,10 @@ export class HellhoundManager {
         private zoneSystem: ZoneSystem,
         private configManager: MapConfigManager,
         private resourceManager: ResourceManager,
-        private eventBus: EventBus
+        private eventBus: EventBus,
+        private visualManager: VisualManager
     ) {}
+
 
     public setDependencies(
         spawnPowerUp: (pos: BABYLON.Vector3, type?: PowerUpType) => void, 
@@ -51,7 +54,7 @@ export class HellhoundManager {
     }
 
     /**
-     * Pre-initializes and compiles all materials used for hounds.
+     * Pre-initializes and compiles all materials and mesh templates used for hounds.
      */
     public async preWarmAssets() {
         const sm = this.scene;
@@ -68,6 +71,9 @@ export class HellhoundManager {
             mat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.2);
             return mat;
         });
+
+        // Pre-warm templates
+        preWarmTemplates(sm, rm);
 
         // Force compilation if a mesh is available
         const compilerMesh = sm.meshes[0];
@@ -102,10 +108,19 @@ export class HellhoundManager {
         
         this.eventBus.emit('HELLHOUND_DEATH', { id: z.id, position: pos });
 
-        // === HELLHOUND DEATH EXPLOSION ===
-        this.createHellhoundDeathExplosion(pos);
+        // === HELLHOUND DEATH EXPLOSION (Pooled) ===
+        const hc = this.configManager.hellhound;
+        const distToPlayer = BABYLON.Vector3.Distance(pos, this.camera.position);
+        if (distToPlayer <= (hc.DEATH_EXPLOSION_RADIUS || 1.5)) {
+            this.eventBus.emit('PLAYER_DAMAGE', { 
+                amount: hc.DEATH_EXPLOSION_DAMAGE || 50, 
+                source: 'hellhound_explosion' 
+            });
+        }
+        this.visualManager.createHellhoundDeathExplosion(pos);
 
         if (this.spawnPowerUpCallback) {
+
             // Guaranteed power-up on the final dog kill of a dog round
             const isFinalDogKill = this.gameState.isDogRound &&
                                    this.gameState.zombiesToSpawn === 0 &&
@@ -120,51 +135,9 @@ export class HellhoundManager {
         }
     }
 
-    private createHellhoundDeathExplosion(pos: BABYLON.Vector3): void {
-        const hc = this.configManager.hellhound;
-
-        // Check if local player is in explosion radius
-        const distToPlayer = BABYLON.Vector3.Distance(pos, this.camera.position);
-        if (distToPlayer <= (hc.DEATH_EXPLOSION_RADIUS || 1.5)) {
-            this.eventBus.emit('PLAYER_DAMAGE', { 
-                amount: hc.DEATH_EXPLOSION_DAMAGE || 50, 
-                source: 'hellhound_explosion' 
-            });
-        }
-
-        // Visual burst effect
-        const ps = new BABYLON.ParticleSystem("houndExplosion", 50, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        ps.emitter = pos.clone();
-
-        // Fire colors
-        ps.color1 = new BABYLON.Color4(1, 0.5, 0, 1);
-        ps.color2 = new BABYLON.Color4(1, 0.2, 0, 0.8);
-        ps.colorDead = new BABYLON.Color4(0.2, 0, 0, 0);
-
-        ps.minSize = 0.3;
-        ps.maxSize = 0.8;
-        ps.minLifeTime = 0.2;
-        ps.maxLifeTime = 0.4;
-        ps.emitRate = 100;
-
-        ps.direction1 = new BABYLON.Vector3(-1, 1, -1);
-        ps.direction2 = new BABYLON.Vector3(1, 2, 1);
-        ps.minEmitPower = 2;
-        ps.maxEmitPower = 4;
-
-        ps.targetStopDuration = 0.1;
-        // Do not use disposeOnStop — it calls dispose(disposeTexture=true)
-        // which destroys the shared cached texture from ResourceManager.
-        ps.disposeOnStop = false;
-        ps.onAnimationEnd = () => {
-            ps.dispose(false);
-        };
-        ps.start();
-    }
-
     /**
      * Find a valid spawn position that:
+
      * 1. Is within an accessible zone
      * 2. Is not too close to any player
      * 3. Is not too far from players
