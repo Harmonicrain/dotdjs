@@ -26,7 +26,7 @@ function createPBRMaterialWithTexture(
     mat.metallic = metallic;
     mat.roughness = roughness;
     mat.environmentIntensity = envIntensity;
-    
+
     if (tex.isReady()) {
         mat.markDirty();
     } else {
@@ -43,7 +43,7 @@ export class LevelBuilder {
     private lights: BABYLON.PointLight[] = [];
     private materials: Map<string, BABYLON.Material> = new Map();
     private mapGameplay: MapGameplay = {};
-    
+
     // Result Containers
     public loadPromises: Promise<any>[] = [];
     private windowsRef: WindowBarrier[];
@@ -53,7 +53,7 @@ export class LevelBuilder {
     private powerSwitchActivate: (() => void) | null = null;
     private powerDoor: BABYLON.Mesh | null = null;
     private powerDoorOpenY: number = 8;
-    
+
     constructor(
         scene: BABYLON.Scene,
         shadowCasters: BABYLON.AbstractMesh[],
@@ -104,9 +104,9 @@ export class LevelBuilder {
 
     private initializeEnvironment(def: MapDefinition) {
         if (!def.environment) return;
-        
+
         const env = def.environment;
-        
+
         if (env.skybox) {
             const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, this.scene);
             const skyboxMaterial = new BABYLON.StandardMaterial("skyBox", this.scene);
@@ -143,7 +143,7 @@ export class LevelBuilder {
             dl.intensity = env.directionalLight.intensity;
             dl.position = new BABYLON.Vector3(0, 20, 0);
             dl.parent = this.root;
-            
+
             const shadow = env.shadow;
             const shadowGenerator = new BABYLON.ShadowGenerator(shadow?.resolution ?? 1024, dl);
             shadowGenerator.useBlurExponentialShadowMap = true;
@@ -165,11 +165,11 @@ export class LevelBuilder {
         floorMat.diffuseTexture = floorTex;
         floorTex.uScale = 8;
         floorTex.vScale = 16;
-        
+
         this.materials.set('wall', new BABYLON.StandardMaterial("wallMat", this.scene));
         const wallMat = this.materials.get('wall') as BABYLON.StandardMaterial;
         wallMat.diffuseTexture = new BABYLON.Texture(textures.wall, this.scene);
-        
+
         this.materials.set('ceiling', new BABYLON.StandardMaterial("ceilingMat", this.scene));
         const ceilingMat = this.materials.get('ceiling') as BABYLON.StandardMaterial;
         ceilingMat.diffuseTexture = new BABYLON.Texture(textures.ceiling, this.scene);
@@ -177,7 +177,7 @@ export class LevelBuilder {
         this.materials.set('plank', new BABYLON.StandardMaterial("plankMat", this.scene));
         const plankMat = this.materials.get('plank') as BABYLON.StandardMaterial;
         plankMat.diffuseTexture = new BABYLON.Texture(textures.plank, this.scene);
-        
+
         // Aliases
         this.materials.set('brick', this.materials.get('wall')!);
         this.materials.set('wood', this.materials.get('floor')!);
@@ -203,7 +203,7 @@ export class LevelBuilder {
         voidMat.albedoColor = new BABYLON.Color3(0, 0, 0);
         voidMat.unlit = true;
         this.materials.set('void', voidMat);
-        
+
         // Frame material
         const frameMat = new BABYLON.PBRMaterial("frameMat", this.scene);
         frameMat.albedoColor = new BABYLON.Color3(0.6, 0.6, 0.6);
@@ -215,14 +215,20 @@ export class LevelBuilder {
     }
 
     private buildGeometry(def: MapDefinition) {
-        const noNav: BABYLON.Mesh[] = [];
+        const groups: Record<string, { meshes: BABYLON.Mesh[], mat: BABYLON.Material, isWalkable: boolean }> = {};
+
         def.geometry.forEach((geo, idx) => {
             const matName = geo.material || geo.texture || (geo.type === 'wall' ? 'wall' : 'floor');
             const mat = this.materials.get(matName) || this.materials.get('wall')!;
-            
+
             if (geo.type === 'box' || geo.type === 'wall' || geo.type === 'floor' || geo.type === 'ceiling') {
                 const isWalkableSurface = geo.type === 'floor' || geo.type === 'box';
-                const targetNav = isWalkableSurface ? this.navMeshes : noNav;
+                const key = `${matName}_${isWalkableSurface}`;
+
+                if (!groups[key]) {
+                    groups[key] = { meshes: [], mat, isWalkable: isWalkableSurface };
+                }
+
                 const box = createTiledBox(
                     this.scene,
                     `geo_${idx}`,
@@ -230,13 +236,40 @@ export class LevelBuilder {
                     new BABYLON.Vector3(geo.pos[0], geo.pos[1], geo.pos[2]),
                     mat,
                     geo.uvScale || 1.0,
-                    true,
-                    this.shadowCasters,
-                    targetNav
+                    false, // Handle shadows post-merge
+                    [],    // Temp array
+                    []     // Temp array
                 );
-                box.parent = this.root;
+
                 if (geo.rotation) {
                     box.rotation = new BABYLON.Vector3(geo.rotation[0], geo.rotation[1], geo.rotation[2]);
+                }
+
+                box.computeWorldMatrix(true);
+                groups[key].meshes.push(box as BABYLON.Mesh);
+            }
+        });
+
+        Object.keys(groups).forEach(key => {
+            const group = groups[key];
+            if (group.meshes.length > 0) {
+                if (group.meshes.length === 1) {
+                    const mesh = group.meshes[0];
+                    mesh.parent = this.root;
+                    mesh.receiveShadows = true;
+                    this.shadowCasters.push(mesh);
+                    if (group.isWalkable) this.navMeshes.push(mesh);
+                } else {
+                    const merged = BABYLON.Mesh.MergeMeshes(group.meshes, true, true);
+                    if (merged) {
+                        merged.name = `merged_geo_${key}`;
+                        merged.parent = this.root;
+                        merged.material = group.mat;
+                        merged.checkCollisions = true;
+                        merged.receiveShadows = true;
+                        this.shadowCasters.push(merged);
+                        if (group.isWalkable) this.navMeshes.push(merged);
+                    }
                 }
             }
         });
@@ -245,38 +278,74 @@ export class LevelBuilder {
     private buildGrounds(def: MapDefinition) {
         if (!def.grounds) return;
         const hasNavFloors = def.navFloors && def.navFloors.length > 0;
-        
+
+        const groups: Record<string, { meshes: BABYLON.Mesh[], mat: BABYLON.Material }> = {};
+
         def.grounds.forEach((g, idx) => {
-            const baseMat = this.materials.get(g.texture || 'floor') || this.materials.get('floor')!;
-            let mat = baseMat;
-            
-            if (g.uvScale && baseMat instanceof BABYLON.StandardMaterial) {
-                const clonedMat = baseMat.clone(`ground_${idx}_mat`) as BABYLON.StandardMaterial;
-                if (clonedMat.diffuseTexture) {
-                    const clonedTex = clonedMat.diffuseTexture.clone() as BABYLON.Texture;
-                    clonedTex.uScale = g.uvScale[0];
-                    clonedTex.vScale = g.uvScale[1];
-                    clonedMat.diffuseTexture = clonedTex;
-                }
-                mat = clonedMat;
-            }
-            
+            const matName = g.texture || 'floor';
+            const baseMat = this.materials.get(matName) || this.materials.get('floor')!;
+
             const ground = BABYLON.MeshBuilder.CreateGround(`ground_${idx}`, { width: g.width, height: g.height }, this.scene);
             ground.position = new BABYLON.Vector3(g.pos[0], g.pos[1], g.pos[2]);
-            ground.material = mat;
-            ground.checkCollisions = true;
-            ground.receiveShadows = true;
-            ground.parent = this.root;
-            
-            if (!hasNavFloors) {
-                this.navMeshes.push(ground);
+
+            if (g.uvScale) {
+                let texU = 1;
+                let texV = 1;
+
+                if (baseMat instanceof BABYLON.StandardMaterial && baseMat.diffuseTexture && (baseMat.diffuseTexture as BABYLON.Texture).uScale !== undefined) {
+                    texU = (baseMat.diffuseTexture as BABYLON.Texture).uScale;
+                    texV = (baseMat.diffuseTexture as BABYLON.Texture).vScale;
+                } else if (baseMat instanceof BABYLON.PBRMaterial && baseMat.albedoTexture && (baseMat.albedoTexture as BABYLON.Texture).uScale !== undefined) {
+                    texU = (baseMat.albedoTexture as BABYLON.Texture).uScale;
+                    texV = (baseMat.albedoTexture as BABYLON.Texture).vScale;
+                }
+
+                const uvData = ground.getVerticesData(BABYLON.VertexBuffer.UVKind);
+                if (uvData) {
+                    for (let i = 0; i < uvData.length; i += 2) {
+                        uvData[i] *= (g.uvScale[0] / texU);
+                        uvData[i + 1] *= (g.uvScale[1] / texV);
+                    }
+                    ground.setVerticesData(BABYLON.VertexBuffer.UVKind, uvData);
+                }
+            }
+
+            ground.computeWorldMatrix(true);
+
+            if (!groups[matName]) {
+                groups[matName] = { meshes: [], mat: baseMat };
+            }
+            groups[matName].meshes.push(ground);
+        });
+
+        Object.keys(groups).forEach(key => {
+            const group = groups[key];
+            if (group.meshes.length > 0) {
+                if (group.meshes.length === 1) {
+                    const mesh = group.meshes[0];
+                    mesh.material = group.mat;
+                    mesh.checkCollisions = true;
+                    mesh.receiveShadows = true;
+                    mesh.parent = this.root;
+                    if (!hasNavFloors) this.navMeshes.push(mesh);
+                } else {
+                    const merged = BABYLON.Mesh.MergeMeshes(group.meshes, true, true);
+                    if (merged) {
+                        merged.name = `merged_ground_${key}`;
+                        merged.material = group.mat;
+                        merged.checkCollisions = true;
+                        merged.receiveShadows = true;
+                        merged.parent = this.root;
+                        if (!hasNavFloors) this.navMeshes.push(merged);
+                    }
+                }
             }
         });
     }
 
     private buildNavFloors(def: MapDefinition) {
         if (!def.navFloors) return;
-        
+
         const DEBUG_SHOW_NAVFLOORS = false;
         const colors = [
             new BABYLON.Color3(1, 0, 0),
@@ -286,11 +355,13 @@ export class LevelBuilder {
             new BABYLON.Color3(0, 0, 1),
             new BABYLON.Color3(1, 0, 1),
         ];
-        
+
+        const navFloorMeshes: BABYLON.Mesh[] = [];
+
         def.navFloors.forEach((g, idx) => {
             const ground = BABYLON.MeshBuilder.CreateGround(`navfloor_${idx}`, { width: g.width, height: g.height }, this.scene);
             ground.position = new BABYLON.Vector3(g.pos[0], g.pos[1] + 0.05, g.pos[2]);
-            
+
             if (DEBUG_SHOW_NAVFLOORS) {
                 const mat = new BABYLON.StandardMaterial(`navfloor_mat_${idx}`, this.scene);
                 mat.diffuseColor = colors[idx % colors.length];
@@ -301,12 +372,39 @@ export class LevelBuilder {
             } else {
                 ground.visibility = 0;
             }
-            
-            ground.isPickable = false;
-            ground.checkCollisions = false;
-            ground.parent = this.root;
-            this.navMeshes.push(ground);
+
+            ground.computeWorldMatrix(true);
+            navFloorMeshes.push(ground);
         });
+
+        if (navFloorMeshes.length > 0) {
+            if (navFloorMeshes.length === 1) {
+                const mesh = navFloorMeshes[0];
+                mesh.isPickable = false;
+                mesh.checkCollisions = false;
+                mesh.parent = this.root;
+                this.navMeshes.push(mesh);
+            } else {
+                if (!DEBUG_SHOW_NAVFLOORS) {
+                    const merged = BABYLON.Mesh.MergeMeshes(navFloorMeshes, true, true);
+                    if (merged) {
+                        merged.name = "merged_navfloors";
+                        merged.visibility = 0;
+                        merged.isPickable = false;
+                        merged.checkCollisions = false;
+                        merged.parent = this.root;
+                        this.navMeshes.push(merged);
+                    }
+                } else {
+                    navFloorMeshes.forEach(mesh => {
+                        mesh.isPickable = false;
+                        mesh.checkCollisions = false;
+                        mesh.parent = this.root;
+                        this.navMeshes.push(mesh);
+                    });
+                }
+            }
+        }
     }
 
     private buildInteractables(def: MapDefinition) {
@@ -397,7 +495,7 @@ export class LevelBuilder {
         perks.forEach(p => {
             const pos = new BABYLON.Vector3(p.pos[0], p.pos[1], p.pos[2]);
             let machine: BABYLON.TransformNode;
-            
+
             if (p.type === 'juggernog') {
                 machine = createJuggernog(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['juggernog'], this.loadPromises);
             } else if (p.type === 'speed_cola') {
@@ -405,10 +503,10 @@ export class LevelBuilder {
             } else {
                 machine = createQuickRevive(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['quick_revive'], this.loadPromises);
             }
-            
+
             machine.parent = this.root;
             const perkCost = this.mapGameplay.perkCosts?.[p.type] ?? defaultPerkCosts[p.type] ?? 2000;
-            
+
             const triggers = machine.getChildMeshes().filter(m => m.name.includes("Trigger"));
             triggers.forEach(t => {
                 t.metadata = { type: 'PERK', id: p.id, perkType: p.type, cost: perkCost } as InteractableMetadata;
@@ -477,9 +575,9 @@ export class LevelBuilder {
 
         buildings.forEach(b => {
             const building = createBuilding(
-                this.scene, 
-                b, 
-                this.shadowCasters, 
+                this.scene,
+                b,
+                this.shadowCasters,
                 this.navMeshes,
                 { onLoaded: this.onBuildingLoaded },
                 this.loadPromises
@@ -496,20 +594,20 @@ export class LevelBuilder {
         sw.root.parent = this.root;
         this.powerSwitchHandle = sw.handle;
         this.powerSwitchActivate = sw.activate;
-        
+
         const trig = this.scene.getMeshByName("powerSwitchTrigger");
         if (trig) trig.metadata = { type: 'POWER' } as InteractableMetadata;
-        
+
         if (ps.powerDoor) {
             const pdDef = ps.powerDoor;
             this.powerDoorOpenY = pdDef.openY ?? 8;
-            
+
             const pd = BABYLON.MeshBuilder.CreateBox("powerDoor", { width: pdDef.size[0], height: pdDef.size[1], depth: pdDef.size[2] }, this.scene);
             pd.position = new BABYLON.Vector3(pdDef.pos[0], pdDef.pos[1], pdDef.pos[2]);
             pd.visibility = 0;
             pd.checkCollisions = true;
             pd.parent = this.root;
-            
+
             const pdVis = BABYLON.MeshBuilder.CreateBox("powerDoorVis", { width: pdDef.size[0], height: pdDef.size[1], depth: pdDef.size[2] }, this.scene);
             pdVis.parent = pd;
             pdVis.position = BABYLON.Vector3.Zero();
@@ -533,7 +631,7 @@ export class LevelBuilder {
         const pp = packAPunch;
         const machine = createPackAPunchMachine(this.scene, new BABYLON.Vector3(pp.pos[0], pp.pos[1], pp.pos[2]), pp.rotation || 0, def.modelOverrides?.['pack_a_punch'], this.loadPromises);
         machine.parent = this.root;
-        
+
         const papCost = this.mapGameplay.packAPunchCost ?? GAME_CONFIG.PACK_A_PUNCH_COST;
         const trig = this.scene.getMeshByName("papTrigger");
         if (trig) trig.metadata = { type: 'PAP', cost: papCost } as InteractableMetadata;
@@ -545,7 +643,7 @@ export class LevelBuilder {
         if (this.mysteryBoxRef.current) {
             this.mysteryBoxRef.current.instances = [];
         }
-        
+
         mysteryBoxes.forEach((loc, index) => {
             const box = createMysteryBox(this.scene);
             box.root.parent = this.root;
@@ -564,9 +662,9 @@ export class LevelBuilder {
                     trigger: box.trigger
                 });
             }
-            
+
             box.trigger.metadata = { type: 'MYSTERY_BOX' } as InteractableMetadata;
-            
+
             if (index > 0) {
                 box.root.setEnabled(false);
                 if (box.trigger) box.trigger.setEnabled(false);
@@ -588,7 +686,7 @@ export class LevelBuilder {
 
     private extractDoorConnections(def: MapDefinition) {
         const doorConnections: DoorConnection[] = [];
-        
+
         if (def.interactables.doors) {
             def.interactables.doors.forEach(d => {
                 doorConnections.push({
@@ -600,7 +698,7 @@ export class LevelBuilder {
                 });
             });
         }
-        
+
         const powerDoorDef = def.interactables.powerSwitch?.powerDoor;
         if (powerDoorDef?.connects) {
             doorConnections.push({
@@ -611,7 +709,7 @@ export class LevelBuilder {
                 entryThreshold: 2.0
             });
         }
-        
+
         return doorConnections;
     }
 }
