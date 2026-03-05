@@ -34,7 +34,10 @@ export interface IZombieDamageContext {
  * Uses MapConfigManager for map-specific tuning.
  */
 export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
-    
+
+    // Pre-allocated scratch for knockback direction — avoids 2 allocs per hit
+    const _pushDir = new BABYLON.Vector3();
+
     const getHorizontalDist = (p1: BABYLON.Vector3, p2: BABYLON.Vector3) => {
         return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.z - p2.z, 2));
     };
@@ -127,10 +130,15 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                         ctx.setFlashColor(isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
                         ctx.timerManager.schedule('dmg_flash', visuals.HIT_FLASH_DURATION * 2, () => ctx.setFlashColor(null));
 
-                        // Apply knockback through externalForce (handled by PlayerMovementSystem)
-                        const pushDir = camera.position.subtract(z.mesh.position).normalize();
-                        pushDir.y = 0;
-                        gameState.externalForce.addInPlace(pushDir.scale(0.5));
+                        // Apply knockback — subtractToRef + normalizeToRef avoid 2 allocations
+                        camera.position.subtractToRef(z.mesh.position, _pushDir);
+                        _pushDir.y = 0;
+                        _pushDir.normalize();
+                        gameState.externalForce.addInPlaceFromFloats(
+                            _pushDir.x * 0.5,
+                            0,
+                            _pushDir.z * 0.5
+                        );
 
                         if (gameState.health <= 0 && !gameState.isDowned) {
                             const isSolo = currentGameMode === 'SOLO';

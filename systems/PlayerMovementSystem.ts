@@ -20,15 +20,27 @@ export interface IMovementContext {
 export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
     let lastPosition = new BABYLON.Vector3(0, 0, 0);
     let firstFrame = true;
-    
-    // Pre-allocated ray for ground checks (avoid per-frame allocation)
-    const _groundRay = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Down(), 1);
-    
+
+    // ── Pre-allocated scratch vectors — zero allocations in the hot update path ──
+    // Axis constants passed to getDirectionToRef (never mutated)
+    const _axisForward = new BABYLON.Vector3(0, 0, 1);
+    const _axisRight   = new BABYLON.Vector3(1, 0, 0);
+    // Output vectors for camera direction queries
+    const _camForward  = new BABYLON.Vector3();
+    const _camRight    = new BABYLON.Vector3();
+    // Accumulated move direction (zeroed at the top of each frame)
+    const _moveDir     = new BABYLON.Vector3();
+    // Velocity scratch (replaces currentPos.subtract(lastPosition))
+    const _velocity    = new BABYLON.Vector3();
+
+    // Pre-allocated ray for ground checks
+    const _groundRay = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3(0, -1, 0), 1);
+
     // Camera smoothing state - accumulated rotation targets
     let targetRotationX = 0;
     let targetRotationY = 0;
     let smoothingInitialized = false;
-    
+
     // Smoothing factor: 1.0 = instant (no smoothing), lower = more smoothing
     // 0.5-0.7 is good for reducing jitter while staying responsive
     const CAMERA_SMOOTHING = 0.65;
@@ -86,14 +98,14 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             }
 
             // --- CALCULATE VELOCITY ---
-            const currentPos = camera.position;
-            const velocity = currentPos.subtract(lastPosition);
+            // subtractToRef writes into _velocity — no allocation
+            camera.position.subtractToRef(lastPosition, _velocity);
             if (ctx.gameState.currentVelocity) {
-                ctx.gameState.currentVelocity.copyFrom(velocity);
+                ctx.gameState.currentVelocity.copyFrom(_velocity);
             } else {
-                ctx.gameState.currentVelocity = velocity;
+                ctx.gameState.currentVelocity = _velocity.clone();
             }
-            lastPosition.copyFrom(currentPos);
+            lastPosition.copyFrom(camera.position);
 
             // STOP MOVEMENT IF DOWNED
             if (ctx.gameState.isDowned) {
@@ -107,21 +119,27 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             }
 
             // --- DIRECTION CALC ---
-            const forward = camera.getDirection(BABYLON.Vector3.Forward());
-            forward.y = 0; forward.normalize();
-            const right = camera.getDirection(BABYLON.Vector3.Right());
-            right.y = 0; right.normalize();
+            // getDirectionToRef writes into pre-allocated vectors — no allocation
+            camera.getDirectionToRef(_axisForward, _camForward);
+            _camForward.y = 0; _camForward.normalize();
+            camera.getDirectionToRef(_axisRight, _camRight);
+            _camRight.y = 0; _camRight.normalize();
 
-            const moveDir = BABYLON.Vector3.Zero();
-            if (inputManager.isDown(GameAction.MOVE_FORWARD)) moveDir.addInPlace(forward);
-            if (inputManager.isDown(GameAction.MOVE_BACK)) moveDir.addInPlace(forward.scale(-1));
-            if (inputManager.isDown(GameAction.MOVE_LEFT)) moveDir.addInPlace(right.scale(-1));
-            if (inputManager.isDown(GameAction.MOVE_RIGHT)) moveDir.addInPlace(right);
+            // Zero the move accumulator, then add components in-place — no allocation
+            _moveDir.set(0, 0, 0);
+            if (inputManager.isDown(GameAction.MOVE_FORWARD)) _moveDir.addInPlace(_camForward);
+            if (inputManager.isDown(GameAction.MOVE_BACK))    _moveDir.subtractInPlace(_camForward);
+            if (inputManager.isDown(GameAction.MOVE_LEFT))    _moveDir.subtractInPlace(_camRight);
+            if (inputManager.isDown(GameAction.MOVE_RIGHT))   _moveDir.addInPlace(_camRight);
 
-            if (moveDir.lengthSquared() > 0.001) {
-                moveDir.normalize();
+            if (_moveDir.lengthSquared() > 0.001) {
+                _moveDir.normalize();
                 camera.speed = speed;
-                camera.cameraDirection.addInPlace(moveDir.scale(speed * dt));
+                camera.cameraDirection.addInPlaceFromFloats(
+                    _moveDir.x * speed * dt,
+                    _moveDir.y * speed * dt,
+                    _moveDir.z * speed * dt
+                );
             }
 
             // --- NOCLIP HANDLING ---

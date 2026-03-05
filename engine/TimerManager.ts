@@ -16,7 +16,12 @@ export class TimerManager {
   }
 
   cancel(id: string) {
-    this.timers = this.timers.filter(t => t.id !== id);
+    for (let i = this.timers.length - 1; i >= 0; i--) {
+      if (this.timers[i].id === id) {
+        this.timers.splice(i, 1);
+        return;
+      }
+    }
   }
 
   update(dt: number) {

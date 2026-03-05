@@ -58,7 +58,7 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
                 // Position Lerp (frame-rate independent)
                 const lerpAmount = frameIndependentLerp(dt);
                 _tempLerpTarget.copyFromFloats(finalTargetX, finalTargetY, targetPos.z);
-                mesh.position = BABYLON.Vector3.Lerp(mesh.position, _tempLerpTarget, lerpAmount);
+                BABYLON.Vector3.LerpToRef(mesh.position, _tempLerpTarget, lerpAmount, mesh.position);
                 ctx.camera.fov = BABYLON.Scalar.Lerp(ctx.camera.fov, targetFov, lerpAmount);
 
                 mesh.setEnabled(!ctx.gameState.isSpectating && !ctx.gameState.isGameOver);
