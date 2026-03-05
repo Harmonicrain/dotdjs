@@ -344,8 +344,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             if (z.stateTimer !== undefined && z.stateTimer <= 0) {
                 z.hellhoundState = HellhoundState.CHASING;
             }
-            _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
-            z.mesh.moveWithCollisions(_tempGravity);
+            _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
+            z.mesh.moveWithCollisions(_tempMoveResult);
             return;
         }
 
@@ -371,7 +371,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     _tempBlended.normalize();
                     _tempMoveResult.copyFrom(_tempBlended);
                     _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-                    z.mesh.moveWithCollisions(_tempMoveResult);
                 }
             }
         } else if (z.hellhoundState === HellhoundState.ATTACK_WINDUP) {
@@ -399,7 +398,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempLungeDir.y = 0;
                 _tempMoveResult.copyFrom(_tempLungeDir);
                 _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
-                z.mesh.moveWithCollisions(_tempMoveResult);
                 
                 const distFromStartSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lungeStartPos);
                 const distToPlayerSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
@@ -418,7 +416,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     _tempRetreatDir.normalize();
                     _tempMoveResult.copyFrom(_tempRetreatDir);
                     _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-                    z.mesh.moveWithCollisions(_tempMoveResult);
                 } else {
                     z.hellhoundState = HellhoundState.CHASING;
                     z.lungeStartPos = undefined;
@@ -432,8 +429,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         }
 
-        _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
-        z.mesh.moveWithCollisions(_tempGravity);
+        _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
+        z.mesh.moveWithCollisions(_tempMoveResult);
     };
 
     /**
@@ -507,9 +504,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         applyRotationSmoothing(z, _tempBlended, frameFactor);
         _tempMoveResult.copyFrom(_tempBlended);
         _tempMoveResult.scaleInPlace(z.speed * frameFactor);
+        _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
         z.mesh.moveWithCollisions(_tempMoveResult);
-        _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
-        z.mesh.moveWithCollisions(_tempGravity);
     };
 
     /**
@@ -560,7 +556,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempBlended.normalize();
                 _tempMoveResult.copyFrom(_tempBlended);
                 _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-                z.mesh.moveWithCollisions(_tempMoveResult);
             }
         }
     };
@@ -604,7 +599,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             _tempBlended.normalize();
             _tempMoveResult.copyFrom(_tempBlended);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-            z.mesh.moveWithCollisions(_tempMoveResult);
 
             if (distSq < 4.0) {
                 z.state = ZombieState.ATTACKING_BARRIER;
@@ -677,6 +671,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             for (const z of zombies) {
                 if (z.isDead) continue;
 
+                _tempMoveResult.set(0, 0, 0);
+
                 // Burning damage
                 if (updateBurningDamage(z, now, ctx)) continue;
 
@@ -706,8 +702,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 // Apply gravity (except when entering window)
                 if (z.state !== ZombieState.ENTERING) {
-                    _tempGravity.set(0, gc.GRAVITY * 3 * frameFactor, 0);
-                    z.mesh.moveWithCollisions(_tempGravity);
+                    _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
+                    z.mesh.moveWithCollisions(_tempMoveResult);
                     if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
                 }
             }
