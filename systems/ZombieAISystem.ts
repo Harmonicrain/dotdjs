@@ -184,7 +184,7 @@ const computeNavPath = (
         }
         if (z.path.length > 0) {
             z.path[0].subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalizeInPlace();
+            _tempDirectDir.normalize();
             return _tempDirectDir;
         }
     }
@@ -330,7 +330,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                         separation.y * sc.ZOMBIE_SEPARATION_FORCE,
                         separation.z * sc.ZOMBIE_SEPARATION_FORCE
                     );
-                    _tempBlended.normalizeInPlace();
+                    _tempBlended.normalize();
                     _tempMoveResult.copyFrom(_tempBlended);
                     _tempMoveResult.scaleInPlace(z.speed * frameFactor);
                     z.mesh.moveWithCollisions(_tempMoveResult);
@@ -343,7 +343,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 z.lungeStartPos = z.mesh.position.clone();
                 z.lungeTargetPos = _targetPos.clone();
                 z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
-                _tempLungeDir.normalizeInPlace();
+                _tempLungeDir.normalize();
                 _tempLungeDir.y = 0;
                 const yaw = Math.atan2(_tempLungeDir.x, _tempLungeDir.z);
                 z.mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
@@ -354,7 +354,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
             } else if (z.lungeTargetPos && z.lungeStartPos) {
                 z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
-                _tempLungeDir.normalizeInPlace();
+                _tempLungeDir.normalize();
                 _tempLungeDir.y = 0;
                 _tempMoveResult.copyFrom(_tempLungeDir);
                 _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
@@ -373,7 +373,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempRetreatDir.y = 0;
                 const distBack = _tempRetreatDir.length();
                 if (distBack > 0.5) {
-                    _tempRetreatDir.normalizeInPlace();
+                    _tempRetreatDir.normalize();
                     _tempMoveResult.copyFrom(_tempRetreatDir);
                     _tempMoveResult.scaleInPlace(z.speed * frameFactor);
                     z.mesh.moveWithCollisions(_tempMoveResult);
@@ -448,7 +448,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         ws.wanderTarget.subtractToRef(z.mesh.position, _tempDirectDir);
         _tempDirectDir.y = 0;
         if (_tempDirectDir.lengthSquared() > 0.001) {
-            _tempDirectDir.normalizeInPlace();
+            _tempDirectDir.normalize();
         } else {
             _tempDirectDir.set(Math.cos(ws.angle), 0, Math.sin(ws.angle));
         }
@@ -460,7 +460,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             separation.y * sc.ZOMBIE_SEPARATION_FORCE,
             separation.z * sc.ZOMBIE_SEPARATION_FORCE
         );
-        _tempBlended.normalizeInPlace();
+        _tempBlended.normalize();
         applyRotationSmoothing(z, _tempBlended, frameFactor);
         _tempMoveResult.copyFrom(_tempBlended);
         _tempMoveResult.scaleInPlace(z.speed * frameFactor);
@@ -512,7 +512,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     separation.y * sc.ZOMBIE_SEPARATION_FORCE,
                     separation.z * sc.ZOMBIE_SEPARATION_FORCE
                 );
-                _tempBlended.normalizeInPlace();
+                _tempBlended.normalize();
                 _tempMoveResult.copyFrom(_tempBlended);
                 _tempMoveResult.scaleInPlace(z.speed * frameFactor);
                 z.mesh.moveWithCollisions(_tempMoveResult);
@@ -545,7 +545,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             z.mesh.lookAt(_tempLookAt);
 
             targetWindow.attackPoint.subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalizeInPlace();
+            _tempDirectDir.normalize();
             _tempDirectDir.y = 0;
             const dist = getHorizontalDist(z.mesh.position, targetWindow.attackPoint);
             const sepFactor = dist < 3.5 ? 0.1 : 1.0;
@@ -556,7 +556,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 separation.y * sepForce,
                 separation.z * sepForce
             );
-            _tempBlended.normalizeInPlace();
+            _tempBlended.normalize();
             _tempMoveResult.copyFrom(_tempBlended);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             z.mesh.moveWithCollisions(_tempMoveResult);
@@ -593,7 +593,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             _tempLookAt.set(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z);
             z.mesh.lookAt(_tempLookAt);
             targetWindow.entryPoint.subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalizeInPlace();
+            _tempDirectDir.normalize();
             _tempMoveResult.copyFrom(_tempDirectDir);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             z.mesh.position.addInPlace(_tempMoveResult);

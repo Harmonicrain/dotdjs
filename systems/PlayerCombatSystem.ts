@@ -218,7 +218,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
              }
 
              _shootTargetPos.subtractToRef(_muzzlePos, _baseDir);
-             _baseDir.normalizeInPlace();
+             _baseDir.normalize();
 
              for(let i=0; i < weapon.pellets; i++) {
                  _pelletDir.copyFrom(_baseDir);
@@ -226,7 +226,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                      _pelletDir.x += (Math.random() - 0.5) * spread;
                      _pelletDir.y += (Math.random() - 0.5) * spread;
                      _pelletDir.z += (Math.random() - 0.5) * spread;
-                     _pelletDir.normalizeInPlace();
+                     _pelletDir.normalize();
                  }
                  _bulletVel.copyFrom(_pelletDir);
                  _bulletVel.scaleInPlace(cc.PROJECTILE_SPEED);
@@ -235,7 +235,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                      _bulletVel.addInPlace(ctx.gameState.currentVelocity);
                  }
                  const finalSpeed = weapon.projectileSpeedOverride ?? _bulletVel.length();
-                 _bulletVel.normalizeInPlace();
+                 _bulletVel.normalize();
                  ctx.gameEngine.spawnProjectile(
                      _muzzlePos,
                      _bulletVel,
