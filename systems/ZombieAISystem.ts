@@ -177,7 +177,9 @@ const computeNavPath = (
             z.path.shift();
         }
         if (z.path.length > 0) {
-            return z.path[0].subtract(z.mesh.position).normalize();
+            z.path[0].subtractToRef(z.mesh.position, _tempDirectDir);
+            _tempDirectDir.normalizeInPlace();
+            return _tempDirectDir;
         }
     }
 
@@ -385,25 +387,32 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         const camera = ctx.camera;
 
         if (!z.wander || now >= z.wander.nextUpdateTime) {
-            const rawAway = z.mesh.position.subtract(camera.position);
-            rawAway.y = 0;
-            const baseAngle = rawAway.lengthSquared() > 0.001
-                ? Math.atan2(rawAway.z, rawAway.x)
+            z.mesh.position.subtractToRef(camera.position, _tempDirectDir);
+            _tempDirectDir.y = 0;
+            const baseAngle = _tempDirectDir.lengthSquared() > 0.001
+                ? Math.atan2(_tempDirectDir.z, _tempDirectDir.x)
                 : Math.random() * Math.PI * 2;
 
             const spread = (Math.random() - 0.5) * (Math.PI * 140 / 180);
             const newAngle = baseAngle + spread;
             const dist = zc.WANDER_DIST_MIN + Math.random() * (zc.WANDER_DIST_MAX - zc.WANDER_DIST_MIN);
+            const nextTime = now + zc.WANDER_UPDATE_MIN + Math.random() * (zc.WANDER_UPDATE_MAX - zc.WANDER_UPDATE_MIN);
+            const wx = z.mesh.position.x + Math.cos(newAngle) * dist;
+            const wy = z.mesh.position.y;
+            const wz = z.mesh.position.z + Math.sin(newAngle) * dist;
 
-            z.wander = {
-                angle: newAngle,
-                nextUpdateTime: now + zc.WANDER_UPDATE_MIN + Math.random() * (zc.WANDER_UPDATE_MAX - zc.WANDER_UPDATE_MIN),
-                wanderTarget: new BABYLON.Vector3(
-                    z.mesh.position.x + Math.cos(newAngle) * dist,
-                    z.mesh.position.y,
-                    z.mesh.position.z + Math.sin(newAngle) * dist
-                ),
-            };
+            if (z.wander) {
+                // Reuse existing object and Vector3 — avoid allocation on wander refresh
+                z.wander.angle = newAngle;
+                z.wander.nextUpdateTime = nextTime;
+                z.wander.wanderTarget.set(wx, wy, wz);
+            } else {
+                z.wander = {
+                    angle: newAngle,
+                    nextUpdateTime: nextTime,
+                    wanderTarget: new BABYLON.Vector3(wx, wy, wz),
+                };
+            }
         }
 
         const distToTarget = getHorizontalDist(z.mesh.position, z.wander.wanderTarget);
@@ -413,11 +422,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         }
 
         const ws = z.wander;
-        const toTarget = ws.wanderTarget.subtract(z.mesh.position);
-        toTarget.y = 0;
-        const moveDir = toTarget.lengthSquared() > 0.001
-            ? toTarget.normalize()
-            : new BABYLON.Vector3(Math.cos(ws.angle), 0, Math.sin(ws.angle));
+        ws.wanderTarget.subtractToRef(z.mesh.position, _tempDirectDir);
+        _tempDirectDir.y = 0;
+        if (_tempDirectDir.lengthSquared() > 0.001) {
+            _tempDirectDir.normalizeInPlace();
+        } else {
+            _tempDirectDir.set(Math.cos(ws.angle), 0, Math.sin(ws.angle));
+        }
+        const moveDir = _tempDirectDir;
 
         const blended = moveDir.add(separation.scale(sc.ZOMBIE_SEPARATION_FORCE)).normalize();
         applyRotationSmoothing(z, blended, frameFactor);

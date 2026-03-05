@@ -392,7 +392,7 @@ Item 32 replaced a manual loop with `.filter()`, but `.filter()` still allocates
 
 ---
 
-### P2. ZombieAISystem.ts — Per-Frame Vector Allocations in Path Following
+### P2. ZombieAISystem.ts — Per-Frame Vector Allocations in Path Following ✅ DONE
 **File:** `systems/ZombieAISystem.ts` (line ~180)
 
 ```typescript
@@ -403,7 +403,7 @@ const dir = z.path[0].subtract(z.mesh.position).normalize();
 
 ---
 
-### P3. ZombieAISystem.ts — Wander Target Allocates New Vector3 Each Wander Tick
+### P3. ZombieAISystem.ts — Wander Target Allocates New Vector3 Each Wander Tick ✅ DONE
 **File:** `systems/ZombieAISystem.ts` (lines ~401–405)
 
 ```typescript
@@ -414,7 +414,7 @@ A fresh `Vector3` is created every time a zombie picks a new wander target. Reus
 
 ---
 
-### P4. PlayerCombatSystem.ts — Multiple Vector3 Allocations Per Pellet Per Shot
+### P4. PlayerCombatSystem.ts — Multiple Vector3 Allocations Per Pellet Per Shot ✅ DONE
 **File:** `systems/PlayerCombatSystem.ts` (lines ~141–228)
 
 The firing path clones and allocates several vectors per shot, and the shotgun pellet loop (up to 8 pellets) calls `baseDir.clone()` per pellet:
@@ -427,7 +427,7 @@ At a fast fire rate (10 shots/sec × 8 pellets) this is 80+ `Vector3` allocation
 
 ---
 
-### P5. RemotePlayerSystem.ts — `Vector3.Lerp()` Allocates Every Frame
+### P5. RemotePlayerSystem.ts — `Vector3.Lerp()` Allocates Every Frame ✅ DONE
 **File:** `systems/RemotePlayerSystem.ts` (lines ~51–55)
 
 ```typescript

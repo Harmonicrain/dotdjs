@@ -48,10 +48,11 @@ export const createRemotePlayerSystem = (ctx: IRemoteContext): System => {
 
             // Gentle lerp to absorb sub-frame residual jitter; the buffer already
             // provides the bulk of the smoothing.
-            remoteVisual.root.position = BABYLON.Vector3.Lerp(
+            BABYLON.Vector3.LerpToRef(
                 remoteVisual.root.position,
                 _tempTargetPos,
                 0.5,
+                remoteVisual.root.position,
             );
 
             // Rotation and pitch are set directly from the interpolated values;
