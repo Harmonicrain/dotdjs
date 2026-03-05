@@ -49,6 +49,34 @@ const _tempMoveResult = new BABYLON.Vector3();
 const _tempLookAt = new BABYLON.Vector3();
 const _tempLungeDir = new BABYLON.Vector3();
 const _tempRetreatDir = new BABYLON.Vector3();
+// Scratch Quaternions — avoids two Quaternion allocations per moving zombie per frame
+const _tempTargetQuat = new BABYLON.Quaternion();
+
+// ── Spatial grid for O(n) separation force ───────────────────────────────
+// Cell size slightly larger than the separation radius (~sqrt of ZOMBIE_SEPARATION_DIST).
+// Rebuilt once per frame before the zombie loop; each zombie only checks its
+// own cell and the 8 neighbours instead of all N zombies.
+const _GRID_CELL_SIZE = 3;
+const _separationGrid = new Map<number, Zombie[]>();
+
+const _gridKey = (x: number, z: number): number => {
+    const cx = Math.floor(x / _GRID_CELL_SIZE);
+    const cz = Math.floor(z / _GRID_CELL_SIZE);
+    // Simple integer hash — avoids string allocation
+    return (cx & 0xFFFF) << 16 | (cz & 0xFFFF);
+};
+
+const buildSeparationGrid = (zombies: Zombie[]): void => {
+    // Reuse existing bucket arrays where possible to minimise GC
+    for (const bucket of _separationGrid.values()) bucket.length = 0;
+    for (const z of zombies) {
+        if (z.isDead) continue;
+        const key = _gridKey(z.mesh.position.x, z.mesh.position.z);
+        let bucket = _separationGrid.get(key);
+        if (!bucket) { bucket = []; _separationGrid.set(key, bucket); }
+        bucket.push(z);
+    }
+};
 
 // Constants
 const PATH_UPDATE_INTERVAL = 0.5;
@@ -102,32 +130,43 @@ const updateBurningDamage = (
 };
 
 /**
- * Computes separation force from nearby zombies.
+ * Computes separation force from nearby zombies using the pre-built spatial
+ * grid. Only the zombie's own cell and its 8 neighbours are checked, reducing
+ * complexity from O(n²) to O(n * k) where k is average bucket occupancy.
  * Modifies _tempSeparation in place and returns it.
  */
 const computeSeparationForce = (
     z: Zombie,
-    zombies: Zombie[],
     separationDist: number
 ): BABYLON.Vector3 => {
     _tempSeparation.set(0, 0, 0);
     let neighbors = 0;
-    
-    for (const other of zombies) {
-        if (other === z || other.isDead) continue;
-        const distSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, other.mesh.position);
-        if (distSq < separationDist) {
-            const pushX = z.mesh.position.x - other.mesh.position.x;
-            const pushZ = z.mesh.position.z - other.mesh.position.z;
-            const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
-            if (len > 0.001) {
-                _tempSeparation.x += pushX / len;
-                _tempSeparation.z += pushZ / len;
+
+    const cx = Math.floor(z.mesh.position.x / _GRID_CELL_SIZE);
+    const cz = Math.floor(z.mesh.position.z / _GRID_CELL_SIZE);
+
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            const key = ((cx + dx) & 0xFFFF) << 16 | ((cz + dz) & 0xFFFF);
+            const bucket = _separationGrid.get(key);
+            if (!bucket) continue;
+            for (const other of bucket) {
+                if (other === z || other.isDead) continue;
+                const distSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, other.mesh.position);
+                if (distSq < separationDist) {
+                    const pushX = z.mesh.position.x - other.mesh.position.x;
+                    const pushZ = z.mesh.position.z - other.mesh.position.z;
+                    const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
+                    if (len > 0.001) {
+                        _tempSeparation.x += pushX / len;
+                        _tempSeparation.z += pushZ / len;
+                    }
+                    neighbors++;
+                }
             }
-            neighbors++;
         }
     }
-    
+
     if (neighbors > 0) {
         _tempSeparation.scaleInPlace(1.0 / neighbors);
     }
@@ -136,7 +175,8 @@ const computeSeparationForce = (
 
 /**
  * Computes navmesh path for a zombie.
- * Updates z.path in place and returns move direction or null.
+ * Uses a pathCursor index instead of Array.shift() so node advancement is O(1)
+ * rather than O(n) (shift re-indexes the entire array on every consumed node).
  */
 const computeNavPath = (
     z: Zombie,
@@ -156,7 +196,10 @@ const computeNavPath = (
     if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
     z.pathUpdateTimer -= dt;
 
-    if (!z.path || z.path.length === 0 || z.pathUpdateTimer <= 0) {
+    const cursor = z.pathCursor ?? 0;
+    const pathExhausted = !z.path || cursor >= z.path.length;
+
+    if (pathExhausted || z.pathUpdateTimer <= 0) {
         const navStart = ctx.navPlugin.getClosestPoint(z.mesh.position);
         _tempNavEndVec.set(targetPos.x, 0, targetPos.z);
         const navEnd = ctx.navPlugin.getClosestPoint(_tempNavEndVec);
@@ -179,11 +222,9 @@ const computeNavPath = (
         if (newPath && newPath.length > 0) {
             z.path = newPath;
             z.pathfindingFailed = false;
-            if (z.path.length > 0 && BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[0]) < 0.25) {
-                z.path.shift();
-            }
+            // Skip first node if zombie is already standing on it
+            z.pathCursor = (BABYLON.Vector3.DistanceSquared(z.mesh.position, newPath[0]) < 0.25) ? 1 : 0;
         } else {
-
             if (!z.pathfindingFailed) {
                 console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
                 z.pathfindingFailed = true;
@@ -191,14 +232,14 @@ const computeNavPath = (
         }
     }
 
-    if (z.path && z.path.length > 0) {
-        const distToNodeSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[0]);
+    if (z.path && z.pathCursor !== undefined && z.pathCursor < z.path.length) {
+        const distToNodeSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[z.pathCursor]);
         if (distToNodeSq < PATH_REACH_THRESHOLD * PATH_REACH_THRESHOLD) {
-            z.path.shift();
+            z.pathCursor++;
         }
 
-        if (z.path.length > 0) {
-            z.path[0].subtractToRef(z.mesh.position, _tempDirectDir);
+        if (z.pathCursor < z.path.length) {
+            z.path[z.pathCursor].subtractToRef(z.mesh.position, _tempDirectDir);
             _tempDirectDir.normalize();
             return _tempDirectDir;
         }
@@ -214,6 +255,7 @@ const computeNavPath = (
 
 /**
  * Applies rotation smoothing toward movement direction.
+ * Uses pre-allocated scratch Quaternion to avoid two allocations per call.
  */
 const applyRotationSmoothing = (
     z: Zombie,
@@ -222,14 +264,15 @@ const applyRotationSmoothing = (
 ): void => {
     if (moveDir.lengthSquared() > 0.001) {
         const yaw = Math.atan2(moveDir.x, moveDir.z);
-        const targetRot = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
+        BABYLON.Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, _tempTargetQuat);
         if (!z.mesh.rotationQuaternion) {
             z.mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(z.mesh.rotation);
         }
-        z.mesh.rotationQuaternion = BABYLON.Quaternion.Slerp(
+        BABYLON.Quaternion.SlerpToRef(
             z.mesh.rotationQuaternion,
-            targetRot,
-            ROTATION_SPEED * frameFactor
+            _tempTargetQuat,
+            ROTATION_SPEED * frameFactor,
+            z.mesh.rotationQuaternion
         );
     }
 };
@@ -341,7 +384,10 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempLungeDir.normalize();
                 _tempLungeDir.y = 0;
                 const yaw = Math.atan2(_tempLungeDir.x, _tempLungeDir.z);
-                z.mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
+                if (!z.mesh.rotationQuaternion) {
+                    z.mesh.rotationQuaternion = new BABYLON.Quaternion();
+                }
+                BABYLON.Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, z.mesh.rotationQuaternion);
             }
         } else if (z.hellhoundState === HellhoundState.ATTACKING) {
             if (z.stateTimer !== undefined && z.stateTimer <= 0) {
@@ -625,14 +671,17 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const sc = ctx.configManager.sync;
             const gc = ctx.configManager.gameplay;
 
+            // Build spatial grid once — O(n); each zombie then does O(k) neighbour check
+            buildSeparationGrid(zombies);
+
             for (const z of zombies) {
                 if (z.isDead) continue;
 
                 // Burning damage
                 if (updateBurningDamage(z, now, ctx)) continue;
 
-                // Compute separation force
-                const separation = computeSeparationForce(z, zombies, sc.ZOMBIE_SEPARATION_DIST);
+                // Compute separation force (grid-accelerated)
+                const separation = computeSeparationForce(z, sc.ZOMBIE_SEPARATION_DIST);
 
                 // Hellhound AI
                 if (z.type === 'HELLHOUND') {

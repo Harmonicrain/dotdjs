@@ -58,12 +58,14 @@ export class UIBridge {
 
     public setPoints(v: number) {
         this.gameState.points = v;
+        // Points must always flush immediately — no throttle.
+        // They are event-driven (kills, purchases), not per-frame, so the cost
+        // is negligible. Throttling caused the store to lag behind gameState,
+        // making the PlayerStatus diff animation show wrong deltas (e.g. -490
+        // instead of -500 when a buffered +10 kill bonus hadn't been pushed yet).
         if (this.uiCache.points !== v) {
-            const delta = Math.abs(v - this.uiCache.points);
-            if (this.checkThrottle('points') || delta > 100) {
-                this.uiCache.points = v;
-                this._updatePlayer({ points: v });
-            }
+            this.uiCache.points = v;
+            this._updatePlayer({ points: v });
         }
     }
 

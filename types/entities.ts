@@ -77,6 +77,7 @@ export type Zombie = {
     wander?: WanderState;
     // Navmesh Pathfinding
     path?: BABYLON.Vector3[];
+    pathCursor?: number;
     pathUpdateTimer?: number;
     pathfindingFailed?: boolean;  // Track if pathfinding has failed (to avoid console spam)
     warnedNavStart?: boolean;     // Track if we've warned about start position

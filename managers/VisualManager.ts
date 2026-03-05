@@ -19,6 +19,11 @@ export class VisualManager {
     private activeDecals: BABYLON.AbstractMesh[] = [];
     private MAX_DECALS = 40;
 
+    // Blood decals are created at a much higher rate (up to 2 per bullet hit)
+    // so they get their own capped ring-buffer to avoid unbounded mesh growth.
+    private activeBloodDecals: BABYLON.AbstractMesh[] = [];
+    private static readonly MAX_BLOOD_DECALS = 60;
+
     public lights: BABYLON.PointLight[] = [];
 
     // Zombie Residue (kept for compatibility; no longer stores cube chunks)
@@ -80,6 +85,16 @@ export class VisualManager {
     private houndExplosionPSPool: BABYLON.ParticleSystem[] = [];
     private houndExplosionCursor = 0;
 
+    // ── Pre-allocated zombie spawn smoke pool ────────────────────────────────
+    private static readonly MAX_SPAWN_EFFECT_PS = 6;
+    private spawnEffectPSPool: BABYLON.ParticleSystem[] = [];
+    private spawnEffectCursor = 0;
+
+    // ── Pre-allocated hellhound spawn smoke pool ─────────────────────────────
+    private static readonly MAX_SPAWN_SMOKE_PS = 4;
+    private spawnSmokePSPool: BABYLON.ParticleSystem[] = [];
+    private spawnSmokeCursor = 0;
+
     // ── Floor gore mesh pool (Discs) ─────────────────────────────────────────
     private static readonly MAX_GORE_DISCS = 60;
     private goreDiscPool: BABYLON.Mesh[] = [];
@@ -98,6 +113,11 @@ export class VisualManager {
     private static readonly _bloodDirMax = new BABYLON.Vector3(-0.1, -0.1, -0.1);
     private static readonly _debrisMinBox = new BABYLON.Vector3(-0.5, -0.2, -0.1);
     private static readonly _debrisMaxBox = new BABYLON.Vector3(0.5, 0.2, 0.1);
+    // Scratch vectors for per-call direction computation — avoids allocations in
+    // createImpactParticles, createBloodSplatter, createZombieExplosion, createHeadExplosion
+    private static readonly _scratchDir1 = new BABYLON.Vector3();
+    private static readonly _scratchDir2 = new BABYLON.Vector3();
+    private static readonly _scratchOrigin = new BABYLON.Vector3();
 
     constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {
         this.initBloodPool();
@@ -112,6 +132,8 @@ export class VisualManager {
         this.initHoundExplosionPool();
         this.initGoreDiscPool();
         this.initGoreFadeObserver();
+        this.initSpawnEffectPool();
+        this.initSpawnSmokePool();
     }
 
 
@@ -498,10 +520,12 @@ export class VisualManager {
      * and a persistent blood pool + gore pile on the floor.
      */
     public createZombieExplosion(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
-        const origin = new BABYLON.Vector3(pos.x, pos.y + 0.8, pos.z);
         const bx = hitDir ? -hitDir.x : 0;
         const by = hitDir ? Math.max(-hitDir.y + 0.8, 0.5) : 1.0;
         const bz = hitDir ? -hitDir.z : 0;
+
+        // Reuse scratch origin — set inline to avoid new Vector3 allocation
+        VisualManager._scratchOrigin.set(pos.x, pos.y + 0.8, pos.z);
 
         const idx = this.zombieExplosionCursor % VisualManager.MAX_ZOMBIE_EXPLOSIONS;
         this.zombieExplosionCursor++;
@@ -509,23 +533,23 @@ export class VisualManager {
         // 1. Burst
         const burst = this.burstPSPool[idx];
         if (burst.isStarted()) { burst.stop(); burst.reset(); }
-        burst.emitter = origin;
-        burst.direction1 = new BABYLON.Vector3(bx - 0.9, by - 0.3, bz - 0.9);
-        burst.direction2 = new BABYLON.Vector3(bx + 0.9, by + 1.2, bz + 0.9);
+        burst.emitter = VisualManager._scratchOrigin;
+        burst.direction1.set(bx - 0.9, by - 0.3, bz - 0.9);
+        burst.direction2.set(bx + 0.9, by + 1.2, bz + 0.9);
         burst.start();
 
         // 2. Mist
         const mist = this.mistPSPool[idx];
         if (mist.isStarted()) { mist.stop(); mist.reset(); }
-        mist.emitter = origin;
+        mist.emitter = VisualManager._scratchOrigin;
         mist.start();
 
         // 3. Chunks
         const chunks = this.chunksPSPool[idx];
         if (chunks.isStarted()) { chunks.stop(); chunks.reset(); }
-        chunks.emitter = origin;
-        chunks.direction1 = new BABYLON.Vector3(bx - 1.5, by + 0.5, bz - 1.5);
-        chunks.direction2 = new BABYLON.Vector3(bx + 1.5, by + 3.0, bz + 1.5);
+        chunks.emitter = VisualManager._scratchOrigin;
+        chunks.direction1.set(bx - 1.5, by + 0.5, bz - 1.5);
+        chunks.direction2.set(bx + 1.5, by + 3.0, bz + 1.5);
         chunks.start();
 
         this.createFloorGore(pos);
@@ -536,12 +560,12 @@ export class VisualManager {
      * and a floor blood pool.
      */
     public createHeadExplosion(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
-        const origin = new BABYLON.Vector3(pos.x, pos.y, pos.z);
         const bx = hitDir ? -hitDir.x : 0;
         const by = hitDir ? Math.max(-hitDir.y + 1.2, 1.0) : 1.5;
         const bz = hitDir ? -hitDir.z : 0;
 
-        // Use same zombie explosion index for base parts
+        VisualManager._scratchOrigin.set(pos.x, pos.y, pos.z);
+
         const idx = this.zombieExplosionCursor % VisualManager.MAX_ZOMBIE_EXPLOSIONS;
         const hIdx = this.headExplosionCursor % VisualManager.MAX_HEAD_EXPLOSIONS;
         this.zombieExplosionCursor++;
@@ -550,23 +574,23 @@ export class VisualManager {
         // 1. Intense Burst
         const burst = this.burstPSPool[idx];
         if (burst.isStarted()) { burst.stop(); burst.reset(); }
-        burst.emitter = origin;
-        burst.direction1 = new BABYLON.Vector3(bx - 0.7, by, bz - 0.7);
-        burst.direction2 = new BABYLON.Vector3(bx + 0.7, by + 1.5, bz + 0.7);
+        burst.emitter = VisualManager._scratchOrigin;
+        burst.direction1.set(bx - 0.7, by, bz - 0.7);
+        burst.direction2.set(bx + 0.7, by + 1.5, bz + 0.7);
         burst.start();
 
         // 2. Brain Chunks
         const brain = this.brainPSPool[hIdx];
         if (brain.isStarted()) { brain.stop(); brain.reset(); }
-        brain.emitter = origin;
-        brain.direction1 = new BABYLON.Vector3(bx - 2, by + 0.5, bz - 2);
-        brain.direction2 = new BABYLON.Vector3(bx + 2, by + 4, bz + 2);
+        brain.emitter = VisualManager._scratchOrigin;
+        brain.direction1.set(bx - 2, by + 0.5, bz - 2);
+        brain.direction2.set(bx + 2, by + 4, bz + 2);
         brain.start();
 
         // 3. Mist
         const mist = this.mistPSPool[idx];
         if (mist.isStarted()) { mist.stop(); mist.reset(); }
-        mist.emitter = origin;
+        mist.emitter = VisualManager._scratchOrigin;
         mist.start();
 
         this.createFloorGore(pos);
@@ -694,9 +718,11 @@ export class VisualManager {
         }
 
         ps.emitter = pos;
-        ps.direction1 = normal.scale(1.5).add(new BABYLON.Vector3(0.2, 0.2, 0.2));
-        ps.direction2 = normal.scale(1.5).add(new BABYLON.Vector3(-0.2, -0.2, -0.2));
-        
+        // Avoid allocations: compute scaled normal components inline and set in-place
+        const nx = normal.x * 1.5, ny = normal.y * 1.5, nz = normal.z * 1.5;
+        ps.direction1.set(nx + 0.2, ny + 0.2, nz + 0.2);
+        ps.direction2.set(nx - 0.2, ny - 0.2, nz - 0.2);
+
         ps.start();
     }
 
@@ -733,8 +759,10 @@ export class VisualManager {
         }
 
         ps.emitter = pos;
-        ps.direction1 = normal.scale(2).add(new BABYLON.Vector3(0.5, 0.5, 0.5));
-        ps.direction2 = normal.scale(2).add(new BABYLON.Vector3(-0.5, -0.5, -0.5));
+        // Avoid allocations: compute scaled normal inline and set in-place
+        const nx = normal.x * 2, ny = normal.y * 2, nz = normal.z * 2;
+        ps.direction1.set(nx + 0.5, ny + 0.5, nz + 0.5);
+        ps.direction2.set(nx - 0.5, ny - 0.5, nz - 0.5);
         
         ps.start();
 
@@ -754,8 +782,15 @@ export class VisualManager {
 
     private createBloodDecalOnMesh(pos: BABYLON.Vector3, normal: BABYLON.Vector3, target: BABYLON.AbstractMesh) {
         const scene = this.scene;
-        
-        // Create a blood decal using Babylon's CreateDecal
+
+        // Evict the oldest blood decal before adding a new one so the live count
+        // stays at MAX_BLOOD_DECALS. This replaces the unbounded setTimeout pattern
+        // which could accumulate hundreds of meshes under sustained fire.
+        if (this.activeBloodDecals.length >= VisualManager.MAX_BLOOD_DECALS) {
+            const oldest = this.activeBloodDecals.shift();
+            if (oldest && !oldest.isDisposed()) oldest.dispose();
+        }
+
         const size = new BABYLON.Vector3(0.15, 0.15, 0.15);
         const decal = BABYLON.MeshBuilder.CreateDecal("bloodDecal", target, {
             position: pos,
@@ -764,7 +799,6 @@ export class VisualManager {
             angle: Math.random() * Math.PI
         });
 
-        // Create blood material if not exists
         let bloodMat = this.resourceManager.getMaterial("bloodDecalMat", () => {
             const mat = new BABYLON.StandardMaterial("bloodDecalMat", scene);
             mat.diffuseColor = new BABYLON.Color3(0.6, 0, 0);
@@ -777,59 +811,66 @@ export class VisualManager {
         decal.isPickable = false;
         decal.setParent(target);
 
-        // Fade out after 5 seconds
-        setTimeout(() => {
-            if (decal && !decal.isDisposed()) {
-                decal.dispose();
-            }
-        }, 5000);
+        this.activeBloodDecals.push(decal);
+    }
+
+    private initSpawnEffectPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < VisualManager.MAX_SPAWN_EFFECT_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`spawnEffect_${i}`, 50, this.scene);
+            ps.particleTexture = tex;
+            ps.color1 = new BABYLON.Color4(0.5, 0.5, 0.5, 1);
+            ps.color2 = new BABYLON.Color4(0, 0, 0, 0);
+            ps.minSize = 0.5; ps.maxSize = 1.0;
+            ps.minLifeTime = 0.5; ps.maxLifeTime = 1.0;
+            ps.emitRate = 100;
+            ps.targetStopDuration = 0.5;
+            ps.disposeOnStop = false;
+            this.spawnEffectPSPool.push(ps);
+        }
+    }
+
+    private initSpawnSmokePool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < VisualManager.MAX_SPAWN_SMOKE_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`spawnSmoke_${i}`, 100, this.scene);
+            ps.particleTexture = tex;
+            ps.color1 = new BABYLON.Color4(0.1, 0.1, 0.15, 1);
+            ps.color2 = new BABYLON.Color4(0.3, 0.2, 0.4, 0.8);
+            ps.colorDead = new BABYLON.Color4(0, 0, 0, 0);
+            ps.minSize = 0.8; ps.maxSize = 2.0;
+            ps.minLifeTime = 0.8; ps.maxLifeTime = 1.5;
+            ps.emitRate = 80;
+            ps.minEmitBox = new BABYLON.Vector3(-0.5, -0.2, -0.5);
+            ps.maxEmitBox = new BABYLON.Vector3(0.5, 0.5, 0.5);
+            ps.direction1 = new BABYLON.Vector3(-1, 2, -1);
+            ps.direction2 = new BABYLON.Vector3(1, 3, 1);
+            ps.minEmitPower = 0.5; ps.maxEmitPower = 1.5;
+            ps.gravity = new BABYLON.Vector3(0, -0.5, 0);
+            ps.minAngularSpeed = -Math.PI;
+            ps.maxAngularSpeed = Math.PI;
+            ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+            ps.disposeOnStop = false;
+            this.spawnSmokePSPool.push(ps);
+        }
     }
 
     public createSpawnEffect(pos: BABYLON.Vector3) {
-        const ps = new BABYLON.ParticleSystem("spawnSmoke", 50, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        ps.emitter = pos; 
-        ps.color1 = new BABYLON.Color4(0.5, 0.5, 0.5, 1); 
-        ps.color2 = new BABYLON.Color4(0, 0, 0, 0);
-        ps.minSize = 0.5; ps.maxSize = 1.0; 
-        ps.minLifeTime = 0.5; ps.maxLifeTime = 1.0; 
-        ps.emitRate = 100; 
-        ps.targetStopDuration = 0.5; 
-        this.setupSafeAutoDispose(ps);
+        const idx = this.spawnEffectCursor % VisualManager.MAX_SPAWN_EFFECT_PS;
+        this.spawnEffectCursor++;
+        const ps = this.spawnEffectPSPool[idx];
+        if (ps.isStarted()) { ps.stop(); ps.reset(); }
+        ps.emitter = pos;
         ps.start();
     }
 
     public createSpawnSmokeEffect(pos: BABYLON.Vector3): BABYLON.ParticleSystem {
-        const ps = new BABYLON.ParticleSystem("hellhoundSpawnSmoke", 100, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        const idx = this.spawnSmokeCursor % VisualManager.MAX_SPAWN_SMOKE_PS;
+        this.spawnSmokeCursor++;
+        const ps = this.spawnSmokePSPool[idx];
+        if (ps.isStarted()) { ps.stop(); ps.reset(); }
         ps.emitter = pos;
-        
-        // Dark, ominous smoke colors
-        ps.color1 = new BABYLON.Color4(0.1, 0.1, 0.15, 1);
-        ps.color2 = new BABYLON.Color4(0.3, 0.2, 0.4, 0.8);
-        ps.colorDead = new BABYLON.Color4(0, 0, 0, 0);
-        
-        ps.minSize = 0.8;
-        ps.maxSize = 2.0;
-        ps.minLifeTime = 0.8;
-        ps.maxLifeTime = 1.5;
-        ps.emitRate = 80;
-        
-        ps.minEmitBox = new BABYLON.Vector3(-0.5, -0.2, -0.5);
-        ps.maxEmitBox = new BABYLON.Vector3(0.5, 0.5, 0.5);
-        
-        ps.direction1 = new BABYLON.Vector3(-1, 2, -1);
-        ps.direction2 = new BABYLON.Vector3(1, 3, 1);
-        
-        ps.minEmitPower = 0.5;
-        ps.maxEmitPower = 1.5;
-        ps.gravity = new BABYLON.Vector3(0, -0.5, 0);
-        
-        ps.minAngularSpeed = -Math.PI;
-        ps.maxAngularSpeed = Math.PI;
-        
-        ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
-        
+        ps.start();
         return ps;
     }
 
@@ -921,6 +962,9 @@ export class VisualManager {
         this.activeDecals.forEach(d => d.dispose());
         this.activeDecals = [];
 
+        this.activeBloodDecals.forEach(d => { if (!d.isDisposed()) d.dispose(); });
+        this.activeBloodDecals = [];
+
         this.zombieResidue.forEach(r => r.meshes.forEach(m => m.dispose()));
         this.zombieResidue = [];
 
@@ -950,6 +994,9 @@ export class VisualManager {
             ps.reset();
         });
 
+        this.spawnEffectPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.spawnSmokePSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+
         
         this.bloodPool.forEach(b => { 
             b.mesh.setEnabled(false); 
@@ -970,6 +1017,8 @@ export class VisualManager {
         }
         this.activeDecals.forEach(d => d.dispose());
         this.activeDecals = [];
+        this.activeBloodDecals.forEach(d => { if (!d.isDisposed()) d.dispose(); });
+        this.activeBloodDecals = [];
         if (this.decalMat) this.decalMat.dispose();
 
         // Dispose flash light pool
@@ -1003,6 +1052,11 @@ export class VisualManager {
             ps.dispose(false);
         }
         this.bloodPSPool = [];
+
+        for (const ps of this.spawnEffectPSPool) { ps.dispose(false); }
+        this.spawnEffectPSPool = [];
+        for (const ps of this.spawnSmokePSPool) { ps.dispose(false); }
+        this.spawnSmokePSPool = [];
 
 
         this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
