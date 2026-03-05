@@ -17,7 +17,9 @@ import { SoundManager } from './SoundManager';
  */
 export class ZombieManager {
     public windows: WindowBarrier[];
+    private windowsByZone: Map<number, WindowBarrier[]> = new Map();
     private spawnPowerUpCallback: ((pos: BABYLON.Vector3) => void) | null = null;
+
     private addPointsCallback: ((amount: number) => void) | null = null;
     private sendNetworkMessage: ((msg: GameMessage) => void) | null = null;
     private setKillsCallback: ((kills: number) => void) | null = null;
@@ -42,7 +44,19 @@ export class ZombieManager {
         private soundManager: SoundManager | null
     ) {
         this.windows = windows;
+        this.initWindowsByZone();
     }
+
+    private initWindowsByZone() {
+        this.windowsByZone.clear();
+        for (const w of this.windows) {
+            if (!this.windowsByZone.has(w.zone)) {
+                this.windowsByZone.set(w.zone, []);
+            }
+            this.windowsByZone.get(w.zone)!.push(w);
+        }
+    }
+
 
     public setDependencies(
         spawnPowerUp: (pos: BABYLON.Vector3) => void, 
@@ -64,7 +78,7 @@ export class ZombieManager {
         const rm = this.resourceManager;
 
         // Force creation/caching of zombie materials
-        rm.getMaterial("zombieBodyMat", () => {
+        const bodyMat = rm.getMaterial("zombieBodyMat", () => {
             const mat = new BABYLON.StandardMaterial("zombieBodyMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.12);
             mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02); 
@@ -73,7 +87,7 @@ export class ZombieManager {
             mat.maxSimultaneousLights = 8;
             return mat;
         });
-        rm.getMaterial("zombieHeadMat", () => {
+        const headMat = rm.getMaterial("zombieHeadMat", () => {
             const mat = new BABYLON.StandardMaterial("zombieHeadMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.15, 0.2, 0.15);
             mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
@@ -81,13 +95,21 @@ export class ZombieManager {
             mat.maxSimultaneousLights = 8;
             return mat;
         });
-        rm.getMaterial("zombieEyeMat", () => {
+        const eyeMat = rm.getMaterial("zombieEyeMat", () => {
             const mat = new BABYLON.StandardMaterial("zombieEyeMat", sm);
             mat.emissiveColor = new BABYLON.Color3(1, 1, 0.5);
             mat.specularColor = BABYLON.Color3.Black();
             mat.maxSimultaneousLights = 8;
             return mat;
         });
+
+        // Force compilation if a mesh is available
+        const compilerMesh = sm.meshes[0];
+        if (compilerMesh) {
+            bodyMat.forceCompilation(compilerMesh);
+            headMat.forceCompilation(compilerMesh);
+            eyeMat.forceCompilation(compilerMesh);
+        }
     }
 
     public onZombieDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST', isHeadshot: boolean = false, headPos?: BABYLON.Vector3, hitDir?: BABYLON.Vector3) {
@@ -141,9 +163,23 @@ export class ZombieManager {
             rAccessible.forEach(z => accessibleZones.add(z));
         }
 
-        const validWindows = this.windows.filter(w => accessibleZones.has(w.zone));
+        // Handle case where windowsByZone might not be initialized yet or is empty
+        if (this.windowsByZone.size === 0 && this.windows.length > 0) {
+            this.initWindowsByZone();
+        }
+
+        // Use pre-computed windowsByZone map for O(accessibleZones) instead of O(totalWindows)
+        const validWindows: WindowBarrier[] = [];
+        accessibleZones.forEach(zoneId => {
+            const zoneWindows = this.windowsByZone.get(zoneId);
+            if (zoneWindows) {
+                validWindows.push(...zoneWindows);
+            }
+        });
+
         
         if (validWindows.length > 0) {
+
                 const w = validWindows[Math.floor(Math.random() * validWindows.length)];
                 spawnPos = w.spawnPoint.clone();
                 spawnPos.x += (Math.random() - 0.5); 

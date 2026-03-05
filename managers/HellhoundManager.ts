@@ -57,17 +57,24 @@ export class HellhoundManager {
         const sm = this.scene;
         const rm = this.resourceManager;
 
-        rm.getMaterial("houndMat", () => {
+        const houndMat = rm.getMaterial("houndMat", () => {
             const mat = new BABYLON.StandardMaterial("houndMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.45);
             mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
             return mat;
         });
-        rm.getMaterial("houndDarkMat", () => {
+        const houndDarkMat = rm.getMaterial("houndDarkMat", () => {
             const mat = new BABYLON.StandardMaterial("houndDarkMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.2);
             return mat;
         });
+
+        // Force compilation if a mesh is available
+        const compilerMesh = sm.meshes[0];
+        if (compilerMesh) {
+            houndMat.forceCompilation(compilerMesh);
+            houndDarkMat.forceCompilation(compilerMesh);
+        }
     }
 
     public onHellhoundDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST') {

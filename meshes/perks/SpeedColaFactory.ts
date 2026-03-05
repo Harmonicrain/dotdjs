@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MODELS } from '../../config';
 import { resolveModelTransform, ModelTransform } from '../../config/modelTransforms';
 
-export const createSpeedCola = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>) => {
+export const createSpeedCola = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("speedColaRoot", scene);
     root.position = position;
     root.rotation.y = rotationY;
@@ -16,7 +16,7 @@ export const createSpeedCola = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
     trigger.checkCollisions = false;
 
     // Load 3D Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SPEED_COLA, scene)
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SPEED_COLA, scene)
         .then((result) => {
             if (scene.isDisposed) return;
 
@@ -55,6 +55,8 @@ export const createSpeedCola = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
             mat.diffuseColor = new BABYLON.Color3(0.2, 0.8, 0.2); // Green
             fallback.material = mat;
         });
+
+    if (promises) promises.push(p);
 
     return root;
 };

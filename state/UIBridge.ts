@@ -91,9 +91,13 @@ export class UIBridge {
     public setAmmo(v: number) {
         if (this.uiCache.ammo !== v) {
             this.uiCache.ammo = v;
-            this._updatePlayer({ ammo: v });
+            // Throttle ammo updates for automatic weapons
+            if (this.checkThrottle('ammo')) {
+                this._updatePlayer({ ammo: v });
+            }
         }
     }
+
 
     public setReserveAmmo(v: number) {
         if (this.uiCache.reserveAmmo !== v) {
@@ -180,7 +184,13 @@ export class UIBridge {
         this._updateGame({ isGameOver: v });
     }
 
+    public setReviveProgress(v: number) {
+        this.gameState.reviveProgress = v;
+        this._updatePlayer({ reviveProgress: v });
+    }
+
     public setInteractionMsg(v: string | null) {
+
         if (this.uiCache.interactionMsg !== v) {
             this.uiCache.interactionMsg = v;
             this._updateGame({ interactionMsg: v });

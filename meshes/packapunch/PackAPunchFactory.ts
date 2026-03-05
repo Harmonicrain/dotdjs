@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MODELS } from '../../config';
 import { resolveModelTransform, ModelTransform } from '../../config/modelTransforms';
 
-export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.Vector3, rotationY: number, modelOverride?: Partial<ModelTransform>) => {
+export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.Vector3, rotationY: number, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("papRoot", scene);
     root.position = position;
     root.rotation.y = rotationY;
@@ -22,7 +22,7 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
     anchor.position = new BABYLON.Vector3(-0.7, 1.4, 0.3); // Positioned slightly front and up
 
     // Load 3D Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.PACK_A_PUNCH, scene)
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.PACK_A_PUNCH, scene)
         .then((result) => {
             if (scene.isDisposed) return;
 
@@ -59,6 +59,8 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
             mat.diffuseColor = new BABYLON.Color3(0.4, 0.5, 0.6);
             fallback.material = mat;
         });
+
+    if (promises) promises.push(p);
 
     return root;
 };

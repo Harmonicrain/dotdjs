@@ -45,6 +45,7 @@ export class LevelBuilder {
     private mapGameplay: MapGameplay = {};
     
     // Result Containers
+    public loadPromises: Promise<any>[] = [];
     private windowsRef: WindowBarrier[];
     private mysteryBoxRef: MutableRefObject<MysteryBox>;
     private doorMeshes: Record<string, DoorMeshEntry> = {};
@@ -96,7 +97,8 @@ export class LevelBuilder {
                 rotation: definition.spawns.host.rot,
                 clientRotation: definition.spawns.client.rot
             } as SpawnPoints,
-            doorConnections: this.extractDoorConnections(definition)
+            doorConnections: this.extractDoorConnections(definition),
+            loadPromises: this.loadPromises
         };
     }
 
@@ -397,11 +399,11 @@ export class LevelBuilder {
             let machine: BABYLON.TransformNode;
             
             if (p.type === 'juggernog') {
-                machine = createJuggernog(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['juggernog']);
+                machine = createJuggernog(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['juggernog'], this.loadPromises);
             } else if (p.type === 'speed_cola') {
-                machine = createSpeedCola(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['speed_cola']);
+                machine = createSpeedCola(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['speed_cola'], this.loadPromises);
             } else {
-                machine = createQuickRevive(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['quick_revive']);
+                machine = createQuickRevive(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['quick_revive'], this.loadPromises);
             }
             
             machine.parent = this.root;
@@ -479,7 +481,8 @@ export class LevelBuilder {
                 b, 
                 this.shadowCasters, 
                 this.navMeshes,
-                { onLoaded: this.onBuildingLoaded }
+                { onLoaded: this.onBuildingLoaded },
+                this.loadPromises
             );
             building.parent = this.root;
         });
@@ -489,7 +492,7 @@ export class LevelBuilder {
         if (!powerSwitch) return;
 
         const ps = powerSwitch;
-        const sw = createPowerSwitch(this.scene, new BABYLON.Vector3(ps.pos[0], ps.pos[1], ps.pos[2]), ps.rotation || 0, def.modelOverrides?.['power_switch']);
+        const sw = createPowerSwitch(this.scene, new BABYLON.Vector3(ps.pos[0], ps.pos[1], ps.pos[2]), ps.rotation || 0, def.modelOverrides?.['power_switch'], this.loadPromises);
         sw.root.parent = this.root;
         this.powerSwitchHandle = sw.handle;
         this.powerSwitchActivate = sw.activate;
@@ -528,7 +531,7 @@ export class LevelBuilder {
         if (!packAPunch) return;
 
         const pp = packAPunch;
-        const machine = createPackAPunchMachine(this.scene, new BABYLON.Vector3(pp.pos[0], pp.pos[1], pp.pos[2]), pp.rotation || 0, def.modelOverrides?.['pack_a_punch']);
+        const machine = createPackAPunchMachine(this.scene, new BABYLON.Vector3(pp.pos[0], pp.pos[1], pp.pos[2]), pp.rotation || 0, def.modelOverrides?.['pack_a_punch'], this.loadPromises);
         machine.parent = this.root;
         
         const papCost = this.mapGameplay.packAPunchCost ?? GAME_CONFIG.PACK_A_PUNCH_COST;

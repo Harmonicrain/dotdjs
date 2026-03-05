@@ -7,6 +7,7 @@ import { EventBus } from '../engine/EventBus';
 import { TimerManager } from '../engine/TimerManager';
 import { ZombieManager } from '../managers/ZombieManager';
 import { HellhoundManager } from '../managers/HellhoundManager';
+import { VisualManager } from '../managers/VisualManager';
 import { MapConfigManager } from '../managers/MapConfigManager';
 
 export interface IZombieAIContext {
@@ -18,8 +19,10 @@ export interface IZombieAIContext {
     timerManager: TimerManager;
     zombieManager: ZombieManager;
     hellhoundManager: HellhoundManager;
+    visualManager: VisualManager;
     configManager: MapConfigManager;
     zombies: Zombie[];
+
     windows: WindowBarrier[];
     zoneSystem: ZoneSystem;
     navPlugin?: BABYLON.RecastJSPlugin;
@@ -60,6 +63,16 @@ const getHorizontalDist = (p1: BABYLON.Vector3, p2: BABYLON.Vector3): number => 
     const dz = p1.z - p2.z;
     return Math.sqrt(dx * dx + dz * dz);
 };
+
+/**
+ * Computes horizontal squared distance between two positions (ignoring Y).
+ */
+const getHorizontalDistSq = (p1: BABYLON.Vector3, p2: BABYLON.Vector3): number => {
+    const dx = p1.x - p2.x;
+    const dz = p1.z - p2.z;
+    return dx * dx + dz * dz;
+};
+
 
 /**
  * Updates burning damage for a zombie.
@@ -166,10 +179,11 @@ const computeNavPath = (
         if (newPath && newPath.length > 0) {
             z.path = newPath;
             z.pathfindingFailed = false;
-            if (z.path.length > 0 && BABYLON.Vector3.Distance(z.mesh.position, z.path[0]) < 0.5) {
+            if (z.path.length > 0 && BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[0]) < 0.25) {
                 z.path.shift();
             }
         } else {
+
             if (!z.pathfindingFailed) {
                 console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
                 z.pathfindingFailed = true;
@@ -178,10 +192,11 @@ const computeNavPath = (
     }
 
     if (z.path && z.path.length > 0) {
-        const distToNode = BABYLON.Vector3.Distance(z.mesh.position, z.path[0]);
-        if (distToNode < PATH_REACH_THRESHOLD) {
+        const distToNodeSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[0]);
+        if (distToNodeSq < PATH_REACH_THRESHOLD * PATH_REACH_THRESHOLD) {
             z.path.shift();
         }
+
         if (z.path.length > 0) {
             z.path[0].subtractToRef(z.mesh.position, _tempDirectDir);
             _tempDirectDir.normalize();
@@ -259,33 +274,12 @@ const getTargetPosition = (
  * Uses MapConfigManager for map-specific tuning.
  */
 export const createZombieAISystem = (ctx: IZombieAIContext): System => {
-    let woodTexture: BABYLON.Texture | null = null;
     const _targetPos = new BABYLON.Vector3();
-
-    const createWoodDebris = (pos: BABYLON.Vector3, scene: BABYLON.Scene) => {
-        const particleSystem = new BABYLON.ParticleSystem("debris", 20, scene);
-        if (!woodTexture) woodTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/wood.jpg", scene);
-        particleSystem.particleTexture = woodTexture;
-        particleSystem.emitter = pos;
-        particleSystem.minEmitBox = new BABYLON.Vector3(-0.5, -0.2, -0.1);
-        particleSystem.maxEmitBox = new BABYLON.Vector3(0.5, 0.2, 0.1);
-        particleSystem.color1 = new BABYLON.Color4(0.6, 0.5, 0.4, 1.0);
-        particleSystem.color2 = new BABYLON.Color4(0.4, 0.3, 0.2, 1.0);
-        particleSystem.minSize = 0.05;
-        particleSystem.maxSize = 0.15;
-        particleSystem.minLifeTime = 0.5;
-        particleSystem.maxLifeTime = 1.0;
-        particleSystem.emitRate = 100;
-        particleSystem.gravity = new BABYLON.Vector3(0, -9.81, 0);
-        particleSystem.direction1 = new BABYLON.Vector3(-1, 2, -1);
-        particleSystem.direction2 = new BABYLON.Vector3(1, 2, 1);
-        particleSystem.disposeOnStop = true;
-        particleSystem.start();
-    };
 
     /**
      * Updates hellhound AI state machine.
      */
+
     const updateHellhoundAI = (
         z: Zombie,
         dt: number,
@@ -312,11 +306,12 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             return;
         }
 
-        const distToTarget = BABYLON.Vector3.Distance(z.mesh.position, _targetPos);
+        const distToTargetSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
         const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
 
         if (z.hellhoundState === HellhoundState.CHASING) {
-            if (distToTarget <= hc.ATTACK_INITIATE_RANGE && heightDiff < ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+            if (distToTargetSq <= hc.ATTACK_INITIATE_RANGE * hc.ATTACK_INITIATE_RANGE && heightDiff < ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+
                 z.hellhoundState = HellhoundState.ATTACK_WINDUP;
                 z.stateTimer = hc.ATTACK_WINDUP_MIN + Math.random() * (hc.ATTACK_WINDUP_MAX - hc.ATTACK_WINDUP_MIN);
             } else {
@@ -360,9 +355,10 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
                 z.mesh.moveWithCollisions(_tempMoveResult);
                 
-                const distFromStart = BABYLON.Vector3.Distance(z.mesh.position, z.lungeStartPos);
-                const distToPlayer = BABYLON.Vector3.Distance(z.mesh.position, _targetPos);
-                if (distFromStart >= hc.LUNGE_DISTANCE || distToPlayer <= 1.5) {
+                const distFromStartSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lungeStartPos);
+                const distToPlayerSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
+                if (distFromStartSq >= hc.LUNGE_DISTANCE * hc.LUNGE_DISTANCE || distToPlayerSq <= 2.25) {
+
                     z.hellhoundState = HellhoundState.RECOVERY;
                     z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
                 }
@@ -438,8 +434,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         }
 
-        const distToTarget = getHorizontalDist(z.mesh.position, z.wander.wanderTarget);
-        if (distToTarget < zc.WANDER_TARGET_THRESHOLD) {
+        const distToTargetSq = getHorizontalDistSq(z.mesh.position, z.wander.wanderTarget);
+        if (distToTargetSq < zc.WANDER_TARGET_THRESHOLD * zc.WANDER_TARGET_THRESHOLD) {
+
             z.wander = undefined;
             return;
         }
@@ -488,11 +485,12 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const isRemoteDown = ctx.remote.gameState.health <= 0 || ctx.remote.gameState.isDowned;
 
             if (ctx.remote.pos && !isRemoteDown) {
-                const distToLocal = BABYLON.Vector3.Distance(z.mesh.position, ctx.camera.position);
-                const distToRemote = BABYLON.Vector3.Distance(z.mesh.position, ctx.remote.pos);
-                if (isLocalDown || distToRemote < distToLocal) {
+                const distToLocalSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, ctx.camera.position);
+                const distToRemoteSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, ctx.remote.pos);
+                if (isLocalDown || distToRemoteSq < distToLocalSq) {
                     _targetPos.copyFrom(ctx.remote.pos);
                 }
+
             }
         }
 
@@ -502,10 +500,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             moveDir.y = 0;
             applyRotationSmoothing(z, moveDir, frameFactor);
 
-            const distHorizontal = getHorizontalDist(z.mesh.position, _targetPos);
+            const distHorizontalSq = getHorizontalDistSq(z.mesh.position, _targetPos);
             const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
 
-            if (distHorizontal > zc.ATTACK_RANGE * 0.9 || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+            if (distHorizontalSq > (zc.ATTACK_RANGE * 0.9) * (zc.ATTACK_RANGE * 0.9) || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+
                 _tempBlended.copyFrom(moveDir);
                 _tempBlended.addInPlaceFromFloats(
                     separation.x * sc.ZOMBIE_SEPARATION_FORCE,
@@ -547,8 +546,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             targetWindow.attackPoint.subtractToRef(z.mesh.position, _tempDirectDir);
             _tempDirectDir.normalize();
             _tempDirectDir.y = 0;
-            const dist = getHorizontalDist(z.mesh.position, targetWindow.attackPoint);
-            const sepFactor = dist < 3.5 ? 0.1 : 1.0;
+            const distSq = getHorizontalDistSq(z.mesh.position, targetWindow.attackPoint);
+            const sepFactor = distSq < 12.25 ? 0.1 : 1.0;
             const sepForce = sc.ZOMBIE_SEPARATION_FORCE * sepFactor;
             _tempBlended.copyFrom(_tempDirectDir);
             _tempBlended.addInPlaceFromFloats(
@@ -561,15 +560,15 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             z.mesh.moveWithCollisions(_tempMoveResult);
 
-            if (dist < 2.0) {
+            if (distSq < 4.0) {
                 z.state = ZombieState.ATTACKING_BARRIER;
-            } else if (dist < 5.0) {
+            } else if (distSq < 25.0) {
                 if (!z.lastPosition) { z.lastPosition = new BABYLON.Vector3(); z.lastPosition.copyFrom(z.mesh.position); }
                 if (!z.stuckTimer) z.stuckTimer = 0;
                 z.stuckTimer += dt;
                 if (z.stuckTimer > 0.5) {
-                    const moveDist = BABYLON.Vector3.Distance(z.mesh.position, z.lastPosition);
-                    if (moveDist < 0.1) z.state = ZombieState.ATTACKING_BARRIER;
+                    const moveDistSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lastPosition);
+                    if (moveDistSq < 0.01) z.state = ZombieState.ATTACKING_BARRIER;
                     z.lastPosition.copyFrom(z.mesh.position);
                     z.stuckTimer = 0;
                 }
@@ -583,13 +582,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     const b = activeBoards[Math.floor(Math.random() * activeBoards.length)];
                     b.setEnabled(false);
                     ctx.eventBus.emit('BOARD_STATE_CHANGE', { windowId: targetWindow.id });
-                    createWoodDebris(b.position, ctx.scene);
+                    ctx.visualManager.createWoodDebris(b.position);
                 }
                 z.mesh.rotation.z = Math.sin(now * 0.01) * 0.15;
             } else {
                 z.state = ZombieState.ENTERING;
             }
         } else if (z.state === ZombieState.ENTERING) {
+
             _tempLookAt.set(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z);
             z.mesh.lookAt(_tempLookAt);
             targetWindow.entryPoint.subtractToRef(z.mesh.position, _tempDirectDir);
@@ -597,21 +597,19 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             _tempMoveResult.copyFrom(_tempDirectDir);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             z.mesh.position.addInPlace(_tempMoveResult);
-            if (getHorizontalDist(z.mesh.position, targetWindow.entryPoint) < 0.5) {
+            if (getHorizontalDistSq(z.mesh.position, targetWindow.entryPoint) < 0.25) {
                 z.state = ZombieState.CHASING;
             }
+
         }
     };
 
     return {
         name: 'zombieAI',
         dispose: () => {
-            if (woodTexture) {
-                woodTexture.dispose();
-                woodTexture = null;
-            }
         },
         update: (dt: number, now: number) => {
+
             if (ctx.gameState.isDebugMode) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;

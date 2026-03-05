@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MODELS } from '../../config';
 import { resolveModelTransform, ModelTransform } from '../../config/modelTransforms';
 
-export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>) => {
+export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("juggernogRoot", scene);
     root.position = position;
     root.rotation.y = rotationY;
@@ -16,7 +16,7 @@ export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
     trigger.checkCollisions = false;
 
     // Load 3D Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.JUGGERNOG, scene)
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.JUGGERNOG, scene)
         .then((result) => {
             if (scene.isDisposed) return; // Prevent error if scene died during load
 
@@ -53,6 +53,8 @@ export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
             mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
             fallback.material = mat;
         });
+
+    if (promises) promises.push(p);
 
     return root;
 };

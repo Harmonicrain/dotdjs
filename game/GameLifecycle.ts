@@ -130,7 +130,8 @@ export class GameLifecycle {
             const sm = game.stateManager!;
             await Promise.all([
                 sm.visualManager.preWarmAssets(),
-                sm.zombieManager.preWarmAssets()
+                sm.zombieManager.preWarmAssets(),
+                sm.hellhoundManager.preWarmAssets()
             ]);
 
             // ── CRITICAL FIX: Wait for ALL scene textures to be ready ──
@@ -292,6 +293,13 @@ export class GameLifecycle {
 
         // Request pointer lock
         game.canvas.requestPointerLock();
+
+        // Let the engine render a few frames while the loading screen is still up.
+        // This ensures the weapon shaders (just enabled) and shadow maps compile 
+        // completely before the player sees the game, preventing the initial sub-60fps drop.
+        for (let i = 0; i < 5; i++) {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        }
 
         callbacks.onLoadingChange(false);
         } catch (e) {

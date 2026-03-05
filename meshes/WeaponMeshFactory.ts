@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { WEAPON_CONFIGS, MODELS } from '../config';
 import { resolveModelTransform, ModelTransform } from '../config/modelTransforms';
 
-export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent: BABYLON.TransformNode, modelOverride?: Partial<ModelTransform>) => {
+export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent: BABYLON.TransformNode, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("worldWeapon_" + weaponId, scene);
     root.parent = parent;
     
@@ -16,7 +16,7 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
     }
 
     if (weaponId === 'pistol') {
-        BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
+        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
             if (scene.isDisposed || root.isDisposed()) return;
             const model = result.meshes[0];
             model.parent = root;
@@ -35,6 +35,7 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
             if (scene.isDisposed || root.isDisposed()) return; // expected during map transitions
             console.warn("M1911 load failed", e);
         });
+        if (promises) promises.push(p);
     } 
     else if (weaponId === 'rifle') {
         const rBody = BABYLON.MeshBuilder.CreateBox("w_rifleBody", { width: 0.06, height: 0.08, depth: 0.4 }, scene);
@@ -62,7 +63,7 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
         barrel.parent = root; barrel.rotation.x = Math.PI / 2; barrel.position = new BABYLON.Vector3(0, 0.02, 0.28); barrel.material = gunMat;
     }
     else if (weaponId === 'ray_gun') {
-        BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
+        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
             if (scene.isDisposed || root.isDisposed()) return;
             const model = result.meshes[0];
             model.parent = root;
@@ -80,12 +81,13 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
             if (scene.isDisposed || root.isDisposed()) return;
             console.warn("Ray Gun load failed", e);
         });
+        if (promises) promises.push(p);
     }
 
     return root;
 };
 
-export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, modelOverride?: Partial<ModelTransform>) => {
+export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const weaponMap: { [key: string]: BABYLON.TransformNode } = {};
     
     // FPS Gun Material (Dark Gunmetal PBR)
@@ -103,7 +105,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     pistolRoot.setEnabled(false); 
     
     // Load FPS M1911 Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
+    const p1 = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
         if (scene.isDisposed || pistolRoot.isDisposed()) return;
         const model = result.meshes[0];
         model.parent = pistolRoot;
@@ -135,6 +137,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
         if (scene.isDisposed || pistolRoot.isDisposed()) return; // expected during map transitions
         console.warn("FPS M1911 load failed", e);
     });
+    if (promises) promises.push(p1);
     
     weaponMap['pistol'] = pistolRoot;
 
@@ -221,7 +224,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     rayGunRoot.setEnabled(false);
     
     // Load Ray Gun Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
+    const p2 = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
         if (scene.isDisposed || rayGunRoot.isDisposed()) return;
         const model = result.meshes[0];
         model.parent = rayGunRoot;
@@ -252,6 +255,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
         if (scene.isDisposed || rayGunRoot.isDisposed()) return;
         console.warn("FPS Ray Gun load failed", e);
     });
+    if (promises) promises.push(p2);
     
     weaponMap['ray_gun'] = rayGunRoot;
 

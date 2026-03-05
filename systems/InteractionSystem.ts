@@ -275,9 +275,13 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
 
                 if (!c.metadata?.originalMaterial) {
                     c.metadata = { ...c.metadata, originalMaterial: c.material };
+                } else if (c.material && c.material !== c.metadata.originalMaterial) {
+                    // Dispose the previous upgraded material to prevent observer leaks
+                    c.material.dispose();
                 }
 
-                const papMat = c.material.clone(c.material.name + "_pap") as BABYLON.PBRMaterial | BABYLON.StandardMaterial;
+                const papMat = c.metadata.originalMaterial.clone(c.metadata.originalMaterial.name + "_pap") as BABYLON.PBRMaterial | BABYLON.StandardMaterial;
+
 
                 if (papMat instanceof BABYLON.PBRMaterial) {
                     papMat.metallic = 1.0;

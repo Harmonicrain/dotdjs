@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MODELS } from '../../config';
 import { resolveModelTransform, ModelTransform } from '../../config/modelTransforms';
 
-export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector3, rotationY: number, modelOverride?: Partial<ModelTransform>) => {
+export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector3, rotationY: number, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("powerSwitch", scene);
     root.position = position; 
     root.rotation.y = rotationY;
@@ -24,7 +24,7 @@ export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector
     let switchAnimationGroup: BABYLON.AnimationGroup | null = null;
 
     // Load Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.POWER_SWITCH, scene).then((result) => {
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.POWER_SWITCH, scene).then((result) => {
         if (scene.isDisposed || root.isDisposed()) return;
         const model = result.meshes[0];
         model.parent = root;
@@ -69,6 +69,8 @@ export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector
         handleMat.metallic = 0.5; handleMat.roughness = 0.5;
         handle.material = handleMat;
     });
+
+    if (promises) promises.push(p);
 
     /**
      * Call this when the player activates the switch.

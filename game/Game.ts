@@ -277,10 +277,10 @@ export class Game {
             visualManager: sm.visualManager,
             zombieManager: sm.zombieManager,
             hellhoundManager: sm.hellhoundManager,
+            configManager: sm.configManager,
             eventBus: sm.eventBus,
             zombies: sm.zombies,
             gameModeRef: sm.gameModeRef,
-            configManager: sm.configManager,
             debugSelection: sm.debugSelection,
             send: (msg) => sm.send(msg),
             addPoints: (amt) => sm.addPoints(amt),
@@ -292,6 +292,7 @@ export class Game {
             setIsGameOver: (v) => sm.setIsGameOver(v),
             staticLevelMeshes: sm.staticLevelMeshes
         }));
+
         this.systemManager.register(createPlayerMovementSystem(sm));
         this.systemManager.register(createPlayerCombatSystem(sm));
 
@@ -307,6 +308,7 @@ export class Game {
             timerManager: sm.timerManager,
             zombieManager: sm.zombieManager,
             hellhoundManager: sm.hellhoundManager,
+            visualManager: sm.visualManager,
             configManager: sm.configManager,
             zombies: sm.zombies,
             windows: sm.windows,
@@ -324,6 +326,7 @@ export class Game {
             setIsGameOver: (v) => sm.setIsGameOver(v),
             setFlashColor: (v) => sm.setFlashColor(v)
         }));
+
         this.systemManager.register(createZombieDamageSystem(sm));
         this.systemManager.register(createZombieCleanupSystem(sm));
         this.systemManager.register(createZombieAnimationSystem({
@@ -573,8 +576,10 @@ export class Game {
         
         this.shadowCasters = []; 
         this.stateManager.mapVisuals.doorMeshes.clear();
+        this.stateManager.windows.length = 0; // Clear array but keep reference
         
         // 2. Load New Map
+
         try {
             const sm = this.stateManager;
             const onBuildingLoaded = (meshes: BABYLON.AbstractMesh[]) => {
@@ -586,6 +591,10 @@ export class Game {
             };
             
             const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, sm.windows, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
+            
+            // Await all map models to load
+            await Promise.all(lvl.loadPromises);
+
             this.currentMapRoot = lvl.root;
             
             if (lvl.doors) {
@@ -723,9 +732,12 @@ export class Game {
             this.stateManager.navPlugin = this.navPlugin;
         }
 
-        // No map loaded here — loadLevel() is called later in GameLifecycle.start()
+        // Load environment texture and create weapons
+        const loadPromises: Promise<any>[] = [];
+        const meshes = createWeapons(this.scene, this.camera, undefined, loadPromises);
+        // Wait for weapons and environment
+        await Promise.all(loadPromises);
 
-        const meshes = createWeapons(this.scene, this.camera);
         this.weaponMeshes = { 
             pistol: meshes.pistol, 
             rifle: meshes.rifle, 

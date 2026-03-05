@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MODELS } from '../../config';
 import { resolveModelTransform, ModelTransform } from '../../config/modelTransforms';
 
-export const createQuickRevive = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>) => {
+export const createQuickRevive = (scene: BABYLON.Scene, shadowCasters: BABYLON.AbstractMesh[], position: BABYLON.Vector3, rotationY: number = 0, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("quickReviveRoot", scene);
     root.position = position;
     root.rotation.y = rotationY;
@@ -16,7 +16,7 @@ export const createQuickRevive = (scene: BABYLON.Scene, shadowCasters: BABYLON.A
     trigger.checkCollisions = false;
 
     // Load 3D Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.QUICK_REVIVE, scene)
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.QUICK_REVIVE, scene)
         .then((result) => {
             if (scene.isDisposed) return;
 
@@ -55,6 +55,8 @@ export const createQuickRevive = (scene: BABYLON.Scene, shadowCasters: BABYLON.A
             mat.diffuseColor = new BABYLON.Color3(0, 0.6, 0.8); // Cyan
             fallback.material = mat;
         });
+
+    if (promises) promises.push(p);
 
     return root;
 };

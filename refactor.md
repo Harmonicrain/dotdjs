@@ -465,13 +465,11 @@ This creates a new filtered array each time a zombie is spawned. During intense 
 
 ---
 
-### P9. ProjectileSystem.ts — 2–3 Scene Raycasts Per Active Projectile Per Frame
+### P9. ProjectileSystem.ts — 2–3 Scene Raycasts Per Active Projectile Per Frame ✅ DONE
 **File:** `systems/ProjectileSystem.ts` (lines ~224–410)
 
-Each active projectile calls `scene.pickWithRay()` two to three times per frame (zombie hit, environment hit, sometimes a secondary confirmation cast). Babylon's `pickWithRay` tests against the full scene hierarchy by default. With 50 concurrent projectiles that is up to 150 raycasts per frame. Mitigations in increasing effort:
-- Pass a predicate to `pickWithRay` to exclude meshes that projectiles cannot interact with (UI planes, decorative geometry, the player mesh).
-- Consolidate the zombie and environment picks into a single cast with a layered predicate.
-- Consider lowering `MAX_REMOTE_PROJECTILES` and `MAX_LOCAL_PROJECTILES` further to cap worst-case cost.
+Consolidated zombie and environment picks into a single `pickWithRay` cast per projectile per frame. Also added pre-allocated scratch vectors for remote projectile spawning to avoid per-event allocations.
+
 
 ---
 

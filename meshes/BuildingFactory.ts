@@ -20,7 +20,8 @@ export const createBuilding = (
     def: BuildingDefinition,
     shadowCasters: BABYLON.AbstractMesh[],
     navMeshes: BABYLON.Mesh[],
-    options?: BuildingOptions
+    options?: BuildingOptions,
+    promises?: Promise<any>[]
 ): BABYLON.TransformNode => {
     const root = new BABYLON.TransformNode(`building_${def.id}`, scene);
     root.position = new BABYLON.Vector3(def.pos[0], def.pos[1], def.pos[2]);
@@ -32,7 +33,7 @@ export const createBuilding = (
     const loadedMeshes: BABYLON.Mesh[] = [];
 
     // Load 3D Model
-    BABYLON.SceneLoader.ImportMeshAsync("", "", def.model, scene)
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", def.model, scene)
         .then((result) => {
             if (scene.isDisposed) return;
 
@@ -92,6 +93,8 @@ export const createBuilding = (
             mat.alpha = 0.5;
             fallback.material = mat;
         });
+
+    if (promises) promises.push(p);
 
     return root;
 };

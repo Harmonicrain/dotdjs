@@ -127,7 +127,9 @@ export class StateManager {
     public setIsGameOver(v: boolean) { this.ui.setIsGameOver(v); }
     public setIsDowned(v: boolean) { this.ui.setIsDowned(v); }
     public setIsBeingRevived(v: boolean) { this.ui.setIsBeingRevived(v); }
+    public setReviveProgress(v: number) { this.ui.setReviveProgress(v); }
     public setKills(v: number) { this.ui.setKills(v); }
+
     public setShotsFired(v: number) { this.ui.setShotsFired(v); }
     public setInteractionMsg(v: string | null) { this.ui.setInteractionMsg(v); }
     public setHoverMsg(v: string | null) { this.ui.setHoverMsg(v); }
@@ -207,8 +209,11 @@ export class StateManager {
             isRevivingTeammate: false,
             reviveProgress: 0,
             quickRevivesRemaining: GAME_CONFIG.MAX_QUICK_REVIVES_SOLO,
-            playerName: "Unknown"
+            playerName: "Unknown",
+            interactionMsg: null,
+            hoverMsg: null
         };
+
 
         this.ui = new UIBridge(this.gameState, updatePlayer, updateGame);
         this.mysteryBox = createDefaultMysteryBox();

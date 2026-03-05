@@ -47,10 +47,13 @@ const _scaledDir = new BABYLON.Vector3();
 const _moveStep = new BABYLON.Vector3();
 const _negDir = new BABYLON.Vector3();
 const _reusableRay = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Up(), 1);
+const _remoteOrigin = new BABYLON.Vector3();
+const _remoteDir = new BABYLON.Vector3();
 
 /**
  * Handle explosive projectile impact - deals AoE damage to all nearby zombies
  */
+
 const handleExplosion = (
     impactPoint: BABYLON.Vector3,
     splashRadius: number,
@@ -165,13 +168,13 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         }
 
         if (msg.origin && msg.dir && engine) {
-            const rayOrigin = new BABYLON.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
-            const rayDir = new BABYLON.Vector3(msg.dir.x, msg.dir.y, msg.dir.z);
+            _remoteOrigin.set(msg.origin.x, msg.origin.y, msg.origin.z);
+            _remoteDir.set(msg.dir.x, msg.dir.y, msg.dir.z);
             const speed = msg.speed ?? COMBAT_CONFIG.PROJECTILE_SPEED;
 
             engine.spawnProjectile(
-                rayOrigin,
-                rayDir,
+                _remoteOrigin,
+                _remoteDir,
                 speed,
                 msg.damage ?? 0,
                 true, // Correctly mark as remote
@@ -182,6 +185,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                 msg.splashDamage ?? (msg.isExplosive ? 1000 : undefined),
                 msg.selfDamageMultiplier ?? (msg.isExplosive ? 0.5 : undefined)
             );
+
 
             // Add tracer trail to all remote projectiles for visibility
             const p = engine.activeProjectiles[engine.activeProjectiles.length - 1];
@@ -262,85 +266,92 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                                  }
                              }
 
-                      const pick = scene.pickWithRay(ray, (mesh) => mesh.name.includes("zombie") || mesh.name.includes("hellhound"));
+                      // Combined raycast for zombies and environment (O(1) instead of O(2))
+                      const pick = scene.pickWithRay(ray, (mesh) => {
+                          // Zombie/Hellhound check
+                          if (mesh.name.includes("zombie") || mesh.name.includes("hellhound")) return true;
+                          // Environment check
+                          return mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
+                      });
                       
                        if (pick && pick.hit && pick.pickedMesh) {
                            hit = true;
-                           ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
-                           
-                           // Handle explosive projectile hit on zombie
-                           if (p.isExplosive && p.splashRadius && p.splashDamage) {
-                               ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
-                               handleExplosion(
-                                   pick.pickedPoint!,
-                                   p.splashRadius,
-                                   p.splashDamage,
-                                   p.selfDamageMultiplier,
-                                   ctx,
-                                   p
-                               );
-                           } else if (isAuthority) {
-                             const z = findZombieFromMesh(pick.pickedMesh);
-                             if (z) {
-                                 z.lastHitTime = Date.now();
-                                 
-                                 const isHeadshot = pick.pickedMesh.name.includes("head") || pick.pickedMesh.name.includes("Head");
-                                 const isLegHit = pick.pickedMesh.name.includes("leg");
-                                 
-                                 let multiplier = 1.0;
-                                 if (isHeadshot) multiplier = 1.5;
-                                 else if (isLegHit) multiplier = 0.7;
-                                 
-                                 const dmg = isInstaKill ? z.maxHealth : (p.damage * multiplier);
-                                 z.health -= dmg;
+                           const isEnemy = pick.pickedMesh.name.includes("zombie") || pick.pickedMesh.name.includes("hellhound");
 
-                                 if (isLegHit && !z.isCrawling && z.type === 'ZOMBIE') {
-                                     if (dmg > 40 || z.health < 40) {
-                                         z.isCrawling = true;
-                                         z.speed = 0.015;
-                                         pick.pickedMesh.setEnabled(false);
-                                         if (z.missingLimbs) {
-                                             if (pick.pickedMesh.name.includes("_l")) z.missingLimbs.legL = true;
-                                             else if (pick.pickedMesh.name.includes("_r")) z.missingLimbs.legR = true;
+                           if (isEnemy) {
+                               ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
+                               
+                               // Handle explosive projectile hit on zombie
+                               if (p.isExplosive && p.splashRadius && p.splashDamage) {
+                                   ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
+                                   handleExplosion(
+                                       pick.pickedPoint!,
+                                       p.splashRadius,
+                                       p.splashDamage,
+                                       p.selfDamageMultiplier,
+                                       ctx,
+                                       p
+                                   );
+                               } else if (isAuthority) {
+                                 const z = findZombieFromMesh(pick.pickedMesh);
+                                 if (z) {
+                                     z.lastHitTime = Date.now();
+                                     
+                                     const isHeadshot = pick.pickedMesh.name.includes("head") || pick.pickedMesh.name.includes("Head");
+                                     const isLegHit = pick.pickedMesh.name.includes("leg");
+                                     
+                                     let multiplier = 1.0;
+                                     if (isHeadshot) multiplier = 1.5;
+                                     else if (isLegHit) multiplier = 0.7;
+                                     
+                                     const dmg = isInstaKill ? z.maxHealth : (p.damage * multiplier);
+                                     z.health -= dmg;
+
+                                     if (isLegHit && !z.isCrawling && z.type === 'ZOMBIE') {
+                                         if (dmg > 40 || z.health < 40) {
+                                             z.isCrawling = true;
+                                             z.speed = 0.015;
+                                             pick.pickedMesh.setEnabled(false);
+                                             if (z.missingLimbs) {
+                                                 if (pick.pickedMesh.name.includes("_l")) z.missingLimbs.legL = true;
+                                                 else if (pick.pickedMesh.name.includes("_r")) z.missingLimbs.legR = true;
+                                             }
                                          }
                                      }
-                                 }
-                                 
-                                 const hitKey = `${z.id}_${p.owner}`;
-                                 if (!hitsProcessed.has(hitKey)) {
-                                     hitsProcessed.add(hitKey);
                                      
-                                     if (p.owner === 'HOST') {
-                                         const base = isHeadshot ? 20 : 10;
-                                         ctx.addPoints(ctx.hasDoublePoints() ? base * 2 : base);
-                                     } else if (p.owner === 'CLIENT') {
-                                         ctx.send({ type: 'HIT_CONFIRM', amount: (isHeadshot ? 20 : 10) });
+                                     const hitKey = `${z.id}_${p.owner}`;
+                                     if (!hitsProcessed.has(hitKey)) {
+                                         hitsProcessed.add(hitKey);
+                                         
+                                         if (p.owner === 'HOST') {
+                                             const base = isHeadshot ? 20 : 10;
+                                             ctx.addPoints(ctx.hasDoublePoints() ? base * 2 : base);
+                                         } else if (p.owner === 'CLIENT') {
+                                             ctx.send({ type: 'HIT_CONFIRM', amount: (isHeadshot ? 20 : 10) });
+                                         }
                                      }
-                                 }
 
-                                   if (z.health <= 0 && !z.isDead) {
-                                        if (z.type === 'HELLHOUND') {
-                                            ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
-                                        } else {
-                                            const headPos = z.headMesh ? z.headMesh.absolutePosition : undefined;
-                                            ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos, p.direction);
-                                        }
-                                   }
-                             }
-                          }
-                         } else {
-                          // Environment Hit
-                          const envPick = scene.pickWithRay(ray, (mesh) => mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger"));
-                          if (envPick && envPick.hit && envPick.pickedMesh) {
-                              hit = true;
-                              finalImpactPoint = envPick.pickedPoint!;
-                              p.direction.scaleToRef(-1, _negDir);
-                              const normal = envPick.getNormal(true) || _negDir;
-                              
-                              ctx.visualManager.createDecal(envPick.pickedPoint!, normal, envPick.pickedMesh);
-                              ctx.visualManager.createImpactParticles(envPick.pickedPoint!, normal);
-                          }
-                      }
+                                       if (z.health <= 0 && !z.isDead) {
+                                            if (z.type === 'HELLHOUND') {
+                                                ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
+                                            } else {
+                                                const headPos = z.headMesh ? z.headMesh.absolutePosition : undefined;
+                                                ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos, p.direction);
+                                            }
+                                       }
+                                 }
+                               }
+                           } else {
+                               // Environment Hit
+                               finalImpactPoint = pick.pickedPoint!;
+                               p.direction.scaleToRef(-1, _negDir);
+                               const normal = pick.getNormal(true) || _negDir;
+                               
+                               ctx.visualManager.createDecal(pick.pickedPoint!, normal, pick.pickedMesh);
+                               ctx.visualManager.createImpactParticles(pick.pickedPoint!, normal);
+                           }
+                        }
+
                 } else {
                     // ── REMOTE PROJECTILE: visual-only collision (no damage) ──
                     p.direction.scaleToRef(0.5, _scaledDir);
@@ -352,34 +363,34 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                     _reusableRay.length = rayLen;
                     const ray = _reusableRay;
 
-                    // Check zombie hits (visual only — no damage)
-                    const pick = scene.pickWithRay(ray, (mesh) =>
-                        mesh.name.includes("zombie") || mesh.name.includes("hellhound")
-                    );
+                    // Combined raycast for zombies and environment (O(1) instead of O(2))
+                    const pick = scene.pickWithRay(ray, (mesh) => {
+                        // Zombie/Hellhound check
+                        if (mesh.name.includes("zombie") || mesh.name.includes("hellhound")) return true;
+                        // Environment check
+                        return mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
+                    });
 
                     if (pick && pick.hit && pick.pickedMesh) {
                         hit = true;
-                        ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
+                        const isEnemy = pick.pickedMesh.name.includes("zombie") || pick.pickedMesh.name.includes("hellhound");
 
-                        if (p.isExplosive && p.splashRadius && p.splashDamage) {
-                            ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
-                        }
-                    } else {
-                        // Check environment hits (visual only — decals + particles)
-                        const envPick = scene.pickWithRay(ray, (mesh) =>
-                            mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger")
-                        );
+                        if (isEnemy) {
+                            ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
 
-                        if (envPick && envPick.hit && envPick.pickedMesh) {
-                            hit = true;
-                            finalImpactPoint = envPick.pickedPoint!;
+                            if (p.isExplosive && p.splashRadius && p.splashDamage) {
+                                ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
+                            }
+                        } else {
+                            finalImpactPoint = pick.pickedPoint!;
                             p.direction.scaleToRef(-1, _negDir);
-                            const normal = envPick.getNormal(true) || _negDir;
+                            const normal = pick.getNormal(true) || _negDir;
 
-                            ctx.visualManager.createDecal(envPick.pickedPoint!, normal, envPick.pickedMesh);
-                            ctx.visualManager.createImpactParticles(envPick.pickedPoint!, normal);
+                            ctx.visualManager.createDecal(pick.pickedPoint!, normal, pick.pickedMesh);
+                            ctx.visualManager.createImpactParticles(pick.pickedPoint!, normal);
                         }
                     }
+
                 }
 
                 if (hit) {

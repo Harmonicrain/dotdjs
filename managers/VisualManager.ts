@@ -58,6 +58,11 @@ export class VisualManager {
     private bloodPSPool: BABYLON.ParticleSystem[] = [];
     private bloodPSCursor = 0;
 
+    // ── Pre-allocated wood debris particle system pool ───────────────────────
+    private static readonly MAX_DEBRIS_PS = 10;
+    private debrisPSPool: BABYLON.ParticleSystem[] = [];
+    private debrisPSCursor = 0;
+
     // ── Shared scratch objects (zero-alloc hot path) ────────────────────────
     private static readonly _scratchColor3 = new BABYLON.Color3();
     private static readonly _explosionDirMin = new BABYLON.Vector3(-1, 1, -1);
@@ -67,6 +72,8 @@ export class VisualManager {
     private static readonly _impactDirMax = new BABYLON.Vector3(-0.05, -0.05, -0.05);
     private static readonly _bloodDirMin = new BABYLON.Vector3(0.1, 0.1, 0.1);
     private static readonly _bloodDirMax = new BABYLON.Vector3(-0.1, -0.1, -0.1);
+    private static readonly _debrisMinBox = new BABYLON.Vector3(-0.5, -0.2, -0.1);
+    private static readonly _debrisMaxBox = new BABYLON.Vector3(0.5, 0.2, 0.1);
 
     constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {
         this.initBloodPool();
@@ -75,6 +82,7 @@ export class VisualManager {
         this.initTrailPSPool();
         this.initImpactPSPool();
         this.initBloodPSPool();
+        this.initDebrisPSPool();
     }
 
 
@@ -206,6 +214,43 @@ export class VisualManager {
             ps.disposeOnStop = false;
             this.bloodPSPool.push(ps);
         }
+    }
+
+    private initDebrisPSPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/wood.jpg");
+        for (let i = 0; i < VisualManager.MAX_DEBRIS_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`debrisPS_${i}`, 20, this.scene);
+            ps.particleTexture = tex;
+            ps.minEmitBox = VisualManager._debrisMinBox;
+            ps.maxEmitBox = VisualManager._debrisMaxBox;
+            ps.color1 = new BABYLON.Color4(0.6, 0.5, 0.4, 1.0);
+            ps.color2 = new BABYLON.Color4(0.4, 0.3, 0.2, 1.0);
+            ps.minSize = 0.05;
+            ps.maxSize = 0.15;
+            ps.minLifeTime = 0.5;
+            ps.maxLifeTime = 1.0;
+            ps.emitRate = 100;
+            ps.targetStopDuration = 0.1;
+            ps.gravity = new BABYLON.Vector3(0, -9.81, 0);
+            ps.direction1 = new BABYLON.Vector3(-1, 2, -1);
+            ps.direction2 = new BABYLON.Vector3(1, 2, 1);
+            ps.disposeOnStop = false;
+            this.debrisPSPool.push(ps);
+        }
+    }
+
+    public createWoodDebris(pos: BABYLON.Vector3) {
+        const idx = this.debrisPSCursor % VisualManager.MAX_DEBRIS_PS;
+        this.debrisPSCursor++;
+        const ps = this.debrisPSPool[idx];
+
+        if (ps.isStarted()) {
+            ps.stop();
+            ps.reset();
+        }
+
+        ps.emitter = pos;
+        ps.start();
     }
 
 
@@ -505,8 +550,30 @@ export class VisualManager {
         // 2. Initialize Shared Materials
         this.initDecalMaterial();
         
-        // 3. Pre-compile materials (Optional but recommended for StandardMaterial)
-        if (this.decalMat) this.decalMat.forceCompilation(this.activeDecals[0] || this.scene.meshes[0]);
+        const floorGoreMat = this.resourceManager.getMaterial("floorGoreMat", () => {
+            const m = new BABYLON.StandardMaterial("floorGoreMat", this.scene);
+            m.diffuseColor = new BABYLON.Color3(0.42, 0.0, 0.0);
+            m.specularColor = new BABYLON.Color3(0.02, 0, 0);
+            m.emissiveColor = new BABYLON.Color3(0.04, 0, 0);
+            m.backFaceCulling = false;
+            return m;
+        });
+
+        const bloodDecalMat = this.resourceManager.getMaterial("bloodDecalMat", () => {
+            const mat = new BABYLON.StandardMaterial("bloodDecalMat", this.scene);
+            mat.diffuseColor = new BABYLON.Color3(0.6, 0, 0);
+            mat.specularColor = BABYLON.Color3.Black();
+            mat.zOffset = -1;
+            return mat;
+        });
+        
+        // 3. Pre-compile materials
+        const compilerMesh = this.activeDecals[0] || this.scene.meshes[0];
+        if (compilerMesh) {
+            if (this.decalMat) this.decalMat.forceCompilation(compilerMesh);
+            if (floorGoreMat instanceof BABYLON.Material) floorGoreMat.forceCompilation(compilerMesh);
+            if (bloodDecalMat instanceof BABYLON.Material) bloodDecalMat.forceCompilation(compilerMesh);
+        }
     }
 
     public setLights(lights: BABYLON.PointLight[]) {
