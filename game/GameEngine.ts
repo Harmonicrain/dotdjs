@@ -174,14 +174,16 @@ export class GameEngine {
         if (p.trailParticleSystem) {
             const ps = p.trailParticleSystem;
             // Detach emitter from the pooled mesh before it gets reused,
-            // snapshot position so remaining particles fade in place
-            ps.emitter = p.mesh.position.clone();
+            // snapshot position so remaining particles fade in place.
+            // We NO LONGER call dispose here as the system is now pooled.
+            if (ps.emitter instanceof BABYLON.AbstractMesh) {
+                ps.emitter = ps.emitter.position.clone();
+            }
             ps.stop();
-            ps.disposeOnStop = false;
-            ps.onAnimationEnd = () => { ps.dispose(false); };
             p.trailParticleSystem = null;
         }
         // Swap-remove for O(1) instead of indexOf+splice O(n)
+
         const arr = this.activeProjectiles;
         const index = arr.indexOf(p);
         if (index !== -1) {

@@ -43,17 +43,40 @@ export class VisualManager {
     private explosionPSPool: BABYLON.ParticleSystem[] = [];
     private explosionPSCursor = 0;
 
+    // ── Pre-allocated trail particle system pool (Ray Gun etc) ───────────────
+    private static readonly MAX_TRAIL_PS = 20;
+    private trailPSPool: BABYLON.ParticleSystem[] = [];
+    private trailPSCursor = 0;
+
+    // ── Pre-allocated impact particle system pool ────────────────────────────
+    private static readonly MAX_IMPACT_PS = 15;
+    private impactPSPool: BABYLON.ParticleSystem[] = [];
+    private impactPSCursor = 0;
+
+    // ── Pre-allocated blood splatter particle system pool ────────────────────
+    private static readonly MAX_BLOOD_PS = 15;
+    private bloodPSPool: BABYLON.ParticleSystem[] = [];
+    private bloodPSCursor = 0;
+
     // ── Shared scratch objects (zero-alloc hot path) ────────────────────────
     private static readonly _scratchColor3 = new BABYLON.Color3();
     private static readonly _explosionDirMin = new BABYLON.Vector3(-1, 1, -1);
     private static readonly _explosionDirMax = new BABYLON.Vector3(1, 1, 1);
     private static readonly _explosionGravity = new BABYLON.Vector3(0, -2, 0);
+    private static readonly _impactDirMin = new BABYLON.Vector3(0.05, 0.05, 0.05);
+    private static readonly _impactDirMax = new BABYLON.Vector3(-0.05, -0.05, -0.05);
+    private static readonly _bloodDirMin = new BABYLON.Vector3(0.1, 0.1, 0.1);
+    private static readonly _bloodDirMax = new BABYLON.Vector3(-0.1, -0.1, -0.1);
 
     constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {
         this.initBloodPool();
         this.initFlashLightPool();
         this.initExplosionPSPool();
+        this.initTrailPSPool();
+        this.initImpactPSPool();
+        this.initBloodPSPool();
     }
+
 
     private initFlashLightPool() {
         for (let i = 0; i < VisualManager.MAX_FLASH_LIGHTS; i++) {
@@ -119,6 +142,72 @@ export class VisualManager {
             this.explosionPSPool.push(ps);
         }
     }
+
+    private initTrailPSPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < VisualManager.MAX_TRAIL_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`trailPS_${i}`, 100, this.scene);
+            ps.particleTexture = tex;
+            ps.minSize = 0.1;
+            ps.maxSize = 0.4;
+            ps.minLifeTime = 0.05;
+            ps.maxLifeTime = 0.2;
+            ps.emitRate = 150;
+            ps.createPointEmitter(VisualManager._trailDir, VisualManager._trailDir);
+            ps.minEmitPower = 1;
+            ps.maxEmitPower = 2;
+            ps.updateSpeed = 0.02;
+            ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+            ps.disposeOnStop = false;
+            this.trailPSPool.push(ps);
+        }
+    }
+
+    private initImpactPSPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < VisualManager.MAX_IMPACT_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`impactPS_${i}`, 10, this.scene);
+            ps.particleTexture = tex;
+            ps.color1 = new BABYLON.Color4(1, 1, 0.8, 1);
+            ps.color2 = new BABYLON.Color4(0.5, 0.5, 0.4, 0.5);
+            ps.minSize = 0.01;
+            ps.maxSize = 0.05;
+            ps.minLifeTime = 0.05;
+            ps.maxLifeTime = 0.15;
+            ps.emitRate = 100;
+            ps.targetStopDuration = 0.05;
+            ps.createPointEmitter(VisualManager._impactDirMin, VisualManager._impactDirMax);
+            ps.minEmitPower = 1;
+            ps.maxEmitPower = 2;
+            ps.gravity = new BABYLON.Vector3(0, -9.8, 0);
+            ps.disposeOnStop = false;
+            this.impactPSPool.push(ps);
+        }
+    }
+
+    private initBloodPSPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < VisualManager.MAX_BLOOD_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`bloodPS_${i}`, 20, this.scene);
+            ps.particleTexture = tex;
+            ps.color1 = new BABYLON.Color4(0.7, 0, 0, 1);
+            ps.color2 = new BABYLON.Color4(0.3, 0, 0, 1);
+            ps.colorDead = new BABYLON.Color4(0.1, 0, 0, 0);
+            ps.minSize = 0.05;
+            ps.maxSize = 0.15;
+            ps.minLifeTime = 0.2;
+            ps.maxLifeTime = 0.4;
+            ps.emitRate = 100;
+            ps.targetStopDuration = 0.1;
+            ps.createPointEmitter(VisualManager._bloodDirMin, VisualManager._bloodDirMax);
+            ps.minEmitPower = 1;
+            ps.maxEmitPower = 3;
+            ps.gravity = new BABYLON.Vector3(0, -5, 0);
+            ps.disposeOnStop = false;
+            this.bloodPSPool.push(ps);
+        }
+    }
+
 
     /**
      * Safely configure a one-shot particle system so it auto-disposes after
@@ -459,23 +548,22 @@ export class VisualManager {
     }
 
     public createImpactParticles(pos: BABYLON.Vector3, normal: BABYLON.Vector3) {
-        const ps = new BABYLON.ParticleSystem("impact", 10, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        const idx = this.impactPSCursor % VisualManager.MAX_IMPACT_PS;
+        this.impactPSCursor++;
+        const ps = this.impactPSPool[idx];
+
+        if (ps.isStarted()) {
+            ps.stop();
+            ps.reset();
+        }
+
         ps.emitter = pos;
-        ps.color1 = new BABYLON.Color4(1, 1, 0.8, 1);
-        ps.color2 = new BABYLON.Color4(0.5, 0.5, 0.4, 0.5);
-        ps.minSize = 0.01; ps.maxSize = 0.05;
-        ps.minLifeTime = 0.05; ps.maxLifeTime = 0.15;
-        ps.emitRate = 100;
-        ps.targetStopDuration = 0.05;
-        ps.createPointEmitter(new BABYLON.Vector3(0.05, 0.05, 0.05), new BABYLON.Vector3(-0.05, -0.05, -0.05));
         ps.direction1 = normal.scale(1.5).add(new BABYLON.Vector3(0.2, 0.2, 0.2));
         ps.direction2 = normal.scale(1.5).add(new BABYLON.Vector3(-0.2, -0.2, -0.2));
-        ps.minEmitPower = 1; ps.maxEmitPower = 2;
-        ps.gravity = new BABYLON.Vector3(0, -9.8, 0);
-        this.setupSafeAutoDispose(ps);
+        
         ps.start();
     }
+
 
     private initBloodPool() {
         for (let i = 0; i < this.poolSize; i++) {
@@ -499,26 +587,19 @@ export class VisualManager {
     }
 
     public createBloodSplatter(pos: BABYLON.Vector3, normal: BABYLON.Vector3, targetMesh?: BABYLON.AbstractMesh) {
-        const scene = this.scene;
+        const idx = this.bloodPSCursor % VisualManager.MAX_BLOOD_PS;
+        this.bloodPSCursor++;
+        const ps = this.bloodPSPool[idx];
 
-        // Create blood spray particles
-        const ps = new BABYLON.ParticleSystem("bloodPS", 20, scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        if (ps.isStarted()) {
+            ps.stop();
+            ps.reset();
+        }
+
         ps.emitter = pos;
-        ps.color1 = new BABYLON.Color4(0.7, 0, 0, 1);
-        ps.color2 = new BABYLON.Color4(0.3, 0, 0, 1);
-        ps.colorDead = new BABYLON.Color4(0.1, 0, 0, 0);
-        ps.minSize = 0.05; ps.maxSize = 0.15;
-        ps.minLifeTime = 0.2; ps.maxLifeTime = 0.4;
-        ps.emitRate = 100;
-        ps.targetStopDuration = 0.1;
-        ps.createPointEmitter(new BABYLON.Vector3(0.1, 0.1, 0.1), new BABYLON.Vector3(-0.1, -0.1, -0.1));
         ps.direction1 = normal.scale(2).add(new BABYLON.Vector3(0.5, 0.5, 0.5));
         ps.direction2 = normal.scale(2).add(new BABYLON.Vector3(-0.5, -0.5, -0.5));
-        ps.minEmitPower = 1; ps.maxEmitPower = 3;
-        ps.gravity = new BABYLON.Vector3(0, -5, 0);
-        ps.targetStopDuration = 0.1;
-        this.setupSafeAutoDispose(ps);
+        
         ps.start();
 
         // Create blood decal on the zombie body where hit
@@ -528,11 +609,12 @@ export class VisualManager {
 
         // Try to find floor for blood pool
         const floorRay = new BABYLON.Ray(pos.add(new BABYLON.Vector3(0, 0.1, 0)), new BABYLON.Vector3(0, -1, 0), 10);
-        const floorPick = scene.pickWithRay(floorRay, (m) => m.checkCollisions && m.isEnabled());
+        const floorPick = this.scene.pickWithRay(floorRay, (m) => m.checkCollisions && m.isEnabled());
         if (floorPick && floorPick.hit && floorPick.pickedPoint && floorPick.pickedMesh) {
             this.createBloodDecalOnMesh(floorPick.pickedPoint, new BABYLON.Vector3(0, 1, 0), floorPick.pickedMesh);
         }
     }
+
 
     private createBloodDecalOnMesh(pos: BABYLON.Vector3, normal: BABYLON.Vector3, target: BABYLON.AbstractMesh) {
         const scene = this.scene;
@@ -662,8 +744,15 @@ export class VisualManager {
     private static readonly _trailDir = new BABYLON.Vector3(0, 0, -1);
 
     public createProjectileTrail(mesh: BABYLON.AbstractMesh, isPacked: boolean = false): BABYLON.ParticleSystem {
-        const ps = new BABYLON.ParticleSystem("projectileTrail", 100, this.scene);
-        ps.particleTexture = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        const idx = this.trailPSCursor % VisualManager.MAX_TRAIL_PS;
+        this.trailPSCursor++;
+        const ps = this.trailPSPool[idx];
+
+        if (ps.isStarted()) {
+            ps.stop();
+            ps.reset();
+        }
+
         ps.emitter = mesh;
 
         if (isPacked) {
@@ -675,23 +764,22 @@ export class VisualManager {
         }
         ps.colorDead = VisualManager._colorDead;
 
-        ps.minSize = 0.1;
-        ps.maxSize = 0.4;
-        ps.minLifeTime = 0.05;
-        ps.maxLifeTime = 0.2;
-
-        ps.emitRate = 150;
-        ps.createPointEmitter(VisualManager._trailDir, VisualManager._trailDir);
-
-        ps.minEmitPower = 1;
-        ps.maxEmitPower = 2;
-        ps.updateSpeed = 0.02;
-
-        ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
         ps.start();
 
         return ps;
     }
+
+    public stopProjectileTrail(ps: BABYLON.ParticleSystem) {
+        if (!ps) return;
+        
+        // Snapshot current position as a static emitter so remaining particles don't snap to origin
+        if (ps.emitter instanceof BABYLON.AbstractMesh) {
+            ps.emitter = ps.emitter.position.clone();
+        }
+        
+        ps.stop();
+    }
+
 
     public reset() {
         this.activeDecals.forEach(d => d.dispose());
@@ -710,6 +798,22 @@ export class VisualManager {
             if (ps.isStarted()) ps.stop(); 
             ps.reset(); 
         });
+
+        this.trailPSPool.forEach(ps => {
+            if (ps.isStarted()) ps.stop();
+            ps.reset();
+        });
+
+        this.impactPSPool.forEach(ps => {
+            if (ps.isStarted()) ps.stop();
+            ps.reset();
+        });
+
+        this.bloodPSPool.forEach(ps => {
+            if (ps.isStarted()) ps.stop();
+            ps.reset();
+        });
+
         
         this.bloodPool.forEach(b => { 
             b.mesh.setEnabled(false); 
@@ -748,6 +852,22 @@ export class VisualManager {
             ps.dispose(false);
         }
         this.explosionPSPool = [];
+
+        for (const ps of this.trailPSPool) {
+            ps.dispose(false);
+        }
+        this.trailPSPool = [];
+
+        for (const ps of this.impactPSPool) {
+            ps.dispose(false);
+        }
+        this.impactPSPool = [];
+
+        for (const ps of this.bloodPSPool) {
+            ps.dispose(false);
+        }
+        this.bloodPSPool = [];
+
 
         this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
         this.floorGorePieces = [];
