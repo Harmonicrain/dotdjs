@@ -8,8 +8,10 @@ export class GameEngine {
     public scene: BABYLON.Scene | null = null;
     public activeProjectiles: Projectile[] = [];
     public projectilePool: ObjectPool<Projectile> | null = null;
+    private remoteProjectileCount: number = 0;
 
     // Scratch vector reused per spawnProjectile call to avoid allocation
+
     private static readonly _lookAtTarget = new BABYLON.Vector3();
 
     constructor() {}
@@ -17,8 +19,10 @@ export class GameEngine {
     public initialize(scene: BABYLON.Scene) {
         this.scene = scene;
         this.activeProjectiles = [];
+        this.remoteProjectileCount = 0;
         
         // Initialize Projectile Pool
+
         this.projectilePool = new ObjectPool<Projectile>(
             () => {
                 // Factory: Create bullet-shaped mesh (disabled by default)
@@ -131,7 +135,7 @@ export class GameEngine {
         if (!this.projectilePool || !this.scene) return;
 
         // Limit remote projectiles to prevent flood
-        if (isRemote && this.activeProjectiles.filter(p => p.isRemote).length > 50) {
+        if (isRemote && this.remoteProjectileCount > 50) {
             return;
         }
 
@@ -165,8 +169,10 @@ export class GameEngine {
         p.selfDamageMultiplier = selfDamageMultiplier;
         // life is reset in pool.acquire() -> reset()
 
+        if (isRemote) this.remoteProjectileCount++;
         this.activeProjectiles.push(p);
     }
+
 
     public releaseProjectile(p: Projectile) {
         if (!this.projectilePool) return;
@@ -174,7 +180,7 @@ export class GameEngine {
         if (p.trailParticleSystem) {
             const ps = p.trailParticleSystem;
             // Detach emitter from the pooled mesh before it gets reused,
-            // snapshot position so remaining particles fade in place.
+            // snapshot position so remaining particles fade out naturally without following the recycled projectile mesh.
             // We NO LONGER call dispose here as the system is now pooled.
             if (ps.emitter instanceof BABYLON.AbstractMesh) {
                 ps.emitter = ps.emitter.position.clone();
@@ -182,7 +188,11 @@ export class GameEngine {
             ps.stop();
             p.trailParticleSystem = null;
         }
+
+        if (p.isRemote) this.remoteProjectileCount--;
+
         // Swap-remove for O(1) instead of indexOf+splice O(n)
+
 
         const arr = this.activeProjectiles;
         const index = arr.indexOf(p);

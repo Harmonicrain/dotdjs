@@ -378,14 +378,11 @@ This section documents all code identified as likely contributors to frame-rate 
 
 ---
 
-### P1. GameEngine.ts — Remote Projectile Count Uses `.filter()` in Hot Path
+### P1. GameEngine.ts — Remote Projectile Count Uses `.filter()` in Hot Path ✅ DONE
 **File:** `game/GameEngine.ts` (line ~134)
 
-```typescript
-if (isRemote && this.activeProjectiles.filter(p => p.isRemote).length > 50) {
-```
+`remoteProjectileCount` integer that is incremented on spawn and decremented on recycle. Replacing `.filter()` allocation in hot path.
 
-Item 32 replaced a manual loop with `.filter()`, but `.filter()` still allocates a new array every call. This runs on every remote projectile spawn. Replace with a maintained `remoteProjectileCount` integer that is incremented on spawn and decremented on recycle.
 
 ---
 
