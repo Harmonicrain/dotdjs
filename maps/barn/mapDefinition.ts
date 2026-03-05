@@ -98,9 +98,9 @@ export const BarnMapDefinition: MapDefinition = {
     
     config: {
         gameplay: barnGameplay,
+        mysteryBox: barnMysteryBox,
         enemies: {
             hellhound: barnHellhound,
-            mysteryBox: barnMysteryBox
         },
         weapons: barnWeapons
     }

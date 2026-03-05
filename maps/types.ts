@@ -29,9 +29,9 @@ export interface MapConfiguration {
     powerUps?: MapPowerUpConfig;
     combat?: MapCombatConfig;
     visuals?: MapVisualConfig;
+    mysteryBox?: MapMysteryBoxConfig;
     enemies?: {
         hellhound?: MapHellhoundConfig;
-        mysteryBox?: MapMysteryBoxConfig;
     };
     weapons?: Record<string, MapWeaponOverride>;
 }

@@ -49,7 +49,7 @@ export class MapConfigManager {
         if (!mc) return;
 
         for (const [key, _default] of CONFIG_KEYS) {
-            const override = key === 'hellhound' || key === 'mysteryBox'
+            const override = key === 'hellhound'
                 ? mc.enemies?.[key]
                 : (mc as Record<string, unknown>)[key];
             if (override) {

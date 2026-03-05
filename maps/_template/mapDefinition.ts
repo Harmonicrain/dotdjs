@@ -50,9 +50,9 @@ export const MapTemplateDefinition: MapDefinition = {
     },
     config: {
         gameplay: templateGameplay,
+        mysteryBox: templateMysteryBox,
         enemies: {
             hellhound: templateHellhound,
-            mysteryBox: templateMysteryBox
         },
         weapons: templateWeapons
     }
