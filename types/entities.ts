@@ -92,6 +92,8 @@ export type Zombie = {
         attack?: BABYLON.AnimationGroup;
     };
     currentAnim?: 'walk' | 'idle' | 'attack' | null;
+    /** Per-zombie animation offset to desynchronize movements */
+    animOffset: number;
 };
 
 export type Projectile = {

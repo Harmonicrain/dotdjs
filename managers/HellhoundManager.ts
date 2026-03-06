@@ -271,7 +271,8 @@ export class HellhoundManager {
                 // Hellhound-specific
                 hellhoundState: HellhoundState.SPAWNING,
                 stateTimer: hc.SPAWN_INVULN_TIME,
-                targetPlayerId: 'HOST' // AI system will refine targeting
+                targetPlayerId: 'HOST', // AI system will refine targeting
+                animOffset: Math.random() * Math.PI * 2
             };
 
             // Fade in mesh

@@ -28,10 +28,12 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
     // Output vectors for camera direction queries
     const _camForward  = new BABYLON.Vector3();
     const _camRight    = new BABYLON.Vector3();
-    // Accumulated move direction (zeroed at the top of each frame)
+    // accumulated move direction (zeroed at the top of each frame)
     const _moveDir     = new BABYLON.Vector3();
     // Velocity scratch (replaces currentPos.subtract(lastPosition))
     const _velocity    = new BABYLON.Vector3();
+    // Persistent knockback velocity that decays over time
+    const _knockbackVel = new BABYLON.Vector3();
 
     // Pre-allocated ray for ground checks
     const _groundRay = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3(0, -1, 0), 1);
@@ -188,15 +190,18 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             camera.cameraDirection.y += ctx.gameState.verticalVelocity;
 
             // --- EXTERNAL FORCE (knockback, etc.) ---
-            // Apply external force to camera movement and decay it
-            const externalForce = ctx.gameState.externalForce;
-            if (externalForce.lengthSquared() > 0.0001) {
-                camera.cameraDirection.addInPlace(externalForce);
-                // Decay external force (0.85 = quick but smooth decay)
-                externalForce.scaleInPlace(0.85);
-                // Zero out when negligible to prevent drift
-                if (externalForce.lengthSquared() < 0.0001) {
-                    externalForce.set(0, 0, 0);
+            // Transfer external force to local velocity and clear it
+            if (ctx.gameState.externalForce.lengthSquared() > 0.0001) {
+                _knockbackVel.addInPlace(ctx.gameState.externalForce);
+                ctx.gameState.externalForce.set(0, 0, 0);
+            }
+
+            // Apply and decay knockback velocity
+            if (_knockbackVel.lengthSquared() > 0.0001) {
+                camera.cameraDirection.addInPlace(_knockbackVel);
+                _knockbackVel.scaleInPlace(0.8); // Slightly faster decay
+                if (_knockbackVel.lengthSquared() < 0.0001) {
+                    _knockbackVel.set(0, 0, 0);
                 }
             }
             

@@ -145,41 +145,84 @@ export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): Syste
                         }
                     } else {
                         // Procedural Animation for Primitives
-                        // We need access to limbs (stored in z.limbs)
                         if (z.limbs) {
                             if (isMoving) {
-                                const speedFactor = z.speed * vc.ZOMBIE_ANIM_SPEED_FACTOR; // Reuse factor
-                                const t = now * vc.ANIM_TIME_FACTOR * speedFactor;
+                                const speedFactor = z.speed * vc.ZOMBIE_ANIM_SPEED_FACTOR;
+                                // MODIFIED PHASE LOGIC: Use a more distinct phase shift per zombie
+                                const baseT = (now % 100000) * vc.ANIM_TIME_FACTOR * speedFactor;
+                                const t = baseT + (z.animOffset || 0);
                                 
-                                // Bipedal Walk Cycle (Opposite arm/leg)
-                                const amp = 0.6; // Swing amplitude
-                                z.limbs.armL.rotation.x = Math.sin(t) * amp;
-                                z.limbs.armR.rotation.x = -Math.sin(t) * amp;
-                                z.limbs.legL.rotation.x = -Math.sin(t) * amp;
-                                z.limbs.legR.rotation.x = Math.sin(t) * amp;
+                                // --- ASYMMETRICAL ZOMBIE LIMP ---
+                                // Different phase shifts for arms vs legs makes it look less like a single t-value
+                                const armT = t + (z.animOffset || 0) * 0.5; 
                                 
-                                // Bobbing
+                                // Left leg: relatively normal swing
+                                const swingL = Math.sin(t) * 0.45;
+                                // Right leg: "stiff" draggy leg (lower amplitude, offset timing)
+                                const swingR = Math.sin(t - 0.5) * 0.25;
+                                
+                                z.limbs.legL.rotation.x = -swingL;
+                                z.limbs.legR.rotation.x = -swingR;
+                                
+                                // --- DANGLING / REACHING ARMS ---
+                                // Arms reach forward but sway erratically (using armT for offset)
+                                const armSway = Math.sin(armT * 0.8) * 0.15;
+                                // Image style: one arm high, one arm mid/low, reaching out
+                                const reachBase = -1.4; // Reach further forward
+                                
+                                // Left arm: high reach, sways out
+                                z.limbs.armL.rotation.x = reachBase - 0.4 + armSway + Math.cos(t * 0.5) * 0.1;
+                                z.limbs.armL.rotation.y = -0.3 + Math.sin(armT * 0.3) * 0.2;
+                                
+                                // Right arm: lower reach, sways out
+                                z.limbs.armR.rotation.x = reachBase + 0.3 - armSway + Math.sin(t * 0.4) * 0.15;
+                                z.limbs.armR.rotation.y = 0.4 + Math.cos(armT * 0.3) * 0.2;
+
+                                // --- SLOUCHING & TILTING TORSO ---
                                 if (z.torsoMesh) {
-                                     // Bob up and down (2x frequency of steps)
-                                     z.torsoMesh.position.y = 1.275 + Math.abs(Math.sin(t)) * 0.05;
-                                     // Head follows torso
+                                     // Bob up and down (REDUCED ABSOLUTE OVERRIDE - use relative if possible)
+                                     // Base Y is 1.275 in factory
+                                     const bob = Math.abs(Math.sin(t)) * 0.05;
+                                     z.torsoMesh.position.y = 1.275 + bob;
+                                     
+                                     // Slouch forward
+                                     z.torsoMesh.rotation.x = 0.25 + Math.sin(t * 0.5) * 0.05;
+                                     // Lateral "drunk" swaying
+                                     z.torsoMesh.rotation.z = Math.sin(armT * 0.4) * 0.12;
+                                     
+                                     // Head erratic tilt
                                      if (z.headMesh) {
-                                         // Head is parented to torso, so no manual update needed if parenting works
-                                         // But createZombieMesh parents head to torso.
+                                         z.headMesh.rotation.z = Math.cos(armT * 0.6) * 0.2;
+                                         z.headMesh.rotation.x = -0.1 + Math.sin(t * 0.7) * 0.15;
                                      }
                                 }
                             } else if (isAttacking) {
-                                // Attack Lunge
-                                const t = now * 0.015;
-                                z.limbs.armL.rotation.x = -1.5 + Math.sin(t) * 0.5;
-                                z.limbs.armR.rotation.x = -1.5 + Math.cos(t) * 0.5;
+                                // Attack Lunge (Slower)
+                                const t = now * 0.01;
+                                z.limbs.armL.rotation.x = -1.5 + Math.sin(t) * 0.4;
+                                z.limbs.armR.rotation.x = -1.5 + Math.cos(t) * 0.4;
                             } else {
-                                // Idle Breathe
-                                const t = now * 0.002;
-                                z.limbs.armL.rotation.x = Math.sin(t) * 0.1;
-                                z.limbs.armR.rotation.x = Math.cos(t) * 0.1;
+                                // --- IDLE ZOMBIE POSE ---
+                                // Even when idle, zombies should hold their arms out
+                                const t = now * 0.001; // Slower idle
+                                const baseOffset = (z.animOffset || 0);
+                                
+                                // Reaching pose (Idle)
+                                const reachBase = -1.2;
+                                z.limbs.armL.rotation.x = reachBase + Math.sin(t + baseOffset) * 0.1;
+                                z.limbs.armR.rotation.x = reachBase + Math.cos(t + baseOffset) * 0.12;
+                                
+                                // Splay arms slightly
+                                z.limbs.armL.rotation.y = -0.2 + Math.sin(t * 0.5) * 0.05;
+                                z.limbs.armR.rotation.y = 0.2 + Math.cos(t * 0.5) * 0.05;
+
                                 z.limbs.legL.rotation.x = 0;
                                 z.limbs.legR.rotation.x = 0;
+                                
+                                if (z.torsoMesh) {
+                                    z.torsoMesh.rotation.x = 0.2; // Slight slouch
+                                    z.torsoMesh.rotation.z = Math.sin(t * 0.3) * 0.05;
+                                }
                             }
                         }
                     }
@@ -189,7 +232,7 @@ export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): Syste
                 else if (z.type === 'HELLHOUND' && z.limbs) {
                     if (isMoving) {
                         const speedFactor = z.speed * vc.HELLHOUND_ANIM_SPEED_FACTOR;
-                        const t = now * vc.ANIM_TIME_FACTOR * speedFactor;
+                        const t = (now * vc.ANIM_TIME_FACTOR * speedFactor) + (z.animOffset || 0);
                         z.limbs.armL.rotation.x = Math.sin(t) * 0.5;
                         z.limbs.legR.rotation.x = Math.sin(t) * 0.5;
                         z.limbs.armR.rotation.x = -Math.sin(t) * 0.5;

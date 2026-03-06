@@ -14,6 +14,7 @@ export interface ZombieMeshResult {
         legL: BABYLON.AbstractMesh;
         legR: BABYLON.AbstractMesh;
     };
+    animOffset?: number;
 }
 
 // ── MESH TEMPLATES ─────────────────────────────────────────────────────────
@@ -22,11 +23,60 @@ export interface ZombieMeshResult {
 let masterZombie: ZombieMeshResult | null = null;
 let masterHellhound: ZombieMeshResult | null = null;
 
+const SKIN_VARIANTS = 5;
+const CLOTHES_VARIANTS = 5;
+
 /**
  * Builds the master templates used for cloning.
  * Should be called during map load/pre-warm.
  */
 export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: ResourceManager) => {
+    // Pre-create material variations with SLIGHT shade differences
+    const skinColors = [
+        new BABYLON.Color3(0.25, 0.35, 0.3),  // Pale Green (Base)
+        new BABYLON.Color3(0.22, 0.38, 0.28), // Deep Jungle Green
+        new BABYLON.Color3(0.28, 0.33, 0.32), // Greyish Green
+        new BABYLON.Color3(0.30, 0.40, 0.25), // Sickly Olive
+        new BABYLON.Color3(0.24, 0.36, 0.34), // Cold Mint Green
+    ];
+
+    const clothesColors = [
+        new BABYLON.Color3(0.12, 0.18, 0.12), // Dark Army Green
+        new BABYLON.Color3(0.15, 0.15, 0.15), // Charcoal
+        new BABYLON.Color3(0.18, 0.22, 0.18), // Faded Olive
+        new BABYLON.Color3(0.10, 0.12, 0.10), // Deep Forest
+        new BABYLON.Color3(0.20, 0.22, 0.20), // Concrete Grey-Green
+    ];
+
+    for (let i = 0; i < SKIN_VARIANTS; i++) {
+        resourceManager.getMaterial(`zombieBodyMat_${i}`, () => {
+            const mat = new BABYLON.StandardMaterial(`zombieBodyMat_${i}`, scene);
+            mat.diffuseColor = skinColors[i];
+            mat.emissiveColor = skinColors[i].scale(0.25); // Stronger self-illumination
+            mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+            mat.maxSimultaneousLights = 12; // Handle complex warehouse lighting
+            return mat;
+        });
+        resourceManager.getMaterial(`zombieHeadMat_${i}`, () => {
+            const mat = new BABYLON.StandardMaterial(`zombieHeadMat_${i}`, scene);
+            mat.diffuseColor = skinColors[i].scale(1.2); 
+            mat.emissiveColor = skinColors[i].scale(0.3);
+            mat.maxSimultaneousLights = 12;
+            return mat;
+        });
+    }
+
+    for (let i = 0; i < CLOTHES_VARIANTS; i++) {
+        resourceManager.getMaterial(`zombieClothesMat_${i}`, () => {
+            const mat = new BABYLON.StandardMaterial(`zombieClothesMat_${i}`, scene);
+            mat.diffuseColor = clothesColors[i];
+            mat.emissiveColor = clothesColors[i].scale(0.1);
+            mat.specularColor = BABYLON.Color3.Black();
+            mat.maxSimultaneousLights = 12;
+            return mat;
+        });
+    }
+
     if (!masterZombie) {
         masterZombie = buildZombieTemplate(scene, resourceManager);
         masterZombie.mesh.setEnabled(false); // Hide the template
@@ -42,18 +92,18 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
 const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceManager): ZombieMeshResult => {
     const root = new BABYLON.Mesh("zombieRoot", scene);
     
-    const bodyMat = resourceManager.getMaterial("zombieBodyMat", () => {
-        const mat = new BABYLON.StandardMaterial("zombieBodyMat", scene);
-        mat.diffuseColor = new BABYLON.Color3(0.12, 0.2, 0.15); // Slightly greener/paler
-        mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02); 
+    // Use variant 0 as the default for the template
+    const bodyMat = resourceManager.getMaterial("zombieBodyMat_0", () => {
+        const mat = new BABYLON.StandardMaterial("zombieBodyMat_0", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.25, 0.35, 0.3);
+        mat.emissiveColor = new BABYLON.Color3(0.04, 0.06, 0.04);
         mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-        mat.maxSimultaneousLights = 8;
         return mat;
     });
 
-    const clothesMat = resourceManager.getMaterial("zombieClothesMat", () => {
-        const mat = new BABYLON.StandardMaterial("zombieClothesMat", scene);
-        mat.diffuseColor = new BABYLON.Color3(0.05, 0.08, 0.05);
+    const clothesMat = resourceManager.getMaterial("zombieClothesMat_0", () => {
+        const mat = new BABYLON.StandardMaterial("zombieClothesMat_0", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.15, 0.22, 0.15);
         mat.specularColor = new BABYLON.Color3(0, 0, 0);
         return mat;
     });
@@ -106,19 +156,31 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
     const fleshPatch = BABYLON.MeshBuilder.CreatePlane("flesh", {size: 0.2}, scene);
     fleshPatch.parent = torso; fleshPatch.position = new BABYLON.Vector3(0.1, 0.1, -0.22);
     fleshPatch.material = bodyMat;
+
+    // Neck
+    const neck = BABYLON.MeshBuilder.CreateCylinder("zombie_neck", {diameter: 0.15, height: 0.2, tessellation: 6}, scene);
+    neck.parent = torso;
+    neck.position = new BABYLON.Vector3(0, 0.45, 0);
+    neck.material = bodyMat;
     
-    const headMat = resourceManager.getMaterial("zombieHeadMat", () => {
-        const mat = new BABYLON.StandardMaterial("zombieHeadMat", scene);
-        mat.diffuseColor = new BABYLON.Color3(0.18, 0.22, 0.18);
-        mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
-        mat.maxSimultaneousLights = 8;
+    const headMat = resourceManager.getMaterial("zombieHeadMat_0", () => {
+        const mat = new BABYLON.StandardMaterial("zombieHeadMat_0", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.3, 0.38, 0.32);
+        mat.emissiveColor = new BABYLON.Color3(0.04, 0.06, 0.04);
         return mat;
     });
     
     const head = BABYLON.MeshBuilder.CreateSphere("zombie_head", {diameterX: 0.4, diameterY: 0.5, diameterZ: 0.45}, scene);
-    head.parent = torso; 
-    head.position = new BABYLON.Vector3(0, 0.575, 0); 
+    head.parent = neck; 
+    head.position = new BABYLON.Vector3(0, 0.15, 0); 
     head.material = headMat;
+
+    // Ears
+    const earL = BABYLON.MeshBuilder.CreateSphere("zombie_ear_l", {diameterX: 0.08, diameterY: 0.12, diameterZ: 0.05}, scene);
+    earL.parent = head; earL.position = new BABYLON.Vector3(-0.2, 0, 0); earL.rotation.z = 0.2; earL.material = headMat;
+    
+    const earR = BABYLON.MeshBuilder.CreateSphere("zombie_ear_r", {diameterX: 0.08, diameterY: 0.12, diameterZ: 0.05}, scene);
+    earR.parent = head; earR.position = new BABYLON.Vector3(0.2, 0, 0); earR.rotation.z = -0.2; earR.material = headMat;
     
     const jaw = BABYLON.MeshBuilder.CreateBox("jaw", {width: 0.2, height: 0.1, depth: 0.2}, scene);
     jaw.parent = head; jaw.position = new BABYLON.Vector3(0, -0.2, 0.05); 
@@ -257,32 +319,73 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
 export const createZombieMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterZombie) preWarmTemplates(scene, resourceManager);
     
-    const instance = masterZombie!.mesh.instantiateHierarchy() as BABYLON.Mesh;
-    instance.name = "zombie_" + Date.now();
+    // Use clone() instead of instantiateHierarchy() to allow independent material assignment
+    // while still sharing the underlying geometry (VertexData).
+    const instance = masterZombie!.mesh.clone("zombie_" + Date.now(), null, false)!;
     instance.position.copyFrom(position);
     instance.setEnabled(true);
     
     // Wire up the ZombieMeshResult parts by finding them in the cloned hierarchy
+    // Use exact names to find the joints (Spheres) instead of the meshes (Cylinders)
     const head = instance.getChildMeshes().find(m => m.name.includes("zombie_head"))!;
     const torso = instance.getChildMeshes().find(m => m.name.includes("zombie_body"))!;
-    const armL = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_l"))!;
-    const armR = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_r"))!;
-    const legL = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_l"))!;
-    const legR = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_r"))!;
+    
+    // For limbs, we want the JOINTS (the spheres) so they rotate correctly
+    const armL = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_l_joint"))!;
+    const armR = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_r_joint"))!;
+    const legL = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_l_joint"))!;
+    const legR = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_r_joint"))!;
+
+    // --- APPLY RANDOM VISUAL VARIATION ---
+    const skinIdx = Math.floor(Math.random() * SKIN_VARIANTS);
+    const clothesIdx = Math.floor(Math.random() * CLOTHES_VARIANTS);
+    
+    const bodyMat = resourceManager.getMaterial(`zombieBodyMat_${skinIdx}`, () => null as any);
+    const headMat = resourceManager.getMaterial(`zombieHeadMat_${skinIdx}`, () => null as any);
+    const clothesMat = resourceManager.getMaterial(`zombieClothesMat_${clothesIdx}`, () => null as any);
+
+    // Update materials on all parts (Recursive override)
+    // We use a more aggressive match to ensure all parts get their materials
+    instance.getDescendants(false).forEach(m => {
+        if (m instanceof BABYLON.AbstractMesh) {
+            const name = m.name.toLowerCase();
+            // Important: Check for "eye" first so it doesn't get overwritten by "head" skin
+            if (name.includes("eye")) {
+                m.material = resourceManager.getMaterial("zombieEyeMat", () => null as any);
+            } else if (name.includes("head") || name.includes("jaw") || name.includes("ear") || name.includes("neck")) {
+                m.material = headMat;
+            } else if (name.includes("body") || name.includes("pants") || name.includes("pelvis") || name.includes("shoulder") || name.includes("shirt") || name.includes("torso")) {
+                m.material = clothesMat;
+            } else if (name.includes("arm") || name.includes("leg") || name.includes("hand") || name.includes("foot") || name.includes("flesh")) {
+                m.material = bodyMat;
+            }
+        }
+    });
+
+    // Randomize scale slightly (0.92x to 1.08x)
+    const scale = 0.92 + Math.random() * 0.16;
+    instance.scaling.set(scale, scale, scale);
+
+    // Ensure Euler rotation is used for procedural animation
+    [armL, armR, legL, legR, head, torso].forEach(m => {
+        m.rotationQuaternion = null;
+    });
 
     return {
         mesh: instance,
         head,
+        headMesh: head,
         torso,
-        limbs: { armL, armR, legL, legR }
+        torsoMesh: torso,
+        limbs: { armL, armR, legL, legR },
+        animOffset: Math.random() * Math.PI * 2 // Store it for animation use
     };
 };
 
 export const createHellhoundMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterHellhound) preWarmTemplates(scene, resourceManager);
 
-    const instance = masterHellhound!.mesh.instantiateHierarchy() as BABYLON.Mesh;
-    instance.name = "hellhound_" + Date.now();
+    const instance = masterHellhound!.mesh.clone("hellhound_" + Date.now(), null, false)!;
     instance.position.copyFrom(position);
     instance.setEnabled(true);
 
