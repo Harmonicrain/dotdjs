@@ -129,15 +129,17 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                         ctx.setHealth(gameState.health);
                         ctx.setFlashColor(isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
                         ctx.timerManager.schedule('dmg_flash', visuals.HIT_FLASH_DURATION * 2, () => ctx.setFlashColor(null));
+                        
+                        const force = isHellhound ? hc.KNOCKBACK_FORCE : combat.ZOMBIE_KNOCKBACK_FORCE;
 
                         // Apply knockback — subtractToRef + normalizeToRef avoid 2 allocations
                         camera.position.subtractToRef(z.mesh.position, _pushDir);
                         _pushDir.y = 0;
                         _pushDir.normalize();
                         gameState.externalForce.addInPlaceFromFloats(
-                            _pushDir.x * 0.5,
+                            _pushDir.x * force,
                             0,
-                            _pushDir.z * 0.5
+                            _pushDir.z * force
                         );
 
                         if (gameState.health <= 0 && !gameState.isDowned) {
