@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
-import { GameStateData, RemoteGameState } from '../types/index';
-import { System, RemotePlayerVisuals } from '../types/systems';
+import { GameStateData, RemoteGameState } from '../../types/index';
+import { System, RemotePlayerVisuals } from '../../types/systems';
 
 export interface IWeaponViewContext {
     gameState: GameStateData;

@@ -1,7 +1,7 @@
-import { GameStateData } from '../types/index';
-import { System } from '../types/systems';
-import { Zombie } from '../types/entities';
-import { MapConfigManager } from '../managers/MapConfigManager';
+import { GameStateData } from '../../types/index';
+import { System } from '../../types/systems';
+import { Zombie } from '../../types/entities';
+import { MapConfigManager } from '../../maps/MapConfigManager';
 
 export interface IZombieCleanupContext {
     gameState: GameStateData;

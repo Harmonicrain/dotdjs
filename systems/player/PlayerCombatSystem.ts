@@ -1,14 +1,14 @@
 import * as BABYLON from '@babylonjs/core';
-import { GameAction, InputManager } from '../engine/InputManager';
-import { PowerUpType, GameStateData, GameMessage } from '../types/index';
-import { System } from '../types/systems';
-import { TimerManager } from '../engine/TimerManager';
-import { VisualManager } from '../managers/VisualManager';
-import { GameEngine } from '../game/GameEngine';
-import { ZombieManager } from '../managers/ZombieManager';
-import { HellhoundManager } from '../managers/HellhoundManager';
-import { Zombie } from '../types/entities';
-import { MapConfigManager } from '../managers/MapConfigManager';
+import { GameAction, InputManager } from '../../engine/InputManager';
+import { PowerUpType, GameStateData, GameMessage } from '../../types/index';
+import { System } from '../../types/systems';
+import { TimerManager } from '../../engine/TimerManager';
+import { VisualManager } from '../../managers/VisualManager';
+import { GameEngine } from '../../game/GameEngine';
+import { ZombieManager } from '../../managers/ZombieManager';
+import { HellhoundManager } from '../../managers/HellhoundManager';
+import { Zombie } from '../../types/entities';
+import { MapConfigManager } from '../../managers/MapConfigManager';
 
 export interface ICombatContext {
     gameState: GameStateData;

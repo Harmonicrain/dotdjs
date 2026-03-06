@@ -1,11 +1,11 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { GAME_CONFIG } from '../config';
-import { GameStateData } from '../types/index';
-import { TimerManager } from '../engine/TimerManager';
-import { System } from '../types/systems';
+import { GAME_CONFIG } from '../../config';
+import { GameStateData } from '../../types/index';
+import { TimerManager } from '../../engine/TimerManager';
+import { System } from '../../types/systems';
 
-import { MapConfigManager } from '../managers/MapConfigManager';
+import { MapConfigManager } from '../../managers/MapConfigManager';
 
 export interface IDownedContext {
     gameState: GameStateData;

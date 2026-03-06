@@ -1,11 +1,11 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { System } from '../types/systems';
-import { Zombie, ZombieState } from '../types/index';
-import { EventBus } from '../engine/EventBus';
-import { CachedHostState } from '../network/NetworkMessageHandler';
-import { createZombieMesh, createHellhoundMesh } from '../meshes/ZombieMeshFactory';
-import { ResourceManager } from '../managers/ResourceManager';
+import { System } from '../../types/systems';
+import { Zombie, ZombieState } from '../../types/index';
+import { EventBus } from '../../engine/EventBus';
+import { CachedHostState } from '../../network/NetworkMessageHandler';
+import { createZombieMesh, createHellhoundMesh } from '../../meshes/ZombieMeshFactory';
+import { ResourceManager } from '../../managers/ResourceManager';
 
 export interface IZombieSyncContext {
     scene: BABYLON.Scene;

@@ -1,8 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
-import { GAME_CONFIG, CONTROLLER_CONFIG } from '../config';
-import { GameAction, InputManager } from '../engine/InputManager';
-import { GameStateData } from '../types/index';
-import { System } from '../types/systems';
+import { GAME_CONFIG, CONTROLLER_CONFIG } from '../../config';
+import { GameAction, InputManager } from '../../engine/InputManager';
+import { GameStateData } from '../../types/index';
+import { System } from '../../types/systems';
 
 export interface IMovementContext {
     gameState: GameStateData;

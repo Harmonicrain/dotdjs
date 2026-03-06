@@ -1,14 +1,14 @@
 import * as BABYLON from '@babylonjs/core';
-import { ZombieState, HellhoundState, GameStateData, WindowBarrier, RemoteGameState, GameMessage } from '../types/index';
-import { System } from '../types/systems';
-import { Zombie } from '../types/entities';
-import { ZoneSystem } from './ZoneSystem';
-import { EventBus } from '../engine/EventBus';
-import { TimerManager } from '../engine/TimerManager';
-import { ZombieManager } from '../managers/ZombieManager';
-import { HellhoundManager } from '../managers/HellhoundManager';
-import { VisualManager } from '../managers/VisualManager';
-import { MapConfigManager } from '../managers/MapConfigManager';
+import { ZombieState, HellhoundState, GameStateData, WindowBarrier, RemoteGameState, GameMessage } from '../../types/index';
+import { System } from '../../types/systems';
+import { Zombie } from '../../types/entities';
+import { ZoneSystem } from '../ZoneSystem';
+import { EventBus } from '../../engine/EventBus';
+import { TimerManager } from '../../engine/TimerManager';
+import { ZombieManager } from '../../managers/ZombieManager';
+import { HellhoundManager } from '../../managers/HellhoundManager';
+import { VisualManager } from '../../managers/VisualManager';
+import { MapConfigManager } from '../../maps/MapConfigManager';
 
 export interface IZombieAIContext {
     gameState: GameStateData;

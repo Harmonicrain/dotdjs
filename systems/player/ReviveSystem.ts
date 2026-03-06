@@ -1,10 +1,10 @@
 import * as BABYLON from '@babylonjs/core';
-import { GAME_CONFIG, VISUAL_CONFIG } from '../config';
-import { GameAction, InputManager, getInputPrompt } from '../engine/InputManager';
-import { GameStateData, GameMessage, RemoteGameState } from '../types/index';
-import { System, ReviveEvent } from '../types/systems';
-import { EventBus } from '../engine/EventBus';
-import { TimerManager } from '../engine/TimerManager';
+import { GAME_CONFIG, VISUAL_CONFIG } from '../../config';
+import { GameAction, InputManager, getInputPrompt } from '../../engine/InputManager';
+import { GameStateData, GameMessage, RemoteGameState } from '../../types/index';
+import { System, ReviveEvent } from '../../types/systems';
+import { EventBus } from '../../engine/EventBus';
+import { TimerManager } from '../../engine/TimerManager';
 
 export interface IReviveContext {
     gameState: GameStateData;
