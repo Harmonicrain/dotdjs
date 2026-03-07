@@ -271,7 +271,10 @@ export class HellhoundManager {
                 // Hellhound-specific
                 hellhoundState: HellhoundState.SPAWNING,
                 stateTimer: hc.SPAWN_INVULN_TIME,
-                targetPlayerId: 'HOST' // AI system will refine targeting
+                targetPlayerId: 'HOST', // AI system will refine targeting
+                // Spread initial path computation across the interval so a batch of
+                // hellhounds doesn't all call computePath on the same frame.
+                pathUpdateTimer: Math.random() * 0.5,
             };
 
             // Fade in mesh

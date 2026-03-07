@@ -75,13 +75,15 @@ export type Zombie = {
     spawnTime: number;
     // Wander state
     wander?: WanderState;
-    // Navmesh Pathfinding
+    // Navmesh Pathfinding (legacy — used only for hellhounds and non-crowd fallback)
     path?: BABYLON.Vector3[];
     pathCursor?: number;
     pathUpdateTimer?: number;
     pathfindingFailed?: boolean;  // Track if pathfinding has failed (to avoid console spam)
     warnedNavStart?: boolean;     // Track if we've warned about start position
     warnedNavEnd?: boolean;       // Track if we've warned about end position
+    // Recast Crowd — index into the ICrowd agent array; undefined = not in crowd
+    crowdAgentIndex?: number;
     // Door Crossing
     doorGraceTimer?: number;
     lastDoorTarget?: BABYLON.Vector3;

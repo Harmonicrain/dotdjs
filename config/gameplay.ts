@@ -107,19 +107,19 @@ export const POWERUP_CONFIG = {
 
 export const ROUND_CONFIG = {
   /** Zombie counts per round (rounds 1-5), then scaling formula kicks in */
-  ZOMBIE_COUNTS_BY_ROUND: [6, 8, 13, 18, 24] as readonly number[],
+  ZOMBIE_COUNTS_BY_ROUND: [6, 8, 12, 16, 22] as readonly number[],
   /** Zombies added per round beyond round 5 */
-  ZOMBIE_SCALING_PER_ROUND: 4,
+  ZOMBIE_SCALING_PER_ROUND: 3,
   /** Multiplier for zombie count in co-op (HOST mode) */
   COOP_ZOMBIE_MULTIPLIER: 1.5,
-  /** Max zombies alive at once */
+  /** Max zombies alive at once — unused directly; computed dynamically in RoundSystem as min(24, 3 + round * 2) */
   MAX_CONCURRENT_ZOMBIES: 24,
   /** Base spawn delay in ms (decreases by SPAWN_DELAY_REDUCTION_PER_ROUND each round) */
-  BASE_SPAWN_DELAY_MS: 2500,
+  BASE_SPAWN_DELAY_MS: 3800,
   /** Minimum spawn delay in ms */
-  MIN_SPAWN_DELAY_MS: 500,
+  MIN_SPAWN_DELAY_MS: 800,
   /** Ms removed from spawn delay per round */
-  SPAWN_DELAY_REDUCTION_PER_ROUND: 100,
+  SPAWN_DELAY_REDUCTION_PER_ROUND: 150,
   /** Dog round frequency (every Nth round) */
   DOG_ROUND_FREQUENCY: 5,
   /** First dog round can occur between these rounds */

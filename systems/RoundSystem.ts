@@ -136,7 +136,9 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
                     ? rc.DOG_SPAWN_DELAY_MIN + Math.random() * (rc.DOG_SPAWN_DELAY_MAX - rc.DOG_SPAWN_DELAY_MIN)
                     : Math.max(rc.MIN_SPAWN_DELAY_MS, rc.BASE_SPAWN_DELAY_MS - (gs.round * rc.SPAWN_DELAY_REDUCTION_PER_ROUND));
 
-                const maxConcurrent = gs.isDogRound ? rc.DOG_MAX_CONCURRENT : rc.MAX_CONCURRENT_ZOMBIES;
+                const maxConcurrent = gs.isDogRound
+                    ? rc.DOG_MAX_CONCURRENT
+                    : Math.min(rc.MAX_CONCURRENT_ZOMBIES, 3 + gs.round * 2); // 5 on R1, scales to 24 cap by R11
 
                 if (now - gs.lastSpawnTime > spawnDelay && gs.zombiesAlive < maxConcurrent) {
                     if (gs.isDogRound) {
