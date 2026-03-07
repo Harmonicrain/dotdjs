@@ -6,8 +6,6 @@ export interface ZombieMeshResult {
     mesh: BABYLON.Mesh;
     head: BABYLON.AbstractMesh;
     torso?: BABYLON.AbstractMesh;
-    torsoMesh?: BABYLON.AbstractMesh; // Added to match ZombieAnimationSystem usage
-    headMesh?: BABYLON.AbstractMesh;  // Added to match ZombieAnimationSystem usage
     limbs: {
         armL: BABYLON.AbstractMesh;
         armR: BABYLON.AbstractMesh;
@@ -44,7 +42,7 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
     
     const bodyMat = resourceManager.getMaterial("zombieBodyMat", () => {
         const mat = new BABYLON.StandardMaterial("zombieBodyMat", scene);
-        mat.diffuseColor = new BABYLON.Color3(0.12, 0.2, 0.15); // Slightly greener/paler
+        mat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.12);
         mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02); 
         mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
         mat.maxSimultaneousLights = 8;
@@ -58,101 +56,62 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
         return mat;
     });
 
-    // --- REBUILT LEGS WITH JOINTS ---
-    const hipL = BABYLON.MeshBuilder.CreateSphere("zombie_leg_l_joint", {diameter: 0.2}, scene);
-    hipL.parent = root; hipL.position = new BABYLON.Vector3(-0.15, 0.85, 0); hipL.material = clothesMat;
+    const legL = BABYLON.MeshBuilder.CreateBox("zombie_leg_l", {width: 0.18, height: 0.85, depth: 0.2}, scene);
+    legL.parent = root; legL.position = new BABYLON.Vector3(-0.15, 0.425, 0); legL.material = bodyMat;
     
-    const legLMesh = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_l_mesh", {diameter: 0.18, height: 0.85, tessellation: 8}, scene);
-    legLMesh.parent = hipL; legLMesh.position.y = -0.425; legLMesh.material = bodyMat;
-    
-    const pantsL = BABYLON.MeshBuilder.CreateCylinder("pants_l", {diameter: 0.2, height: 0.5, tessellation: 8}, scene);
-    pantsL.parent = legLMesh; pantsL.position.y = 0.2; pantsL.material = clothesMat;
+    const pantsL = BABYLON.MeshBuilder.CreateBox("pants_l", {width: 0.2, height: 0.5, depth: 0.22}, scene);
+    pantsL.parent = legL; pantsL.position.y = 0.2; pantsL.material = clothesMat;
 
-    const actualFootL = BABYLON.MeshBuilder.CreateBox("zombie_foot_l_mesh", {width: 0.2, height: 0.1, depth: 0.3}, scene);
-    actualFootL.parent = legLMesh; actualFootL.position = new BABYLON.Vector3(0, -0.38, 0.08); actualFootL.material = bodyMat;
+    const legR = BABYLON.MeshBuilder.CreateBox("zombie_leg_r", {width: 0.18, height: 0.85, depth: 0.2}, scene);
+    legR.parent = root; legR.position = new BABYLON.Vector3(0.15, 0.425, 0); legR.material = bodyMat;
 
-    const hipR = BABYLON.MeshBuilder.CreateSphere("zombie_leg_r_joint", {diameter: 0.2}, scene);
-    hipR.parent = root; hipR.position = new BABYLON.Vector3(0.15, 0.85, 0); hipR.material = clothesMat;
+    const pantsR = BABYLON.MeshBuilder.CreateBox("pants_r", {width: 0.2, height: 0.5, depth: 0.22}, scene);
+    pantsR.parent = legR; pantsR.position.y = 0.2; pantsR.material = clothesMat;
 
-    const legRMesh = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_r_mesh", {diameter: 0.18, height: 0.85, tessellation: 8}, scene);
-    legRMesh.parent = hipR; legRMesh.position.y = -0.425; legRMesh.material = bodyMat;
-
-    const pantsR = BABYLON.MeshBuilder.CreateCylinder("pants_r", {diameter: 0.2, height: 0.5, tessellation: 8}, scene);
-    pantsR.parent = legRMesh; pantsR.position.y = 0.2; pantsR.material = clothesMat;
-
-    const actualFootR = BABYLON.MeshBuilder.CreateBox("zombie_foot_r_mesh", {width: 0.2, height: 0.1, depth: 0.3}, scene);
-    actualFootR.parent = legRMesh; actualFootR.position = new BABYLON.Vector3(0, -0.38, 0.08); actualFootR.material = bodyMat;
-
-    // Pelvis / Hips to connect legs
-    const pelvis = BABYLON.MeshBuilder.CreateSphere("zombie_pelvis", {diameterX: 0.42, diameterY: 0.3, diameterZ: 0.28}, scene);
-    pelvis.parent = root;
-    pelvis.position.y = 0.85;
-    pelvis.material = clothesMat;
-
-    const torso = BABYLON.MeshBuilder.CreateCylinder("zombie_body", {diameterTop: 0.45, diameterBottom: 0.4, height: 0.85, tessellation: 8}, scene);
+    const torso = BABYLON.MeshBuilder.CreateBox("zombie_body", {width: 0.45, height: 0.85, depth: 0.3}, scene);
     torso.parent = root; torso.position = new BABYLON.Vector3(0, 1.275, 0); torso.material = clothesMat;
     
-    // Shoulders & Arm Joints
-    const shoulderL = BABYLON.MeshBuilder.CreateSphere("zombie_arm_l_joint", {diameter: 0.24}, scene);
-    shoulderL.parent = torso; shoulderL.position = new BABYLON.Vector3(-0.25, 0.32, 0); shoulderL.material = clothesMat;
-
-    const shoulderR = BABYLON.MeshBuilder.CreateSphere("zombie_arm_r_joint", {diameter: 0.24}, scene);
-    shoulderR.parent = torso; shoulderR.position = new BABYLON.Vector3(0.25, 0.32, 0); shoulderR.material = clothesMat;
-
-    // Shirt detail
-    const shirtDetail = BABYLON.MeshBuilder.CreateCylinder("shirt_detail", {diameter: 0.46, height: 0.4, tessellation: 8}, scene);
-    shirtDetail.parent = torso; shirtDetail.position.y = 0.2; shirtDetail.material = clothesMat;
-
     const fleshPatch = BABYLON.MeshBuilder.CreatePlane("flesh", {size: 0.2}, scene);
-    fleshPatch.parent = torso; fleshPatch.position = new BABYLON.Vector3(0.1, 0.1, -0.22);
+    fleshPatch.parent = torso; fleshPatch.position = new BABYLON.Vector3(0.1, 0.1, -0.16);
     fleshPatch.material = bodyMat;
     
     const headMat = resourceManager.getMaterial("zombieHeadMat", () => {
         const mat = new BABYLON.StandardMaterial("zombieHeadMat", scene);
-        mat.diffuseColor = new BABYLON.Color3(0.18, 0.22, 0.18);
+        mat.diffuseColor = new BABYLON.Color3(0.15, 0.2, 0.15);
         mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
         mat.maxSimultaneousLights = 8;
         return mat;
     });
     
-    const head = BABYLON.MeshBuilder.CreateSphere("zombie_head", {diameterX: 0.4, diameterY: 0.5, diameterZ: 0.45}, scene);
+    const head = BABYLON.MeshBuilder.CreateSphere("zombie_head", {diameter: 0.4}, scene);
     head.parent = torso; 
     head.position = new BABYLON.Vector3(0, 0.575, 0); 
     head.material = headMat;
     
-    const jaw = BABYLON.MeshBuilder.CreateBox("jaw", {width: 0.2, height: 0.1, depth: 0.2}, scene);
-    jaw.parent = head; jaw.position = new BABYLON.Vector3(0, -0.2, 0.05); 
-    jaw.rotation.x = 0.4; 
+    const jaw = BABYLON.MeshBuilder.CreateBox("jaw", {width: 0.25, height: 0.1, depth: 0.2}, scene);
+    jaw.parent = head; jaw.position = new BABYLON.Vector3(0, -0.15, 0.05); 
+    jaw.rotation.x = 0.3; 
     jaw.material = headMat;
 
     const eyeMat = resourceManager.getMaterial("zombieEyeMat", () => {
         const mat = new BABYLON.StandardMaterial("zombieEyeMat", scene);
-        mat.emissiveColor = new BABYLON.Color3(1, 1, 0.2); // Sallow yellow glow
+        mat.emissiveColor = new BABYLON.Color3(1, 1, 0.5);
         mat.maxSimultaneousLights = 8;
         return mat;
     });
     
     const eyeL = BABYLON.MeshBuilder.CreateSphere("zombie_eye_l", {diameter: 0.08}, scene);
-    eyeL.parent = head; eyeL.position = new BABYLON.Vector3(-0.1, 0.05, 0.18); eyeL.material = eyeMat;
+    eyeL.parent = head; eyeL.position = new BABYLON.Vector3(-0.1, 0.05, 0.15); eyeL.material = eyeMat;
     const eyeR = BABYLON.MeshBuilder.CreateSphere("zombie_eye_r", {diameter: 0.08}, scene);
-    eyeR.parent = head; eyeR.position = new BABYLON.Vector3(0.1, 0.05, 0.18); eyeR.material = eyeMat;
+    eyeR.parent = head; eyeR.position = new BABYLON.Vector3(0.1, 0.05, 0.15); eyeR.material = eyeMat;
 
-    // --- ARMS ATTACHED TO JOINTS ---
-    const armL = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_l_mesh", {diameter: 0.14, height: 0.8, tessellation: 6}, scene);
-    armL.parent = shoulderL; armL.position = new BABYLON.Vector3(0, -0.4, 0.1); 
-    armL.rotation.x = -0.2; // Natural slight forward angle
-    armL.material = bodyMat;
+    const armL = BABYLON.MeshBuilder.CreateBox("zombie_arm_l", {width: 0.14, height: 0.8, depth: 0.14}, scene);
+    armL.parent = torso; armL.position = new BABYLON.Vector3(-0.32, -0.1, 0.2);
+    armL.rotation.x = -Math.PI/2.5; armL.material = bodyMat;
     
-    const handL = BABYLON.MeshBuilder.CreateSphere("zombie_hand_l", {diameter: 0.16}, scene);
-    handL.parent = armL; handL.position.y = -0.4; handL.material = bodyMat;
-    
-    const armR = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_r_mesh", {diameter: 0.14, height: 0.8, tessellation: 6}, scene);
-    armR.parent = shoulderR; armR.position = new BABYLON.Vector3(0, -0.4, 0.1);
-    armR.rotation.x = -0.2;
-    armR.material = bodyMat;
-    
-    const handR = BABYLON.MeshBuilder.CreateSphere("zombie_hand_r", {diameter: 0.16}, scene);
-    handR.parent = armR; handR.position.y = -0.4; handR.material = bodyMat;
+    const armR = BABYLON.MeshBuilder.CreateBox("zombie_arm_r", {width: 0.14, height: 0.8, depth: 0.14}, scene);
+    armR.parent = torso; armR.position = new BABYLON.Vector3(0.32, -0.1, 0.2);
+    armR.rotation.x = -Math.PI/2.5; armR.material = bodyMat;
     
     root.checkCollisions = true;
     root.ellipsoid = new BABYLON.Vector3(0.4, 0.9, 0.4);
@@ -162,7 +121,7 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
         mesh: root, 
         head,
         torso, 
-        limbs: { armL: shoulderL, armR: shoulderR, legL: hipL, legR: hipR }
+        limbs: { armL, armR, legL, legR }
     };
 };
 
@@ -184,52 +143,43 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
         return mat;
     });
 
-    const body = BABYLON.MeshBuilder.CreateCylinder("hellhound_body", {diameterTop: 0.6, diameterBottom: 0.5, height: 1.0, tessellation: 8}, scene);
+    const body = BABYLON.MeshBuilder.CreateBox("hellhound_body", {width: 0.6, height: 0.6, depth: 1.0}, scene);
     body.parent = root; 
-    body.rotation.x = Math.PI / 2;
     body.position.y = 0.6; 
     body.material = furMat;
 
     const headPivot = new BABYLON.TransformNode("headPivot", scene);
     headPivot.parent = body;
-    headPivot.position = new BABYLON.Vector3(0, 0.5, 0.3); // Adjusted for cylinder rotation
-    headPivot.rotation.x = -Math.PI / 2;
+    headPivot.position = new BABYLON.Vector3(0, 0.3, 0.5); 
 
-    const head = BABYLON.MeshBuilder.CreateSphere("hellhound_head", {diameterX: 0.5, diameterY: 0.6, diameterZ: 0.55}, scene);
+    const head = BABYLON.MeshBuilder.CreateBox("hellhound_head", {size: 0.5}, scene);
     head.parent = headPivot;
-    head.position.y = 0.2;
+    head.position.y = 0.25;
     head.material = furMat;
 
-    const snout = BABYLON.MeshBuilder.CreateCylinder("hellhound_snout", {diameterTop: 0.15, diameterBottom: 0.25, height: 0.3, tessellation: 6}, scene);
+    const snout = BABYLON.MeshBuilder.CreateBox("hellhound_snout", {width: 0.25, height: 0.2, depth: 0.3}, scene);
     snout.parent = head;
-    snout.position = new BABYLON.Vector3(0, -0.05, 0.3);
-    snout.rotation.x = Math.PI / 2.2;
+    snout.position = new BABYLON.Vector3(0, -0.1, 0.35);
     snout.material = darkMat;
 
-    const earL = BABYLON.MeshBuilder.CreateCylinder("hellhound_earL", {diameterTop: 0.02, diameterBottom: 0.15, height: 0.25, tessellation: 3}, scene);
-    earL.parent = head; earL.position = new BABYLON.Vector3(-0.15, 0.3, -0.05); earL.material = furMat;
+    const earL = BABYLON.MeshBuilder.CreateBox("hellhound_earL", {width: 0.15, height: 0.15, depth: 0.1}, scene);
+    earL.parent = head; earL.position = new BABYLON.Vector3(-0.15, 0.3, 0); earL.material = furMat;
     
-    const earR = BABYLON.MeshBuilder.CreateCylinder("hellhound_earR", {diameterTop: 0.02, diameterBottom: 0.15, height: 0.25, tessellation: 3}, scene);
-    earR.parent = head; earR.position = new BABYLON.Vector3(0.15, 0.3, -0.05); earR.material = furMat;
+    const earR = BABYLON.MeshBuilder.CreateBox("hellhound_earR", {width: 0.15, height: 0.15, depth: 0.1}, scene);
+    earR.parent = head; earR.position = new BABYLON.Vector3(0.15, 0.3, 0); earR.material = furMat;
 
-    const tail = BABYLON.MeshBuilder.CreateCylinder("hellhound_tail", {diameterTop: 0.05, diameterBottom: 0.15, height: 0.6, tessellation: 6}, scene);
+    const tail = BABYLON.MeshBuilder.CreateBox("hellhound_tail", {width: 0.2, height: 0.2, depth: 0.6}, scene);
     tail.parent = body;
-    tail.position = new BABYLON.Vector3(0, -0.5, -0.2); // Adjusted for cylinder rotation
-    tail.rotation.x = Math.PI / 1.2;
+    tail.position = new BABYLON.Vector3(0, 0.2, -0.6);
+    tail.rotation.x = -Math.PI / 6;
     tail.material = furMat;
 
     const createLeg = (name: string, x: number, z: number) => {
-        const leg = BABYLON.MeshBuilder.CreateCylinder("hellhound_" + name, {diameter: 0.15, height: 0.6, tessellation: 6}, scene);
+        const leg = BABYLON.MeshBuilder.CreateBox("hellhound_" + name, {width: 0.2, height: 0.6, depth: 0.2}, scene);
         leg.parent = root;
+        leg.setPivotPoint(new BABYLON.Vector3(0, 0.3, 0)); 
         leg.position = new BABYLON.Vector3(x, 0.3, z);
         leg.material = darkMat; 
-
-        const paw = BABYLON.MeshBuilder.CreateBox("hellhound_paw_" + name, {width: 0.18, height: 0.08, depth: 0.22}, scene);
-        paw.parent = leg;
-        paw.position.y = -0.28;
-        paw.position.z = 0.05;
-        paw.material = darkMat;
-
         return leg;
     };
 

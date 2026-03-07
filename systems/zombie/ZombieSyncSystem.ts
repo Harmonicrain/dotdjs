@@ -32,7 +32,6 @@ export interface IZombieSyncContext {
 export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
     // Track zombies we created so we can reconcile removals
     const knownZombies = new Map<string, Zombie>();
-    const _tempSyncPos = new BABYLON.Vector3();
 
     const handleNetUpdate = (data: CachedHostState) => {
         if (ctx.gameModeRef.current !== 'CLIENT') return;
@@ -47,16 +46,8 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
                 if (z.headMesh) z.headMesh.dispose();
                 if (z.fireSystem) { z.fireSystem.stop(); z.fireSystem.dispose(); }
                 knownZombies.delete(id);
-                
-                // Swap-remove for O(1) array removal
                 const idx = ctx.zombies.indexOf(z);
-                if (idx !== -1) {
-                    const lastIdx = ctx.zombies.length - 1;
-                    if (idx !== lastIdx) {
-                        ctx.zombies[idx] = ctx.zombies[lastIdx];
-                    }
-                    ctx.zombies.pop();
-                }
+                if (idx !== -1) ctx.zombies.splice(idx, 1);
             }
         }
 
@@ -73,11 +64,11 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
                 if (sd.isCrawling !== undefined) z.isCrawling = sd.isCrawling;
             } else {
                 // Spawn a new zombie mesh at the broadcast position
-                _tempSyncPos.set(sd.x, sd.y, sd.z);
+                const pos = new BABYLON.Vector3(sd.x, sd.y, sd.z);
                 const isHellhound = sd.type === 'HELLHOUND';
                 const result = isHellhound
-                    ? createHellhoundMesh(ctx.scene, _tempSyncPos, ctx.resourceManager)
-                    : createZombieMesh(ctx.scene, _tempSyncPos, ctx.resourceManager);
+                    ? createHellhoundMesh(ctx.scene, pos, ctx.resourceManager)
+                    : createZombieMesh(ctx.scene, pos, ctx.resourceManager);
 
                 const z: Zombie = {
                     id: sd.id,

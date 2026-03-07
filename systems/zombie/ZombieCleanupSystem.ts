@@ -28,34 +28,25 @@ export const createZombieCleanupSystem = (ctx: IZombieCleanupContext): System =>
 
             for (let i = zombies.length - 1; i >= 0; i--) {
                 const z = zombies[i];
-                let shouldRemove = false;
                 
                 // --- DISPOSAL ---
                 if (z.isDead) { 
                     if (z.fireSystem) z.fireSystem.dispose(false);
                     z.mesh.dispose(); 
-                    shouldRemove = true;
+                    zombies.splice(i, 1); 
+                    continue; 
                 }
 
                 // --- OUT OF BOUNDS / STUCK CLEANUP (Authority Only) ---
-                if (!shouldRemove && isAuthority) {
+                if (isAuthority) {
                     const isStuckTimeout = (now - z.spawnTime > zc.STUCK_TIMEOUT) && !z.isCrawling && z.type === 'ZOMBIE';
                     if (z.mesh.position.y < -10 || isStuckTimeout) { 
                         if (z.fireSystem) z.fireSystem.dispose(false);
                         z.mesh.dispose();
+                        zombies.splice(i, 1); 
                         ctx.gameState.zombiesToSpawn++; 
                         ctx.gameState.zombiesAlive--; 
-                        shouldRemove = true;
                     }
-                }
-
-                if (shouldRemove) {
-                    // Swap-remove for O(1) removal
-                    const lastIdx = zombies.length - 1;
-                    if (i !== lastIdx) {
-                        zombies[i] = zombies[lastIdx];
-                    }
-                    zombies.pop();
                 }
             }
         }

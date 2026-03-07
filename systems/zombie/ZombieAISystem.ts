@@ -49,8 +49,6 @@ const _tempMoveResult = new BABYLON.Vector3();
 const _tempLookAt = new BABYLON.Vector3();
 const _tempLungeDir = new BABYLON.Vector3();
 const _tempRetreatDir = new BABYLON.Vector3();
-const _tempLungeStartPos = new BABYLON.Vector3();
-const _tempLungeTargetPos = new BABYLON.Vector3();
 // Scratch Quaternions — avoids two Quaternion allocations per moving zombie per frame
 const _tempTargetQuat = new BABYLON.Quaternion();
 
@@ -393,17 +391,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             if (z.stateTimer !== undefined && z.stateTimer <= 0) {
                 z.hellhoundState = HellhoundState.ATTACKING;
                 z.stateTimer = hc.ATTACK_DURATION_MIN + Math.random() * (hc.ATTACK_DURATION_MAX - hc.ATTACK_DURATION_MIN);
-                if (!z.lungeStartPos) z.lungeStartPos = new BABYLON.Vector3();
-                if (!z.lungeTargetPos) z.lungeTargetPos = new BABYLON.Vector3();
-                
-                z.lungeStartPos.copyFrom(z.mesh.position);
-                z.lungeTargetPos.copyFrom(_targetPos);
+                z.lungeStartPos = z.mesh.position.clone();
+                z.lungeTargetPos = _targetPos.clone();
                 z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
                 _tempLungeDir.normalize();
                 _tempLungeDir.y = 0;
                 const yaw = Math.atan2(_tempLungeDir.x, _tempLungeDir.z);
                 if (!z.mesh.rotationQuaternion) {
-                    z.mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(z.mesh.rotation);
+                    z.mesh.rotationQuaternion = new BABYLON.Quaternion();
                 }
                 BABYLON.Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, z.mesh.rotationQuaternion);
             }
