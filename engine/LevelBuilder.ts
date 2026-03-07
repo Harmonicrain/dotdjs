@@ -1,6 +1,6 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { MapDefinition, WindowBarrier, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
+import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
 import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox } from '../meshes';
@@ -47,6 +47,7 @@ export class LevelBuilder {
     // Result Containers
     public loadPromises: Promise<any>[] = [];
     private windowsRef: WindowBarrier[];
+    private groundSpawnsRef: GroundSpawn[];
     private mysteryBoxRef: MutableRefObject<MysteryBox>;
     private doorMeshes: Record<string, DoorMeshEntry> = {};
     private powerSwitchHandle: BABYLON.TransformNode | null = null;
@@ -58,12 +59,14 @@ export class LevelBuilder {
         scene: BABYLON.Scene,
         shadowCasters: BABYLON.AbstractMesh[],
         windowsRef: WindowBarrier[],
+        groundSpawnsRef: GroundSpawn[],
         mysteryBoxRef: MutableRefObject<MysteryBox>,
         private onBuildingLoaded?: (meshes: BABYLON.Mesh[]) => void
     ) {
         this.scene = scene;
         this.shadowCasters = shadowCasters;
         this.windowsRef = windowsRef;
+        this.groundSpawnsRef = groundSpawnsRef;
         this.mysteryBoxRef = mysteryBoxRef;
         this.root = new BABYLON.TransformNode("levelRoot", scene);
     }
@@ -411,6 +414,7 @@ export class LevelBuilder {
         const i = def.interactables;
         this.buildDoors(i.doors);
         this.buildWindows(i.windows);
+        this.buildGroundSpawns(i.groundSpawns);
         this.buildPerks(i.perks, def);
         this.buildWallbuys(i.wallbuys);
         this.buildBuildings(i.buildings);
@@ -480,6 +484,37 @@ export class LevelBuilder {
             const blocker = this.scene.getMeshByName(w.id + "_blocker");
             if (blocker) blocker.parent = this.root;
             w.boards.forEach(b => { if (!b.parent) b.parent = this.root; });
+        });
+    }
+
+    private buildGroundSpawns(groundSpawns: MapDefinition['interactables']['groundSpawns']) {
+        if (!groundSpawns || groundSpawns.length === 0) return;
+
+        // Dark ground material for the hole disc
+        const holeMat = new BABYLON.StandardMaterial("groundHoleMat", this.scene);
+        holeMat.diffuseColor = new BABYLON.Color3(0.05, 0.03, 0.02);
+        holeMat.specularColor = BABYLON.Color3.Black();
+        holeMat.emissiveColor = new BABYLON.Color3(0.01, 0.005, 0.0);
+
+        groundSpawns.forEach(gs => {
+            // Create a dark disc on the ground to mark the spawn hole
+            const disc = BABYLON.MeshBuilder.CreateDisc(
+                `groundSpawn_${gs.id}`,
+                { radius: 1.2, tessellation: 16 },
+                this.scene
+            );
+            disc.material = holeMat;
+            disc.rotation.x = Math.PI / 2; // Lay flat on ground
+            disc.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.02, gs.pos[2]); // Slightly above ground to prevent z-fighting
+            disc.isPickable = false;
+            disc.parent = this.root;
+
+            // Store the runtime GroundSpawn object
+            this.groundSpawnsRef.push({
+                id: gs.id,
+                position: new BABYLON.Vector3(gs.pos[0], gs.pos[1], gs.pos[2]),
+                zone: gs.zone,
+            });
         });
     }
 

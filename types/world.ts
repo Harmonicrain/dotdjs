@@ -204,6 +204,12 @@ export interface PackAPunchDefinition {
     zone?: number;
 }
 
+export interface GroundSpawnDefinition {
+    id: string;
+    zone: number;
+    pos: [number, number, number];
+}
+
 export interface FixtureDefinition {
     pos: [number, number];  // [x, z]
     zone: number;
@@ -262,6 +268,7 @@ export interface BuildingDefinition {
 export interface InteractablesDefinition {
     doors?: DoorDefinition[];
     windows?: WindowDefinition[];
+    groundSpawns?: GroundSpawnDefinition[];
     perks?: PerkDefinition[];
     wallbuys?: WallbuyDefinition[];
     mysteryBoxes?: MysteryBoxLocationDefinition[];

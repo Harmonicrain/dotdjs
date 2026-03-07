@@ -54,6 +54,14 @@ export const WarehouseMapDefinition: MapDefinition = {
             { id: "window_2", zone: 2, pos: [10, 0, 25], rotation: 0 },
             { id: "window_3", zone: 3, pos: [20, 0, 9], rotation: Math.PI / 2 }
         ],
+        groundSpawns: [
+            { id: "hole_1", zone: 1, pos: [-5, 0, -15] },
+            { id: "hole_2", zone: 1, pos: [5, 0, -25] },
+            { id: "hole_3", zone: 2, pos: [-3, 0, 15] },
+            { id: "hole_4", zone: 2, pos: [5, 0, 30] },
+            { id: "hole_5", zone: 3, pos: [18, 0, 0] },
+            { id: "hole_6", zone: 3, pos: [22, 0, -10] },
+        ],
         perks: [
             { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 39], rotation: Math.PI },
             { type: "speed_cola", id: "speedCola", zone: 3, pos: [28, 0, 2], rotation: -Math.PI / 2 },

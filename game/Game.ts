@@ -180,6 +180,7 @@ export class Game {
             sm.gameState,
             sm.zombies,
             sm.windows,
+            sm.groundSpawns,
             this.camera,
             (pos) => sm.getZone(pos),
             (pos) => visualManager.createSpawnEffect(pos),
@@ -593,7 +594,7 @@ export class Game {
                 }
             };
             
-            const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, sm.windows, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
+            const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, sm.windows, sm.groundSpawns, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
             
             // Await all map models to load
             await Promise.all(lvl.loadPromises);

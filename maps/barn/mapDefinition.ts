@@ -48,6 +48,12 @@ export const BarnMapDefinition: MapDefinition = {
     interactables: {
         doors: [],
         windows: [],
+        groundSpawns: [
+            { id: "hole_1", zone: 1, pos: [-15, 0, -10] },
+            { id: "hole_2", zone: 1, pos: [15, 0, -10] },
+            { id: "hole_3", zone: 1, pos: [-10, 0, 15] },
+            { id: "hole_4", zone: 1, pos: [10, 0, 15] },
+        ],
         perks: [],  // No perks in this map
         wallbuys: [],
         mysteryBoxes: [],

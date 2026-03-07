@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { GAME_CONFIG, WEAPON_CONFIGS, UPGRADED_WEAPON_CONFIGS, POWERUP_CONFIG, SYNC_CONFIG } from '../config';
-import { GameStateData, WeaponState, MysteryBox, MysteryBoxState, Zombie, PowerUpType, WindowBarrier, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorState, WindowBarrierState, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
+import { GameStateData, WeaponState, MysteryBox, MysteryBoxState, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorState, WindowBarrierState, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
 import { MysteryBoxSystem } from '../types/systems';
 import { GameEngine } from '../game/GameEngine';
 import { TimerManager } from '../engine/TimerManager';
@@ -85,6 +85,7 @@ export class StateManager {
     // Level Data
     public staticLevelMeshes: Set<BABYLON.AbstractMesh> = new Set();
     public windows: WindowBarrier[] = [];
+    public groundSpawns: GroundSpawn[] = [];
     public lights: BABYLON.PointLight[] = [];
     public spawnPoints: SpawnPoints | null = null;
     

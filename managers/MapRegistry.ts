@@ -1,6 +1,6 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { WindowBarrier, MysteryBox, MapDefinition, MutableRefObject } from '../types/index';
+import { WindowBarrier, GroundSpawn, MysteryBox, MapDefinition, MutableRefObject } from '../types/index';
 import { WarehouseMapDefinition } from '../maps/warehouse/mapDefinition';
 import { MapTestDefinition } from '../maps/mapTest/mapDefinition';
 import { BarnMapDefinition } from '../maps/barn/mapDefinition';
@@ -54,18 +54,20 @@ export const loadMap = (
     scene: BABYLON.Scene,
     shadowCasters: BABYLON.AbstractMesh[],
     windowsRef: WindowBarrier[],
+    groundSpawnsRef: GroundSpawn[],
     mysteryBoxRef: MutableRefObject<MysteryBox>,
     navPlugin?: BABYLON.RecastJSPlugin,
     onBuildingLoaded?: (meshes: BABYLON.Mesh[]) => void
 ) => {
     windowsRef.length = 0;
+    groundSpawnsRef.length = 0;
 
     const def = MAP_DEFINITIONS[id] || MAP_DEFINITIONS[DEFAULT_MAP_ID];
 
     // Textures: map definition overrides > global defaults
     const textures = resolveTextures(def.textures);
 
-    const builder = new LevelBuilder(scene, shadowCasters, windowsRef, mysteryBoxRef, onBuildingLoaded);
+    const builder = new LevelBuilder(scene, shadowCasters, windowsRef, groundSpawnsRef, mysteryBoxRef, onBuildingLoaded);
     const levelData = builder.build(def, textures);
 
     if (navPlugin && def.navigation?.navmeshParameters) {

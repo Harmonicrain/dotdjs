@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { createZombieMesh, ZombieMeshResult, preWarmTemplates } from '../meshes';
-import { Zombie, ZombieState, WindowBarrier, GameStateData, GameMessage } from '../types/index';
+import { Zombie, ZombieState, WindowBarrier, GroundSpawn, GameStateData, GameMessage } from '../types/index';
 
 import { ZoneSystem } from '../systems/ZoneSystem';
 import { MapConfigManager } from './MapConfigManager';
@@ -19,6 +19,8 @@ import { SoundManager } from './SoundManager';
 export class ZombieManager {
     public windows: WindowBarrier[];
     private windowsByZone: Map<number, WindowBarrier[]> = new Map();
+    public groundSpawns: GroundSpawn[];
+    private groundSpawnsByZone: Map<number, GroundSpawn[]> = new Map();
     private spawnPowerUpCallback: ((pos: BABYLON.Vector3) => void) | null = null;
 
     private addPointsCallback: ((amount: number) => void) | null = null;
@@ -31,6 +33,7 @@ export class ZombieManager {
         private gameState: GameStateData,
         private zombies: Zombie[],
         windows: WindowBarrier[],
+        groundSpawns: GroundSpawn[],
         private camera: BABYLON.UniversalCamera,
         private getZone: (pos: BABYLON.Vector3) => number,
         private createSpawnEffect: (pos: BABYLON.Vector3) => void,
@@ -45,7 +48,9 @@ export class ZombieManager {
         private soundManager: SoundManager | null
     ) {
         this.windows = windows;
+        this.groundSpawns = groundSpawns;
         this.initWindowsByZone();
+        this.initGroundSpawnsByZone();
     }
 
     private initWindowsByZone() {
@@ -55,6 +60,16 @@ export class ZombieManager {
                 this.windowsByZone.set(w.zone, []);
             }
             this.windowsByZone.get(w.zone)!.push(w);
+        }
+    }
+
+    private initGroundSpawnsByZone() {
+        this.groundSpawnsByZone.clear();
+        for (const gs of this.groundSpawns) {
+            if (!this.groundSpawnsByZone.has(gs.zone)) {
+                this.groundSpawnsByZone.set(gs.zone, []);
+            }
+            this.groundSpawnsByZone.get(gs.zone)!.push(gs);
         }
     }
 
@@ -168,12 +183,15 @@ export class ZombieManager {
             rAccessible.forEach(z => accessibleZones.add(z));
         }
 
-        // Handle case where windowsByZone might not be initialized yet or is empty
+        // Handle case where zone maps might not be initialized yet
         if (this.windowsByZone.size === 0 && this.windows.length > 0) {
             this.initWindowsByZone();
         }
+        if (this.groundSpawnsByZone.size === 0 && this.groundSpawns.length > 0) {
+            this.initGroundSpawnsByZone();
+        }
 
-        // Use pre-computed windowsByZone map for O(accessibleZones) instead of O(totalWindows)
+        // Collect valid windows from accessible zones
         const validWindows: WindowBarrier[] = [];
         accessibleZones.forEach(zoneId => {
             const zoneWindows = this.windowsByZone.get(zoneId);
@@ -182,15 +200,36 @@ export class ZombieManager {
             }
         });
 
-        
-        if (validWindows.length > 0) {
+        // Collect valid ground spawns from accessible zones
+        const validGroundSpawns: GroundSpawn[] = [];
+        accessibleZones.forEach(zoneId => {
+            const zoneHoles = this.groundSpawnsByZone.get(zoneId);
+            if (zoneHoles) {
+                validGroundSpawns.push(...zoneHoles);
+            }
+        });
 
-                const w = validWindows[Math.floor(Math.random() * validWindows.length)];
+        // Pick randomly from all valid spawn points (windows + ground holes)
+        const totalSpawnPoints = validWindows.length + validGroundSpawns.length;
+        if (totalSpawnPoints > 0) {
+            const pick = Math.floor(Math.random() * totalSpawnPoints);
+            if (pick < validWindows.length) {
+                // Window spawn
+                const w = validWindows[pick];
                 spawnPos = w.spawnPoint.clone();
-                spawnPos.x += (Math.random() - 0.5); 
-                spawnPos.z += (Math.random() - 0.5); 
+                spawnPos.x += (Math.random() - 0.5);
+                spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
                 selectedWindow = w;
+            } else {
+                // Ground hole spawn
+                const gs = validGroundSpawns[pick - validWindows.length];
+                spawnPos = gs.position.clone();
+                spawnPos.x += (Math.random() - 0.5);
+                spawnPos.z += (Math.random() - 0.5);
+                validSpawnFound = true;
+                selectedWindow = null;
+            }
         }
         
         if (validSpawnFound) {

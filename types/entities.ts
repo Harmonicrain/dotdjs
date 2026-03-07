@@ -120,10 +120,16 @@ export type Projectile = {
 export type WindowBarrier = {
     id: string;
     triggerMesh: BABYLON.AbstractMesh;
-    boards: BABYLON.AbstractMesh[]; 
+    boards: BABYLON.AbstractMesh[];
     position: BABYLON.Vector3;
     spawnPoint: BABYLON.Vector3;
     attackPoint: BABYLON.Vector3;
     entryPoint: BABYLON.Vector3;
+    zone: number;
+};
+
+export type GroundSpawn = {
+    id: string;
+    position: BABYLON.Vector3;
     zone: number;
 };
