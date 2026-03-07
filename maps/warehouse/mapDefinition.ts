@@ -60,7 +60,6 @@ export const WarehouseMapDefinition: MapDefinition = {
             { id: "hole_3", zone: 2, pos: [-3, 0, 15] },
             { id: "hole_4", zone: 2, pos: [5, 0, 30] },
             { id: "hole_5", zone: 3, pos: [18, 0, 0] },
-            { id: "hole_6", zone: 3, pos: [22, 0, -10] },
         ],
         perks: [
             { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 39], rotation: Math.PI },
