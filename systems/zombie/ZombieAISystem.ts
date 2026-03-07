@@ -41,6 +41,7 @@ export interface IZombieAIContext {
 
 // Pre-allocated scratch vectors to avoid per-frame allocations
 const _tempNavEndVec = new BABYLON.Vector3();
+const _tempSeparation = new BABYLON.Vector3();
 const _tempDirectDir = new BABYLON.Vector3();
 const _tempGravity = new BABYLON.Vector3();
 const _tempBlended = new BABYLON.Vector3();
@@ -52,6 +53,32 @@ const _tempLungeStartPos = new BABYLON.Vector3();
 const _tempLungeTargetPos = new BABYLON.Vector3();
 // Scratch Quaternions — avoids two Quaternion allocations per moving zombie per frame
 const _tempTargetQuat = new BABYLON.Quaternion();
+
+// ── Spatial grid for O(n) separation force ───────────────────────────────
+// Cell size slightly larger than the separation radius (~sqrt of ZOMBIE_SEPARATION_DIST).
+// Rebuilt once per frame before the zombie loop; each zombie only checks its
+// own cell and the 8 neighbours instead of all N zombies.
+const _GRID_CELL_SIZE = 3;
+const _separationGrid = new Map<number, Zombie[]>();
+
+const _gridKey = (x: number, z: number): number => {
+    const cx = Math.floor(x / _GRID_CELL_SIZE);
+    const cz = Math.floor(z / _GRID_CELL_SIZE);
+    // Simple integer hash — avoids string allocation
+    return (cx & 0xFFFF) << 16 | (cz & 0xFFFF);
+};
+
+const buildSeparationGrid = (zombies: Zombie[]): void => {
+    // Reuse existing bucket arrays where possible to minimise GC
+    for (const bucket of _separationGrid.values()) bucket.length = 0;
+    for (const z of zombies) {
+        if (z.isDead) continue;
+        const key = _gridKey(z.mesh.position.x, z.mesh.position.z);
+        let bucket = _separationGrid.get(key);
+        if (!bucket) { bucket = []; _separationGrid.set(key, bucket); }
+        bucket.push(z);
+    }
+};
 
 // Constants
 const PATH_UPDATE_INTERVAL = 0.5;
@@ -102,6 +129,50 @@ const updateBurningDamage = (
         }
     }
     return false;
+};
+
+/**
+ * Computes separation force from nearby zombies using the pre-built spatial
+ * grid. Only the zombie's own cell and its 8 neighbours are checked, reducing
+ * complexity from O(n²) to O(n * k) where k is average bucket occupancy.
+ * Modifies _tempSeparation in place and returns it.
+ */
+const computeSeparationForce = (
+    z: Zombie,
+    separationDist: number
+): BABYLON.Vector3 => {
+    _tempSeparation.set(0, 0, 0);
+    let neighbors = 0;
+
+    const cx = Math.floor(z.mesh.position.x / _GRID_CELL_SIZE);
+    const cz = Math.floor(z.mesh.position.z / _GRID_CELL_SIZE);
+
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            const key = ((cx + dx) & 0xFFFF) << 16 | ((cz + dz) & 0xFFFF);
+            const bucket = _separationGrid.get(key);
+            if (!bucket) continue;
+            for (const other of bucket) {
+                if (other === z || other.isDead) continue;
+                const distSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, other.mesh.position);
+                if (distSq < separationDist) {
+                    const pushX = z.mesh.position.x - other.mesh.position.x;
+                    const pushZ = z.mesh.position.z - other.mesh.position.z;
+                    const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
+                    if (len > 0.001) {
+                        _tempSeparation.x += pushX / len;
+                        _tempSeparation.z += pushZ / len;
+                    }
+                    neighbors++;
+                }
+            }
+        }
+    }
+
+    if (neighbors > 0) {
+        _tempSeparation.scaleInPlace(1.0 / neighbors);
+    }
+    return _tempSeparation;
 };
 
 /**
@@ -271,6 +342,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const updateHellhoundAI = (
         z: Zombie,
         dt: number,
+        separation: BABYLON.Vector3,
         frameFactor: number
     ): void => {
         const hc = ctx.configManager.hellhound;
@@ -307,6 +379,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     moveDir.y = 0;
                     applyRotationSmoothing(z, moveDir, frameFactor);
                     _tempBlended.copyFrom(moveDir);
+                    _tempBlended.addInPlaceFromFloats(
+                        separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+                        separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+                        separation.z * sc.ZOMBIE_SEPARATION_FORCE
+                    );
                     _tempBlended.normalize();
                     _tempMoveResult.copyFrom(_tempBlended);
                     _tempMoveResult.scaleInPlace(z.speed * frameFactor);
@@ -382,6 +459,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         z: Zombie,
         dt: number,
         now: number,
+        separation: BABYLON.Vector3,
         frameFactor: number
     ): void => {
         const zc = ctx.configManager.zombieAI;
@@ -436,6 +514,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         const moveDir = _tempDirectDir;
 
         _tempBlended.copyFrom(moveDir);
+        _tempBlended.addInPlaceFromFloats(
+            separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+            separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+            separation.z * sc.ZOMBIE_SEPARATION_FORCE
+        );
         _tempBlended.normalize();
         applyRotationSmoothing(z, _tempBlended, frameFactor);
         _tempMoveResult.copyFrom(_tempBlended);
@@ -450,6 +533,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const updateZombieChase = (
         z: Zombie,
         dt: number,
+        separation: BABYLON.Vector3,
         frameFactor: number
     ): void => {
         const sc = ctx.configManager.sync;
@@ -483,6 +567,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             if (distHorizontalSq > (zc.ATTACK_RANGE * 0.9) * (zc.ATTACK_RANGE * 0.9) || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
 
                 _tempBlended.copyFrom(moveDir);
+                _tempBlended.addInPlaceFromFloats(
+                    separation.x * sc.ZOMBIE_SEPARATION_FORCE,
+                    separation.y * sc.ZOMBIE_SEPARATION_FORCE,
+                    separation.z * sc.ZOMBIE_SEPARATION_FORCE
+                );
                 _tempBlended.normalize();
                 _tempMoveResult.copyFrom(_tempBlended);
                 _tempMoveResult.scaleInPlace(z.speed * frameFactor);
@@ -497,6 +586,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         z: Zombie,
         dt: number,
         now: number,
+        separation: BABYLON.Vector3,
         frameFactor: number
     ): void => {
         const zc = ctx.configManager.zombieAI;
@@ -516,7 +606,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             _tempDirectDir.normalize();
             _tempDirectDir.y = 0;
             const distSq = getHorizontalDistSq(z.mesh.position, targetWindow.attackPoint);
+            const sepFactor = distSq < 12.25 ? 0.1 : 1.0;
+            const sepForce = sc.ZOMBIE_SEPARATION_FORCE * sepFactor;
             _tempBlended.copyFrom(_tempDirectDir);
+            _tempBlended.addInPlaceFromFloats(
+                separation.x * sepForce,
+                separation.y * sepForce,
+                separation.z * sepForce
+            );
             _tempBlended.normalize();
             _tempMoveResult.copyFrom(_tempBlended);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
@@ -586,6 +683,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const sc = ctx.configManager.sync;
             const gc = ctx.configManager.gameplay;
 
+            // Build spatial grid once — O(n); each zombie then does O(k) neighbour check
+            buildSeparationGrid(zombies);
             // Sync window map if new windows were registered since last frame
             ensureWindowMap();
 
@@ -597,15 +696,18 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 // Burning damage
                 if (updateBurningDamage(z, now, ctx)) continue;
 
+                // Compute separation force (grid-accelerated)
+                const separation = computeSeparationForce(z, sc.ZOMBIE_SEPARATION_DIST);
+
                 // Hellhound AI
                 if (z.type === 'HELLHOUND') {
-                    updateHellhoundAI(z, dt, frameFactor);
+                    updateHellhoundAI(z, dt, separation, frameFactor);
                     continue;
                 }
 
                 // Solo downed wander
                 if (currentGameMode === 'SOLO' && ctx.gameState.isDowned) {
-                    updateSoloDownedWander(z, dt, now, frameFactor);
+                    updateSoloDownedWander(z, dt, now, separation, frameFactor);
                     continue;
                 }
 
@@ -613,9 +715,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 // Zombie chase or window interaction
                 if (z.state === ZombieState.CHASING) {
-                    updateZombieChase(z, dt, frameFactor);
+                    updateZombieChase(z, dt, separation, frameFactor);
                 } else if (z.type === 'ZOMBIE') {
-                    updateWindowInteraction(z, dt, now, frameFactor);
+                    updateWindowInteraction(z, dt, now, separation, frameFactor);
                 }
 
                 // Apply gravity (except when entering window)

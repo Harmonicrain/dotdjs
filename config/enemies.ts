@@ -13,7 +13,7 @@ export const HELLHOUND_CONFIG = {
   // Attack
   ATTACK_INITIATE_RANGE: 3.0,
   DAMAGE: 35,
-  KNOCKBACK_FORCE: 0.08,
+  KNOCKBACK_FORCE: 0.25,
   LUNGE_DISTANCE: 1.5,
   LUNGE_SPEED_MULTIPLIER: 2.5,  // Speed multiplier during lunge (matches current AI system)
   
