@@ -8,7 +8,7 @@ import { TimerManager } from '../../engine/TimerManager';
 import { ZombieManager } from '../../managers/ZombieManager';
 import { HellhoundManager } from '../../managers/HellhoundManager';
 import { VisualManager } from '../../managers/VisualManager';
-import { MapConfigManager } from '../../maps/MapConfigManager';
+import { MapConfigManager } from '../../managers/MapConfigManager';
 
 export interface IZombieAIContext {
     gameState: GameStateData;
@@ -325,13 +325,21 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     // The map is rebuilt lazily whenever ctx.windows grows (windows are registered
     // after the system is created, so we can't build it once at factory time).
     const windowMap = new Map<string, (typeof ctx.windows)[0]>();
+    let windowMapSnapshot: any = null;
 
-    const ensureWindowMap = () => {
-        if (windowMap.size === ctx.windows.length) return;
+    const rebuildWindowMap = () => {
         windowMap.clear();
         for (const w of ctx.windows) {
             windowMap.set(w.id, w);
         }
+        windowMapSnapshot = ctx.windows.length > 0 ? ctx.windows[0] : null;
+    };
+
+    const ensureWindowMap = () => {
+        // Rebuild when count changes (windows registered after system creation)
+        if (windowMap.size !== ctx.windows.length) { rebuildWindowMap(); return; }
+        // Handle same-map reloads by checking reference of first window
+        if (ctx.windows.length > 0 && windowMapSnapshot !== ctx.windows[0]) { rebuildWindowMap(); return; }
     };
     /**
      * Updates hellhound AI state machine.

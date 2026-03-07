@@ -2,7 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { ZombieState, GameStateData } from '../../types/index';
 import { System } from '../../types/systems';
 import { Zombie } from '../../types/entities';
-import { MapConfigManager } from '../../maps/MapConfigManager';
+import { MapConfigManager } from '../../managers/MapConfigManager';
 
 export interface IZombieAnimationContext {
     gameState: GameStateData;

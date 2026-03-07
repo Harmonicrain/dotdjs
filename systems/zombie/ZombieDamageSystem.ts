@@ -3,7 +3,7 @@ import { GameStateData, GameMessage, HellhoundState } from '../../types/index';
 import { System } from '../../types/systems';
 import { Zombie } from '../../types/entities';
 import { TimerManager } from '../../engine/TimerManager';
-import { MapConfigManager } from '../../maps/MapConfigManager';
+import { MapConfigManager } from '../../managers/MapConfigManager';
 import { EventBus } from '../../engine/EventBus';
 
 export interface IZombieDamageContext {
