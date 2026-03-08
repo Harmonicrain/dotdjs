@@ -36,6 +36,11 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
     // Pre-allocated ray for ground checks
     const _groundRay = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3(0, -1, 0), 1);
 
+    // Ground-check mesh cache — avoids O(all_meshes) scene scan each frame
+    const GROUND_CACHE_MAX_MISSES = 3;
+    let _cachedGroundMesh: BABYLON.AbstractMesh | null = null;
+    let _cacheConsecutiveMisses = 0;
+
     // Camera smoothing state - accumulated rotation targets
     let targetRotationX = 0;
     let targetRotationY = 0;
@@ -50,6 +55,8 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
         init: () => {
             firstFrame = true;
             smoothingInitialized = false;
+            _cachedGroundMesh = null;
+            _cacheConsecutiveMisses = 0;
         },
         update: (dt: number) => {
             if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen) return;
@@ -164,7 +171,29 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             // Reuse pre-allocated ray to avoid per-frame allocation
             _groundRay.origin.copyFrom(camera.position);
             _groundRay.length = rayLength;
-            const pick = camera.getScene().pickWithRay(_groundRay, (m) => m.checkCollisions && m.isEnabled());
+
+            // Ground-check cache: try last known ground mesh first (O(1)),
+            // fall back to full scene scan (O(n)) only on a miss.
+            let pick: BABYLON.Nullable<BABYLON.PickingInfo> = null;
+            if (_cachedGroundMesh && _cachedGroundMesh.isEnabled()) {
+                const fastPick = _groundRay.intersectsMesh(_cachedGroundMesh);
+                if (fastPick.hit && fastPick.distance <= rayLength) {
+                    pick = fastPick;
+                    _cacheConsecutiveMisses = 0;
+                } else {
+                    _cacheConsecutiveMisses++;
+                    if (_cacheConsecutiveMisses >= GROUND_CACHE_MAX_MISSES) {
+                        _cachedGroundMesh = null;
+                    }
+                }
+            }
+            if (!pick) {
+                pick = camera.getScene().pickWithRay(_groundRay, (m) => m.checkCollisions && m.isEnabled());
+                if (pick?.hit && pick.pickedMesh) {
+                    _cachedGroundMesh = pick.pickedMesh;
+                    _cacheConsecutiveMisses = 0;
+                }
+            }
             
             if (pick && pick.hit && ctx.gameState.verticalVelocity <= 0 && pick.distance <= rayLength) {
                 ctx.gameState.verticalVelocity = 0;
