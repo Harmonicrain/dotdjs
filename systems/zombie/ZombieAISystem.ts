@@ -839,7 +839,19 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 }
 
                 // ── Zombie chase or window interaction ────────────────────────
-                if (z.state === ZombieState.CHASING) {
+                if (z.state === ZombieState.SPAWNING) {
+                    // Ground spawn emergence
+                    const emergeSpeed = 0.5; // Very slow emergence speed
+                    z.mesh.position.y += emergeSpeed * dt;
+                    
+                    if (z.mesh.position.y >= 0) {
+                        z.mesh.position.y = 0;
+                        z.state = ZombieState.CHASING;
+                        if (crowd && z.crowdAgentIndex === undefined) {
+                            addZombieToCrowd(z);
+                        }
+                    }
+                } else if (z.state === ZombieState.CHASING) {
                     updateZombieChase(z, dt, separation, frameFactor);
                 } else if (z.type === 'ZOMBIE') {
                     // Window-state: not in crowd — ensure agent is removed if it somehow exists
@@ -847,9 +859,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     updateWindowInteraction(z, dt, now, separation, frameFactor);
                 }
 
-                // Apply gravity (except when entering window or crowd-managed)
+                // Apply gravity (except when entering window, spawning, or crowd-managed)
                 // Crowd agents have their Y set from navmesh; skip moveWithCollisions for them.
-                if (z.state !== ZombieState.ENTERING && z.crowdAgentIndex === undefined) {
+                if (z.state !== ZombieState.ENTERING && z.state !== ZombieState.SPAWNING && z.crowdAgentIndex === undefined) {
                     _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
                     z.mesh.moveWithCollisions(_tempMoveResult);
                     if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;

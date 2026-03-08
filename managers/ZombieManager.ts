@@ -286,6 +286,9 @@ export class ZombieManager {
 
              if (selectedWindow) {
                  zEntity.state = ZombieState.APPROACHING_WINDOW;
+             } else if (spawnSourceType === 'ground') {
+                 zEntity.state = ZombieState.SPAWNING;
+                 zEntity.mesh.position.y = -1.5; // Start underground
              } else {
                  zEntity.state = ZombieState.CHASING;
              }
