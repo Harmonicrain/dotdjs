@@ -104,6 +104,17 @@ export class MapLoader {
             });
         }
 
+        const powerDoorDef = definition.interactables.powerSwitch?.powerDoor;
+        if (powerDoorDef?.connects) {
+            doorConnections.push({
+                doorId: "powerDoor",
+                fromZone: powerDoorDef.connects[0],
+                toZone: powerDoorDef.connects[1],
+                waypoint: new BABYLON.Vector3(powerDoorDef.pos[0], powerDoorDef.pos[1], powerDoorDef.pos[2]),
+                entryThreshold: 2.0
+            });
+        }
+
         sm.updateZoneSystem(zones, doorConnections);
     }
 
