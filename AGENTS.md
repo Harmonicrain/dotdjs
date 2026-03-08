@@ -83,21 +83,214 @@ A browser-based, multiplayer round-based zombie survival FPS built with Babylon.
 
 ---
 
-## 6. Systems & Managers
+## 6. Systems & Managers Reference
+
+### System Registry (all in `systems/`)
+
+Systems are **factory functions** returning `{ name, update(dt, now) }` objects. They are registered in `Game.ts` via `SystemManager` with explicit priorities (lower = runs first).
+
+#### Player Systems (`systems/player/`)
+| System | Role |
+|--------|------|
+| `PlayerMovementSystem` | WASD, jumping, sprinting, gravity, camera smoothing |
+| `PlayerCombatSystem` | Shooting, reloading, knife attacks, raycasting |
+| `WeaponViewSystem` | First-person weapon mesh positioning (hip/ADS) |
+| `DownedSystem` | Downed state, 45s bleed-out timer, camera |
+| `ReviveSystem` | Teammate revive with progress tracking |
+
+#### Zombie Systems (`systems/zombie/`)
+| System | Role |
+|--------|------|
+| `ZombieAISystem` | Pathfinding (Recast NavMesh), spatial grid separation, crowd sim |
+| `ZombieAnimationSystem` | GLB skeletal animation (walk, idle, attack) |
+| `ZombieDamageSystem` | Damage, dismemberment, burning |
+| `ZombieCleanupSystem` | Dead zombie disposal after timeout |
+| `ZombieSyncSystem` | Network sync of zombie positions (20 Hz) |
+
+#### World Systems (`systems/`)
+| System | Role |
+|--------|------|
+| `InteractionSystem` | Dispatcher for doors, perks, mystery box, PAP, power, windows |
+| `ProjectileSystem` | Bullet physics, collision detection, explosives |
+| `PowerUpSystem` | Spawn, collect, activate power-ups |
+| `RoundSystem` | Round progression, zombie spawn logic, dog rounds |
+| `NetworkSystem` | 20 Hz delta-compressed state sync |
+| `RemotePlayerSystem` | Remote player rendering and interpolation |
+| `MysteryBoxSystem` | Box state machine (idle→opening→rolling→present→closing) |
+| `ZoneSystem` | Zone boundary checking, door connections |
+
+### Interaction Handlers (`systems/interaction/handlers/`)
+
+Each handler is a self-contained module for a specific interactable type:
+- `DoorHandler` — Purchase & open doors
+- `PerkHandler` — Purchase perks
+- `WallBuyHandler` — Purchase wall weapons
+- `PowerHandler` — Activate power switch
+- `PackAPunchHandler` — Upgrade weapons
+- `MysteryBoxHandler` — Random weapon box
+- `WindowHandler` — Repair window barriers
+
+### Managers (`managers/`)
+| Manager | Role |
+|---------|------|
+| `ZombieManager` | HOST-only zombie spawning, kill tracking, spawn sounds |
+| `HellhoundManager` | Hellhound-specific spawning (lunge attack AI) |
+| `VisualManager` | Coordinates particles, decals, gore sub-managers |
+| `ParticleManager` | Muzzle flash, impact effects, blood splatters |
+| `DecalManager` | Bullet holes, blood decals (projected textures) |
+| `GoreManager` | Floor gore from dismemberment |
+| `PowerUpManager` | Power-up spawning based on accumulated points |
+| `ResourceManager` | Asset (model/texture) loading and caching |
+| `SoundManager` | Audio playback and pooling |
+| `MapConfigManager` | Per-map config override loading |
+| `MapLoader` | Scene construction from `MapDefinition` |
+| `MapRegistry` | Map catalog and selection |
 
 ### Visual Effects
-
 - Do not create raw Babylon.js particle systems in isolation.
 - Coordinate with the `VisualManager` for particles, decals, and lighting changes.
 
 ### Audio
-
 - Use `SoundManager` for all audio playback.
 - Preload sounds during map loading to avoid playback lag.
 
 ---
 
-## 7. Coding Style & Conventions
+## 7. EventBus Events Reference
+
+The `EventBus` (in `engine/EventBus.ts`) is a typed pub-sub system. All events:
+
+| Event | Payload | Emitted By |
+|-------|---------|------------|
+| `ZOMBIE_DEATH` | `{ id, position }` | ZombieDamageSystem |
+| `HELLHOUND_DEATH` | `{ id, position }` | ZombieDamageSystem |
+| `PLAYER_DAMAGE` | `{ amount, source }` | ZombieAISystem / ProjectileSystem |
+| `GAME_STARTED` | `{ startPoints }` or null | GameLifecycle |
+| `GAME_OVER` | null | RoundSystem |
+| `BOARD_STATE_CHANGE` | `{ windowId }` | WindowHandler / ZombieAISystem |
+| `DOOR_OPEN_REQUEST` | doorId string | DoorHandler |
+| `POWER_ON_REQUEST` | null | PowerHandler |
+| `WEAPON_PICKUP_REQUEST` | weaponId string | WallBuyHandler / MysteryBoxHandler |
+| `PACK_A_PUNCH_REQUEST` | AbstractMesh | PackAPunchHandler |
+| `COMMAND_REQUEST` | command string | Console UI |
+| `COMMAND_CLOSE_CONSOLE` | null | CommandRegistry |
+| `REMOTE_SHOOT` | GameMessage | NetworkMessageHandler |
+| `RESPAWN_REQUEST` | `{ round, points }` | DownedSystem |
+| `REVIVE_EVENT` | ReviveEvent union | ReviveSystem |
+| `NET_GAME_STATE_UPDATE` | CachedHostState | NetworkMessageHandler |
+| `NET_CLIENT_INPUT` | CachedClientState | NetworkMessageHandler |
+| `HOST_LOADED_RECEIVED` | null | NetworkMessageHandler |
+
+**Cleanup Rule**: Always call `eventBus.off(event, handler)` when a system is disposed. The `eventBus.clear()` is called on game reset.
+
+---
+
+## 8. Entity Types
+
+### Zombie States
+- **SPAWNING** → Emerging from ground/window (slow, may be invulnerable)
+- **APPROACHING_WINDOW** → Moving toward a window barrier
+- **ATTACKING_BARRIER** → Hitting window boards
+- **ENTERING** → Passing through an opened barrier
+- **CHASING** → Pursuing the nearest player
+
+### Hellhound States
+- **SPAWNING** → Invulnerable for 500ms
+- **CHASING** → Sprinting toward player (1.8× player sprint)
+- **ATTACK_WINDUP** → Pre-lunge pause (300–400ms)
+- **ATTACKING** → Lunge attack (200–300ms)
+- **RECOVERY** → Vulnerable post-attack (800–1000ms)
+
+### Projectile
+- Pooled via `ObjectPool` (50 pre-warmed)
+- Tracks: `direction`, `speed`, `damage`, `life` (frames), `isExplosive`, `isPacked`, `owner`
+
+### PowerUp Types
+`MAX_AMMO`, `INSTA_KILL`, `DOUBLE_POINTS`, `NUKE`, `CARPENTER`
+
+---
+
+## 9. State Architecture
+
+### Three-Tier State Flow
+```
+Systems → StateManager (authoritative) → UIBridge (throttled) → Zustand Store → React HUD
+```
+
+- **StateManager** (`state/StateManager.ts`): Single source of truth. All systems read/write here.
+- **UIBridge** (`state/UIBridge.ts`): Throttles pushes to React (50ms for high-frequency like ammo/position, 0ms for event-driven like points).
+- **Zustand Store** (`store/useGameStore.ts`): React-facing store. HUD components subscribe here.
+
+### Store Slices
+- **PlayerFields**: points, health, ammo, perks, kills, shotsFired, playerName
+- **GameFields**: round, activeZombiesCount, powerOn, interactionMsg, gameMode, connectionStatus
+- **RemoteFields**: remotePlayerName, remoteHealth, remotePerks, remoteKills
+- **Settings**: Persisted to `localStorage` under key `zombz_settings`
+
+---
+
+## 10. Map Definition Structure
+
+Maps are defined in `maps/<map_name>/mapDefinition.ts`. Key sections:
+
+```
+MapDefinition {
+  meta: { id, name, version, description }
+  textures: { wall, floor, ceiling, door, plank, powerDoor }
+  geometry: GeometryDefinition[]       // Walls, floors, ceilings
+  grounds: GroundDefinition[]          // Walkable surfaces
+  navFloors?: GroundDefinition[]       // Invisible floors for NavMesh
+  interactables: {
+    doors, windows, groundSpawns, perks,
+    wallbuys, mysteryBoxes, powerSwitch, packAPunch, buildings
+  }
+  fixtures?: FixtureDefinition[]       // Lights
+  environment?: { fog, skybox, lighting, shadows }
+  zones: ZoneDefinition[]              // Zone bounds + spawn bounds
+  spawns: { host, client: { pos, rot } }
+  config?: MapConfiguration            // Per-map overrides
+}
+```
+
+Per-map configs can override gameplay, round, weapon, and enemy settings. See `maps/ADDING_MAPS.md` for the full guide.
+
+---
+
+## 11. Network Message Types
+
+All messages are discriminated unions in `types/ui.ts` (`GameMessage`):
+
+| Type | Direction | Purpose |
+|------|-----------|---------|
+| `STATE` | Host→Client | Delta-compressed game state (with `_seq`, `_full` flags) |
+| `INPUT` | Client→Host | Client position, weapon, health |
+| `SHOOT` | Both | Projectile fired |
+| `INTERACT_DOOR/PERK/WALL_BUY` | Client→Host | Interaction requests |
+| `PLAYER_DOWNED` / `REVIVE_*` | Both | Down/revive lifecycle |
+| `RESPAWN` | Host→Client | Player respawn |
+| `SPAWN_POWERUP` / `ACTIVATE_POWERUP_EFFECT` | Host→Client | Power-up sync |
+| `HIT_CONFIRM` | Host→Client | Damage confirmation |
+| `HOST_LOADED` | Host→Client | Host ready signal |
+| `PING` | Both | Keep-alive |
+
+---
+
+## 12. Game Startup Flow
+
+1. React mounts (`App.tsx` → `GameScene.tsx`)
+2. `GameLifecycle.init()` creates Babylon.js engine, scene, camera
+3. `Game` constructor creates `StateManager`, `ResourceManager`, all managers
+4. `InputManager.attachListeners()` wires keyboard/mouse/gamepad
+5. `Game.onStartGame(mapId, mode, playerName)`:
+   - `MapLoader` loads map definition and builds scene geometry
+   - NavMesh generated from `navFloors` for pathfinding
+   - Systems registered with `SystemManager` in priority order
+6. Game loop runs at ~60 FPS: `SystemManager.updateAll(dt, now)`
+7. Network sync runs at 20 Hz inside `NetworkSystem`
+
+---
+
+## 13. Coding Style & Conventions
 
 - **Strict Typing**: Avoid `any` at all costs. Use `interface` for public APIs over `type`.
 - **Naming Conventions**:
@@ -109,7 +302,7 @@ A browser-based, multiplayer round-based zombie survival FPS built with Babylon.
 
 ---
 
-## 8. Debugging & Commands
+## 14. Debugging & Commands
 
 ### In-Game Console
 - Press `Tab` to open the debug console.
@@ -136,7 +329,7 @@ A browser-based, multiplayer round-based zombie survival FPS built with Babylon.
 
 ---
 
-## 9. Common Commands
+## 15. Common Commands
 
 - **Dev Server**: `npm run dev`
 - **Build**: `npm run build`
@@ -144,7 +337,7 @@ A browser-based, multiplayer round-based zombie survival FPS built with Babylon.
 
 ---
 
-## 10. Agent Workflow & File Hygiene
+## 16. Agent Workflow & File Hygiene
 
 ### Map Integration Checklist
 
