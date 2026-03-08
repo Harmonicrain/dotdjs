@@ -111,13 +111,15 @@ export class LevelBuilder {
         const env = def.environment;
 
         if (env.skybox) {
-            const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, this.scene);
+            const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 150.0 }, this.scene);
             const skyboxMaterial = new BABYLON.StandardMaterial("skyBox", this.scene);
             skyboxMaterial.backFaceCulling = false;
             skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("https://playground.babylonjs.com/textures/skybox", this.scene);
             skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
             skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
             skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+            skyboxMaterial.disableLighting = true;
+            skyboxMaterial.disableDepthWrite = true;
             skybox.material = skyboxMaterial;
             skybox.infiniteDistance = true;
         }
