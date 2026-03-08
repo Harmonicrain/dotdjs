@@ -505,7 +505,7 @@ export class LevelBuilder {
             // Create a dark disc on the ground to mark the spawn hole
             const disc = BABYLON.MeshBuilder.CreateDisc(
                 `groundSpawn_${gs.id}`,
-                { radius: 1.2, tessellation: 16 },
+                { radius: 0.9, tessellation: 16 },
                 this.scene
             );
             disc.material = holeMat;
@@ -517,7 +517,7 @@ export class LevelBuilder {
             // Create a Torus for the dirt mound around the hole
             const mound = BABYLON.MeshBuilder.CreateTorus(
                 `groundSpawnMound_${gs.id}`,
-                { diameter: 2.6, thickness: 0.6, tessellation: 16 },
+                { diameter: 1.95, thickness: 0.45, tessellation: 16 },
                 this.scene
             );
             mound.material = dirtMat;
