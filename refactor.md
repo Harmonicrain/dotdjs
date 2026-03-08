@@ -4,142 +4,9 @@ Read `AGENTS.md` before starting. Do NOT break game logic, networking, or the se
 
 ---
 
-## BUGS — Controls, Camera & Logic
-
-These are actual bugs or behavioral issues that affect gameplay, not just refactoring targets. Fix carefully.
-
-### B1. InputManager.ts - Missing Tab Key Binding for WEAPON_NEXT ✅ DONE
-**File:** `engine/InputManager.ts` (line ~91)
-
-`WEAPON_NEXT` has an empty keyboard binding `{}` while `INPUT_PROMPTS` correctly shows Tab (line ~52). The Tab key for cycling weapons is **completely non-functional** on keyboard/mouse. Controller Y button still works.
-
-### B2. WeaponViewSystem.ts - FOV Lerp is Frame-Rate Dependent ✅ DONE
-**File:** `systems/WeaponViewSystem.ts` (line ~59)
-
-```typescript
-ctx.camera.fov = BABYLON.Scalar.Lerp(ctx.camera.fov, targetFov, 0.2);
-```
-
-The lerp factor `0.2` is applied per frame, not per second. At 120 FPS the ADS transition is twice as slow as at 60 FPS, and at 30 FPS it's twice as fast (jarring). Weapon position lerp on line ~58 has the same issue. Use `1 - Math.pow(1 - 0.2, dt * 60)` or similar frame-independent smoothing.
-
-### B3. PlayerMovementSystem.ts - Recoil Application Fights Recovery Every Frame ✅ DONE (recoil system removed)
-**File:** `systems/PlayerMovementSystem.ts`
-
-The entire recoil system was removed from the codebase, eliminating this issue entirely. Recoil properties removed from WeaponConfig, StateManager, PlayerMovementSystem, and PlayerCombatSystem.
-
-### B4. PlayerMovementSystem.ts - Mouse Look is Frame-Rate Dependent, Gamepad is Not ✅ VERIFIED OK + smoothing added
-**File:** `systems/PlayerMovementSystem.ts`
-
-Mouse look applies raw delta without `dt` — this is correct for raw mouse input since deltas are already frame-proportional. Camera smoothing (lerp-based interpolation with factor 0.65) was added to reduce micro-jitter while maintaining responsive feel.
-
-### B5. ZombieDamageSystem.ts - Zombie Knockback Bypasses Movement System ✅ DONE
-**File:** `systems/ZombieDamageSystem.ts`
-
-Knockback now writes to `gameState.externalForce` instead of directly to `camera.cameraDirection`. PlayerMovementSystem applies and decays `externalForce` each frame, integrating knockback with normal movement physics.
-
-### B6. DownedSystem / ReviveSystem - Asymmetric Camera Height Transition ✅ DONE
-**Files:** `systems/DownedSystem.ts`, `systems/ReviveSystem.ts`
-
-Camera now lerps smoothly in both directions using frame-rate independent lerp. DownedSystem handles the camera rise after revive by detecting when player is not downed but camera is below eye height. Removed instant snap from ReviveSystem.
-
-### B7. GameLifecycle.ts - Camera Double-Reset on Spawn ✅ DONE
-**File:** `game/GameLifecycle.ts`
-
-Replaced setTimeout(50) with frame-synced observer that waits 3 render frames for physics to settle before finalizing spawn position. This prevents the camera jump caused by input being processed during the 50ms gap.
-
-### B8. MysteryBoxSystem.ts - Stale Instance Reference After Relocation ✅ DONE
-**File:** `systems/MysteryBoxSystem.ts`
-
-BOX_RELOCATING case now fetches fresh instance after changing `activeLocationIndex`. Lid mesh rotation also uses current active instance instead of stale reference captured at start of update.
-
-### B9. HellhoundManager.ts - Death Explosion Damage is a No-Op ✅ DONE
-**File:** `managers/HellhoundManager.ts` (lines ~121-124)
-
-```typescript
-if (distToPlayer <= (hc.DEATH_EXPLOSION_RADIUS || 1.5)) {
-    // TODO: Deal hc.DEATH_EXPLOSION_DAMAGE to local player via damage system
-    console.log(`Player hit by hellhound explosion! ...`);
-}
-```
-
-Players take zero damage from hellhound death explosions. This makes dog rounds easier than intended.
-
-### B10. ProjectileSystem.ts - REMOTE_SHOOT Listener Never Unsubscribed ✅ DONE
-**File:** `systems/ProjectileSystem.ts` (line ~122)
-
-The system subscribes to `REMOTE_SHOOT` via `ctx.eventBus.on(...)` but has no `dispose()` method. If the system is recreated (e.g., level reload), duplicate listeners accumulate — each remote shot spawns multiple projectiles.
-
-### B11. GameLoop.ts - Wheel/Keydown Listeners Never Cleaned Up ✅ DONE
-**File:** `game/GameLoop.ts` (lines ~119-124)
-
-`wheel` and `keydown` listeners are attached to canvas/window but never removed when the game loop is destroyed. On game restart, duplicate listeners stack up, causing double-processing of scroll and key events.
-
-### B12. VisualManager.ts - Untracked onBeforeRenderObservable Observer ✅ DONE
-**File:** `managers/VisualManager.ts` (line ~65)
-
-The flash light fade observer is added to `scene.onBeforeRenderObservable` but the reference is never stored. The `dispose()` method cannot remove it. On VisualManager recreation, orphaned observers accumulate.
-
----
-
-## Priority: CRITICAL
-
-### 1. MapBuilder.ts - Massive Duplication Between createPreviewMesh() and createPlacedMesh() ✅ DONE
-**File:** `engine/MapBuilder.ts`
-
-Extracted shared `createEntityMesh(entity, scene)` method that creates meshes based on a static `ENTITY_DIMENSIONS` config object. Both `createPreviewMesh()` and `createPlacedMesh()` now call this shared method and only differ in material/alpha settings.
-
-### 2. types/world.ts - Duplicate Interface Definition ✅ DONE
-**File:** `types/world.ts`
-
-Removed duplicate `PowerSwitchDefinition` interface (was defined twice with identical properties).
-
-### 3. ZombieAISystem.ts - 445-line update() Function ✅ DONE
-**File:** `systems/ZombieAISystem.ts`
-
-Extracted into focused helper functions:
-- `updateBurningDamage(z, now, ctx)` - burning damage tick
-- `computeSeparationForce(z, zombies, separationDist)` - boid separation
-- `computeNavPath(z, targetPos, dt, ctx)` - shared navmesh pathfinding
-- `applyRotationSmoothing(z, moveDir, frameFactor)` - rotation lerp
-- `getTargetPosition(z, ctx, targetPosOut)` - host/client target selection
-- `updateHellhoundAI(z, dt, separation, frameFactor)` - hellhound state machine
-- `updateSoloDownedWander(z, dt, now, separation, frameFactor)` - wander behavior
-- `updateZombieChase(z, dt, separation, frameFactor)` - chase behavior
-- `updateWindowInteraction(z, dt, now, separation, frameFactor)` - barrier states
-
-Also added pre-allocated scratch vectors to reduce per-frame allocations.
-
-### 4. LevelBuilder.ts - 246-line buildInteractables() ✅ DONE
-**File:** `engine/LevelBuilder.ts`
-
-Split into focused sub-methods:
-- `buildDoors(doors)`
-- `buildWindows(windows)`
-- `buildPerks(perks, def)`
-- `buildWallbuys(wallbuys)`
-- `buildBuildings(buildings)`
-- `buildPowerSwitch(powerSwitch, def)`
-- `buildPackAPunch(packAPunch, def)`
-- `buildMysteryBoxes(mysteryBoxes)`
-- `getWallbuyDrawer(weapon)` - returns canvas drawer function
-
-Also extracted `createPBRMaterialWithTexture()` helper to eliminate PBR material creation duplication.
-
----
-
 ## Priority: HIGH
 
-### 5. Game.ts - resetSession() is 87 Lines ✅ DONE
-**File:** `game/Game.ts` (lines ~370-457)
-
-Split into focused private methods: `_clearZombies()`, `_clearPowerUps()`, `_clearProjectiles()`, `_resetWeaponMaterials()`, `_resetVisualAndTimers()`, `_resetGameStateFlags()`, `_resetMysteryBox()`.
-
-### 6. Game.ts - Duplicated Sound Loading Pattern ✅ DONE
-**File:** `game/Game.ts` (lines ~470-484)
-
-Replaced five repetitive `loadSound().catch()` calls with data-driven `soundsToLoad` array and loop.
-
-### 7. GameLifecycle.ts - start() is 163 Lines + Duplicated Weapon Setup ⬜ STILL RELEVANT
+### 1. GameLifecycle.ts - start() is 163 Lines + Duplicated Weapon Setup ⬜ STILL RELEVANT
 **File:** `game/GameLifecycle.ts` (lines ~103-266)
 
 Extract:
@@ -147,32 +14,7 @@ Extract:
 - `_resetToPistol()` - weapon initialization is duplicated between `start()` (lines ~218-232) and `_respawnPlayer()` (lines ~323-333)
 - `_activateWeapon(weaponIndex)` - mesh enable/disable pattern duplicated at lines ~238-245 and ~334
 
-### 8. HellhoundManager + VisualManager - Cross-File Smoke Effect Duplication ✅ DONE
-**Files:** `managers/HellhoundManager.ts` (lines ~241-275) and `managers/VisualManager.ts` (lines ~473-505)
-
-Removed duplicate `createHellhoundSpawnSmoke()` from HellhoundManager. Now uses injected `VisualManager.createSpawnSmokeEffect()`.
-
-### 9. VisualManager.ts - Duplicate Explosion Functions ✅ DONE
-**File:** `managers/VisualManager.ts` (lines ~133-278)
-
-Extracted shared `createExplosionChunks(pos, config)` helper with `ExplosionChunkConfig` interface. Both `createZombieExplosion()` and `createHeadExplosion()` now use this shared helper with different configs.
-
-### 10. VisualManager.ts - Observer Memory Leak Risk ✅ DONE
-**File:** `managers/VisualManager.ts` (lines ~166-184, ~232-246)
-
-Added 10-second max-lifetime timeout to explosion chunk observers to guarantee cleanup even if chunks never hit the floor.
-
-### 11. NetworkMessageHandler.ts - Massive Repetitive Field Assignment ✅ DONE
-**File:** `network/NetworkMessageHandler.ts` (lines ~236-257 and ~345-355)
-
-Extracted `mergeIfDefined(target, source, fields[])` helper. Both STATE and INPUT handlers now use this helper instead of 22+ individual if-checks.
-
-### 12. NetworkMessageHandler.ts - Duplicated Remote Position + State Sync ✅ DONE
-**File:** `network/NetworkMessageHandler.ts` (lines ~293-301 / ~357-365 and ~314-318 / ~377-381)
-
-Extracted `syncRemotePosition(sm, pos)` and `syncRemoteGameState(sm, health, isDowned, kills, shots, perks)` helpers. Both STATE and INPUT handlers now use these shared functions.
-
-### 13. MapBuilder.ts - 207-line update() Method ⬜ STILL RELEVANT (reduced to ~111 lines but sub-methods not extracted)
+### 2. MapBuilder.ts - 207-line update() Method ⬜ STILL RELEVANT (reduced to ~111 lines but sub-methods not extracted)
 **File:** `engine/MapBuilder.ts` (lines ~520-630)
 
 Split into:
@@ -184,78 +26,30 @@ Also, the `getPreviewProps()` switch at lines ~428-510 (82 lines) should be repl
 
 The repeated position-update code at lines ~607-621 should be extracted to `updateEntityPosition(entity)`.
 
-### 14. Pathfinder.ts - Inefficient Linear Open List Search ✅ DONE
-**File:** `engine/Pathfinder.ts` (lines ~48-53)
-
-The A* open list uses linear search to find the minimum f-value node (O(n) per iteration). Replace with a binary heap / priority queue for O(log n) performance.
-
-### 15. PlayerCombatSystem.ts - Vector3 Allocations Per Shot ✅ DONE
-**File:** `systems/PlayerCombatSystem.ts`
-
-Pre-allocated module-level scratch vectors (`_muzzlePos`, `_shootTargetPos`, `_camToMuzzle`, `_baseDir`, `_pelletDir`, `_bulletVel`, `_aimRay`) and converted all per-shot operations to use `copyFrom`, `addInPlaceFromFloats`, `subtractToRef`, `normalizeInPlace`, `scaleInPlace` patterns. Zero allocations per shot/pellet.
-
-### 16. ZombieAISystem.ts - Vector3 Allocations in Hot Loop ✅ DONE
-**File:** `systems/ZombieAISystem.ts`
-
-Added pre-allocated scratch vectors (`_tempGravity`, `_tempBlended`, `_tempMoveResult`, `_tempLookAt`, `_tempLungeDir`, `_tempRetreatDir`) and converted all hot-path allocations to in-place operations:
-- Gravity vectors use `_tempGravity.set()` instead of `new Vector3()`
-- Separation blending uses `_tempBlended.copyFrom()` + `addInPlaceFromFloats()` instead of `.add(.scale())`
-- Movement uses `_tempMoveResult.copyFrom()` + `scaleInPlace()` instead of `.scale()`
-- Window lookAt uses `_tempLookAt.set()` instead of `new Vector3()`
-- Lunge/retreat directions use `subtractToRef` + `normalizeInPlace` instead of `.subtract().normalize()`
-
 ---
 
 ## Priority: MEDIUM
 
-### 17. MapConfigManager.ts - Duplicated Config Initialization ✅ DONE
-**File:** `managers/MapConfigManager.ts`
-
-Extracted `CONFIG_KEYS` constant array mapping property names to their global defaults. `resetToDefaults()` now iterates `CONFIG_KEYS` instead of repeating 11 spread-copy lines. Constructor uses inline initialization (runs once), while `resetToDefaults()` uses the shared loop.
-
-### 18. MapConfigManager.ts - applyMapConfig() Nested Conditionals ✅ DONE
-**File:** `managers/MapConfigManager.ts`
-
-Replaced 9 individual `if (mc.X) Object.assign(this.X, mc.X)` checks with a single loop over `CONFIG_KEYS`. For `hellhound`, the loop reads from `mc.enemies?.[key]`; for all others (including `mysteryBox`, now a top-level config alongside `powerUps`) it reads from `mc[key]` directly.
-
-### 19. NetworkDeltaCompressor.ts - Duplicated Comparison Functions ⬜ STILL RELEVANT
+### 3. NetworkDeltaCompressor.ts - Duplicated Comparison Functions ⬜ STILL RELEVANT
 **File:** `network/NetworkDeltaCompressor.ts` (lines ~70-99)
 
 `perksChanged()`, `doorsChanged()`, `windowsChanged()` have nearly identical logic (compare record keys + values). Extract a generic `recordChanged<T>(a, b, compareFn?)` helper.
 
-### 20. InputManager.ts - Duplicated Device Switching + Deadzone Logic ⬜ STILL RELEVANT
+### 4. InputManager.ts - Duplicated Device Switching + Deadzone Logic ⬜ STILL RELEVANT
 **File:** `engine/InputManager.ts`
 
 - Device switching logic at lines ~202-211, ~274-275, ~288-290 is repeated. Extract `clearNonActiveDeviceState(device)`.
 - Deadzone application at lines ~578-588 is duplicated for X and Y axes. Extract `applyDeadzoneAndSensitivity(raw, threshold, sensitivity)`.
 - Pointer lock conditionals at lines ~342-351 are convoluted and overlapping. Simplify with boolean algebra.
 
-### 21. GameLoop.ts - 181-line createGameLoop + Duplicated Scale UI Updates ⬜ STILL RELEVANT
+### 5. GameLoop.ts - 181-line createGameLoop + Duplicated Scale UI Updates ⬜ STILL RELEVANT
 **File:** `game/GameLoop.ts` (lines ~35-216)
 
 - Extract wheel handler and keydown handler for scale-weapon mode into separate functions.
 - The scale UI update at lines ~65-70 and ~110-115 is identical - extract to `updateScaleWeaponUI(sm, mode)`.
 - The axis key mapping switch at lines ~79-105 should use a mapping object instead.
 
-### 22. InteractionSystem.ts - Two Nearly Identical Door Animation Functions ✅ DONE
-**File:** `systems/InteractionSystem.ts` (lines ~46-89)
-
-Merged `animateDoorMesh()` and `animatePowerDoor()` into single parameterized `animateDoorMeshToY(mesh, targetY, trackObserver, doorId)` function.
-
-### 23. InteractionSystem.ts - performPackAPunch() is 171 Lines ✅ DONE
-**File:** `systems/InteractionSystem.ts` (lines ~119-290)
-
-Split into:
-- `setupPackAPunchAnimation()`
-- `applyPackAPunchUpgrade(weapon)`
-- `createPackAPunchTexture(weapon)`
-
-### 24. MysteryBoxSystem.ts - 170-line Switch Statement ✅ DONE
-**File:** `systems/MysteryBoxSystem.ts` (lines ~74-244)
-
-Extracted each state case into focused methods: `handleBoxIdle()`, `handleBoxOpening()`, `handleBoxRolling()`, `handleBoxWeaponPresent()`, `handleBoxClosing()`, `handleBoxTeddyReveal()`, `handleBoxTeddyWait()`, `handleBoxTeleportOut()`, `handleBoxRelocating()`. Also extracted `updateWeaponDisplay()` and `updateGlow()` helpers.
-
-### 25. ProjectileSystem.ts - 165-line update() with Deep Nesting ⬜ STILL RELEVANT
+### 6. ProjectileSystem.ts - 165-line update() with Deep Nesting ⬜ STILL RELEVANT
 **File:** `systems/ProjectileSystem.ts` (lines ~174-339)
 
 Extract:
@@ -263,7 +57,7 @@ Extract:
 - `handleZombieHit(proj, zombie)`
 - `handleEnvironmentHit(proj, pickInfo)`
 
-### 26. useMultiplayer.ts - 307-line Hook ⬜ STILL RELEVANT (now 358 lines; BENIGN_NETWORK_ERRORS extracted ✅ but hook not split)
+### 7. useMultiplayer.ts - 307-line Hook ⬜ STILL RELEVANT (now 358 lines; BENIGN_NETWORK_ERRORS extracted ✅ but hook not split)
 **File:** `network/useMultiplayer.ts` (lines ~10-316)
 
 Consider splitting into smaller hooks:
@@ -271,14 +65,12 @@ Consider splitting into smaller hooks:
 - `usePeerClient()` - client initialization
 - `useHeartbeat()` - heartbeat management
 
-~~Also, line ~144 has an overly long OR chain for error types. Extract to a `BENIGN_NETWORK_ERRORS` constant array and use `.includes()`.~~ ✅ DONE - Extracted `BENIGN_NETWORK_ERRORS` constant.
-
-### 27. ZombieManager.ts + HellhoundManager.ts - Overlapping Death Handlers ⬜ STILL RELEVANT
+### 8. ZombieManager.ts + HellhoundManager.ts - Overlapping Death Handlers ⬜ STILL RELEVANT
 **Files:** `managers/ZombieManager.ts` (lines ~93-119) and `managers/HellhoundManager.ts` (lines ~73-114)
 
 Both have nearly identical `onDeath()` logic: increment kills, emit events, handle power-up drops, create explosions. Extract a shared `handleEnemyDeath(enemy, pos, killer, callbacks)` utility.
 
-### 28. ZombieManager.ts - 92-line Deeply Nested Spawn Function ⬜ STILL RELEVANT
+### 9. ZombieManager.ts - 92-line Deeply Nested Spawn Function ⬜ STILL RELEVANT
 **File:** `managers/ZombieManager.ts` (lines ~121-213)
 
 Extract:
@@ -286,32 +78,12 @@ Extract:
 - `tryPlaySpawnSound(pos)` - sound cooldown logic
 - `createZombieEntity(spawnPos, window, round)` - entity creation
 
-### 29. CommandRegistry.ts - 100-line show_pathfinding Command ⬜ STILL RELEVANT
+### 10. CommandRegistry.ts - 100-line show_pathfinding Command ⬜ STILL RELEVANT
 **File:** `engine/CommandRegistry.ts` (lines ~173-273)
 
 Extract the pathfinding visualization observer into a separate `PathfindingDebugger` class or utility function. Also, each zombie creates a new material for its debug tube - reuse a single shared material.
 
-### 30. GeometryUtils.ts - Triple-Duplicated Texture Dirty Pattern ✅ DONE
-**File:** `engine/GeometryUtils.ts` (lines ~40-46, ~164-168, ~177-180)
-
-Extracted `markMaterialDirtyOnLoad(mat, tex)` helper function. Used by `createMaterial()` and available for other call sites.
-
-### 31. Game.ts - Dead Shadow Generator Code ✅ DONE
-**File:** `game/Game.ts` (lines ~505-507)
-
-Fixed dead code: shadow generators are now properly disposed using `forEach` loop with `sg?.dispose()`.
-
-### 32. GameEngine.ts - Convoluted Remote Projectile Count ✅ DONE
-**File:** `game/GameEngine.ts` (lines ~91-98)
-
-Replaced manual for-loop with `this.activeProjectiles.filter(p => p.isRemote).length > 50`.
-
-### 33. EventBus.ts - No Cleanup Method for Session Resets ✅ DONE
-**File:** `engine/EventBus.ts`
-
-Added `clear()` method to remove all handlers and `clearEvent(event)` to remove handlers for a specific event type.
-
-### 34. InteractionSystem.ts - PAP Material Observer Relies on Dispose ⬜ STILL RELEVANT
+### 11. InteractionSystem.ts - PAP Material Observer Relies on Dispose ⬜ STILL RELEVANT
 **File:** `systems/InteractionSystem.ts` (lines ~265-269)
 
 The pulsing emissive observer on Pack-a-Punch materials is cleaned up via `papMat.onDisposeObservable`. If materials are reassigned rather than explicitly disposed, the observer persists indefinitely. Each Pack-a-Punch creates a new observer, so re-packing a weapon leaks the old one.
@@ -320,174 +92,196 @@ The pulsing emissive observer on Pack-a-Punch materials is cleaned up via `papMa
 
 ## Priority: LOW
 
-### 35. StateManager.ts - null! Assertions ⬜ STILL RELEVANT
+### 12. StateManager.ts - null! Assertions ⬜ STILL RELEVANT
 **File:** `state/StateManager.ts` (lines ~98-108)
 
 Five properties use `null!` non-null assertion without initialization guarantees. Consider making them properly nullable or initializing in constructor.
 
-### 36. maps/MapTextureResolver.ts - Dead registerMapFolder() Function ⬜ STILL RELEVANT (no call sites exist — safe to delete)
+### 13. MapTextureResolver.ts - Dead registerMapFolder() Function ⬜ STILL RELEVANT (no call sites exist — safe to delete)
 **File:** `maps/MapTextureResolver.ts` (line ~19)
 
 `registerMapFolder()` is a no-op stub kept for "call-site compatibility." Find and remove all call sites, then delete the function.
 
-### 37. ZombieDamageSystem.ts + ZombieAISystem.ts - Math.sqrt for Distance Comparisons ⬜ STILL RELEVANT
+### 14. ZombieDamageSystem.ts + ZombieAISystem.ts - Math.sqrt for Distance Comparisons ⬜ STILL RELEVANT
 **Files:** `systems/ZombieDamageSystem.ts` (line ~42 uses `Math.pow`), `systems/ZombieAISystem.ts` (line ~92, `getHorizontalDist` still uses `Math.sqrt` — note `getHorizontalDistSq` exists and is used in most hot paths, but `getHorizontalDist` is now unused and can be removed)
 
 Uses `Math.sqrt(Math.pow(...))` for distance comparisons where only relative ordering matters. Use squared distance instead and compare against squared thresholds.
 
-### 38. GameEngine.ts - Projectile Pool Reset Fields ⬜ STILL RELEVANT
+### 15. GameEngine.ts - Projectile Pool Reset Fields ⬜ STILL RELEVANT
 **File:** `game/GameEngine.ts` (lines ~104-107)
 
 Resetting fields to `undefined` during pool return. Consider resetting to typed defaults (`false`, `0`, `1`) instead for type safety.
 
-### 39. MapRegistry.ts - Excessive Console Logging ⬜ STILL RELEVANT (11 unconditional console calls)
+### 16. MapRegistry.ts - Excessive Console Logging ⬜ STILL RELEVANT (11 unconditional console calls)
 **File:** `managers/MapRegistry.ts` (lines ~70-113)
 
 13 lines of navmesh debug logging in production code. Wrap in a `DEV` environment check or use a configurable log level.
 
-### 40. UIBridge.ts - Cache Update Before Throttle Check ✖ NOT RELEVANT
-**File:** `state/UIBridge.ts`
-
-`setPoints()` was intentionally refactored to skip throttling entirely (points are event-driven, not per-frame). The comment in the code explains this was a deliberate fix to prevent the UI delta animation from showing wrong values. The original issue no longer applies.
-
-### 41. ZombieAISystem.ts - Unused Scratch Vector ✖ NOT RELEVANT
-**File:** `systems/ZombieAISystem.ts`
-
-`_tempTargetVec` no longer exists in the file — it was already removed as part of the scratch vector refactor (item 16). Not present in current codebase.
-
-### 42. Game.ts - camera.speed is Dead Code ⬜ STILL RELEVANT
+### 17. Game.ts - camera.speed is Dead Code ⬜ STILL RELEVANT
 **File:** `game/Game.ts` (line ~138)
 
 `camera.speed` is set to `GAME_CONFIG.WALK_SPEED` but PlayerMovementSystem drives movement entirely via `camera.cameraDirection` — Babylon's built-in `camera.speed` property is never consulted. Remove the assignment to avoid confusion.
 
-### 43. Game.ts - Missing maxZ (Far Plane) ⬜ STILL RELEVANT
+### 18. Game.ts - Missing maxZ (Far Plane) ⬜ STILL RELEVANT
 **File:** `game/Game.ts` (line ~140)
 
 Only `camera.minZ = 0.1` is set; `maxZ` defaults to Babylon's 10,000 units. For indoor maps this is excessive and reduces depth buffer precision, increasing risk of z-fighting. Set `camera.maxZ = 500` (sufficient for all current maps).
-
-### 44. Barn Map - Missing navFloors Definition ✖ NOT RELEVANT
-**File:** `maps/barn/mapDefinition.ts`
-
-`LevelBuilder.ts` explicitly handles the missing `navFloors` case: when `hasNavFloors` is false, all walkable geometry groups are added to the navmesh instead. Barn pathfinding falls back to this path and works correctly. No fix needed unless barn-specific navmesh tuning is desired.
 
 ---
 
 ## Performance Investigation — Slowdown & Stutter Sources
 
-This section documents all code identified as likely contributors to frame-rate drops or stuttering. Issues are ordered by estimated impact. Many relate to per-frame allocations that trigger garbage collection pauses, or O(n) operations in hot paths.
+This section documents all code identified as likely contributors to frame-rate drops or stuttering. Issues are ordered by estimated impact.
 
 ---
 
-### P1. GameEngine.ts — Remote Projectile Count Uses `.filter()` in Hot Path ✅ DONE
-**File:** `game/GameEngine.ts` (line ~134)
-
-`remoteProjectileCount` integer that is incremented on spawn and decremented on recycle. Replacing `.filter()` allocation in hot path.
-
-
----
-
-### P2. ZombieAISystem.ts — Per-Frame Vector Allocations in Path Following ✅ DONE
-**File:** `systems/ZombieAISystem.ts` (line ~180)
-
-```typescript
-const dir = z.path[0].subtract(z.mesh.position).normalize();
-```
-
-`.subtract()` and `.normalize()` each allocate a new `Vector3`. This runs every frame for every zombie following a path. With 100 zombies all path-following, that is 200+ allocations per frame from this line alone. Replace with `subtractToRef` / `normalizeToRef` using pre-allocated scratch vectors (a pair per zombie or module-level scratch vectors guarded by sequential use).
-
----
-
-### P3. ZombieAISystem.ts — Wander Target Allocates New Vector3 Each Wander Tick ✅ DONE
-**File:** `systems/ZombieAISystem.ts` (lines ~401–405)
-
-```typescript
-z.wander.wanderTarget = new BABYLON.Vector3(...);
-```
-
-A fresh `Vector3` is created every time a zombie picks a new wander target. Reuse a pooled vector per zombie or assign component values into an existing `wanderTarget` vector using `.set()` / `copyFromFloats()`.
-
----
-
-### P4. PlayerCombatSystem.ts — Multiple Vector3 Allocations Per Pellet Per Shot ✅ DONE
-**File:** `systems/PlayerCombatSystem.ts` (lines ~141–228)
-
-The firing path clones and allocates several vectors per shot, and the shotgun pellet loop (up to 8 pellets) calls `baseDir.clone()` per pellet:
-
-```typescript
-const spreadDir = baseDir.clone(); // × 8 pellets per shotgun shot
-```
-
-At a fast fire rate (10 shots/sec × 8 pellets) this is 80+ `Vector3` allocations per second from the spread loop alone. Pre-allocate `_muzzlePos`, `_targetPos`, `_camToMuzzle`, `_spreadDir`, and `_pelletDir` at module scope. Use `addToRef`, `subtractToRef`, `scaleToRef`, and `normalizeToRef` throughout. (Item 15 covers this but has not been implemented yet.)
-
----
-
-### P5. RemotePlayerSystem.ts — `Vector3.Lerp()` Allocates Every Frame ✅ DONE
-**File:** `systems/RemotePlayerSystem.ts` (lines ~51–55)
-
-```typescript
-mesh.position = BABYLON.Vector3.Lerp(mesh.position, target, t);
-```
-
-`Vector3.Lerp` returns a new `Vector3` every call and then immediately writes it to `mesh.position`. Replace with `BABYLON.Vector3.LerpToRef(mesh.position, target, t, mesh.position)` to update in-place with zero allocation.
-
----
-
-### P6. PowerUpSystem.ts — Rotating Meshes Dirtied Every Frame ⬜ STILL RELEVANT
+### P1. PowerUpSystem.ts — Rotating Meshes Dirtied Every Frame ⬜ STILL RELEVANT
 **File:** `systems/PowerUpSystem.ts` (line ~100)
 
 `p.mesh.rotation.y += 0.02 * (dt * 60)` — now frame-rate independent but still mutates `rotation` every frame, forcing a world matrix recompute per power-up orb per tick. A Babylon `Animation` would batch this.
 
 ---
 
-### P7. PowerUpSystem.ts — Pending Power-Up Lookup is O(n) ✅ DONE
-**File:** `systems/PowerUpSystem.ts`
-
-`activePowerUpIds` is now a `Set<string>` used for O(1) membership checks in the pending loop. No longer O(n²).
-
----
-
-### P8. ZombieManager.ts — Window List Filtered on Every Zombie Spawn ✅ DONE
-**File:** `managers/ZombieManager.ts`
-
-`windowsByZone: Map<number, WindowBarrier[]>` is now pre-computed at init. Spawn logic uses `windowsByZone.get(zoneId)` lookups instead of filtering the full array each time.
-
----
-
-### P9. ProjectileSystem.ts — 2–3 Scene Raycasts Per Active Projectile Per Frame ✅ DONE
-**File:** `systems/ProjectileSystem.ts` (lines ~224–410)
-
-Consolidated zombie and environment picks into a single `pickWithRay` cast per projectile per frame. Also added pre-allocated scratch vectors for remote projectile spawning to avoid per-event allocations.
-
-
----
-
-### P10. NetworkDeltaCompressor.ts — Full State Comparison on Every Network Tick ✅ DONE
-**File:** `network/NetworkDeltaCompressor.ts`, `systems/NetworkSystem.ts`
-
-Added dirty flags `_doorsDirty` and `_windowsDirty` inside the compressor. Both start `true`, are reset to `false` once a comparison confirms no change, and are set back to `true` via `markHostDirty('doors' | 'windows')`. NetworkSystem calls `markHostDirty('doors')` on `DOOR_OPEN_REQUEST` and `markHostDirty('windows')` on `BOARD_STATE_CHANGE`. The 5-second forced full-sync resets both flags to `false` after sending, acting as a safety net. `perks`, `powerUps`, and `mysteryBox` are left as always-checking since they are cheap (≤6 comparisons each) and have no dedicated mutation events.
-
----
-
-### P11. InteractionSystem.ts — Pack-a-Punch Material Observer Leaks on Re-Pack ⬜ STILL RELEVANT
+### P2. InteractionSystem.ts — Pack-a-Punch Material Observer Leaks on Re-Pack ⬜ STILL RELEVANT
 **File:** `systems/InteractionSystem.ts` (lines ~292–296)
 
 `timeObs` is registered and only cleaned up via `papMat.onDisposeObservable`. If a weapon is re-packed (material replaced rather than disposed), the old `timeObs` is never removed. Each re-pack adds another `onBeforeRenderObservable` listener. `timeObs` needs to be stored and explicitly removed at the start of `performPackAPunch()`.
 
 ---
 
-### P12. ZombieAISystem.ts — `getHorizontalDist()` Allocates in Window Interaction Hot Path ✖ NOT RELEVANT
-**File:** `systems/ZombieAISystem.ts`
-
-`getHorizontalDist()` (the allocating version) is no longer called anywhere in the file — all hot-path distance checks now use `getHorizontalDistSq()`. The function is dead code and can simply be deleted.
-
----
-
-### P13. CommandRegistry.ts — Debug Pathfinding Allocates New Material Per Zombie ⬜ STILL RELEVANT
+### P3. CommandRegistry.ts — Debug Pathfinding Allocates New Material Per Zombie ⬜ STILL RELEVANT
 **File:** `engine/CommandRegistry.ts` (line ~263)
 
 `new BABYLON.StandardMaterial("pathMat_" + z.id, sm.scene)` still creates one material per zombie for debug tube rendering. A single shared material should be created once and reused.
 
 ---
 
-### P14. MapRegistry.ts — 13 Lines of navmesh Debug Logging in Production ⬜ STILL RELEVANT (11 unconditional console calls confirmed)
+### P4. MapRegistry.ts — navmesh Debug Logging in Production ⬜ STILL RELEVANT (11 unconditional console calls confirmed)
 **File:** `managers/MapRegistry.ts` (lines ~70–113)
+
+11 unconditional `console.log` calls fire every time a navmesh is built or loaded. Each call serialises arguments and writes to the devtools buffer — measurable overhead during round transitions when the navmesh is rebuilt.
+
+---
+
+### P5. LevelBuilder.ts — onNewMeshAddedObservable Accumulates on Map Reload ⬜ STILL RELEVANT
+**File:** `engine/LevelBuilder.ts` (lines ~157–161)
+
+```typescript
+this.scene.onNewMeshAddedObservable.add((mesh) => {
+    if (this.shadowCasters.includes(mesh)) {
+        shadowGenerator.addShadowCaster(mesh);
+    }
+});
+```
+
+Every call to `loadLevel()` registers a **new** observer on `scene.onNewMeshAddedObservable` without storing or removing the previous one. After N map reloads, N identical callbacks fire for every mesh added to the scene. Each callback also calls `this.shadowCasters.includes(mesh)` which is an O(n) linear scan. Fix: store the observer reference and call `.remove()` in `dispose()` / before re-registering. Better still, register shadow casters eagerly during level build and skip the lazy observer entirely.
+
+---
+
+### P6. PlayerMovementSystem.ts — Full Scene Raycast Every Frame for Ground Check ⬜ STILL RELEVANT
+**File:** `systems/player/PlayerMovementSystem.ts` (lines ~163–167)
+
+```typescript
+const pick = camera.getScene().pickWithRay(_groundRay, (m) => m.checkCollisions && m.isEnabled());
+```
+
+A full scene ray cast runs every frame (60×/sec) to determine whether the player is grounded. The predicate `m.checkCollisions && m.isEnabled()` is evaluated against every mesh in the scene. Consider:
+- Restricting the predicate to a known set of floor meshes stored at level load
+- Using Babylon's built-in `camera._needMoveForGravity` / ellipsoid collision system instead of a manual raycast
+- Or caching the last ground mesh and only re-testing it until the player leaves contact
+
+---
+
+### P7. ProjectileSystem.ts — getLightByName() O(n) Lookup Per Remote Shoot Event ⬜ STILL RELEVANT
+**File:** `systems/ProjectileSystem.ts` (line ~163)
+
+```typescript
+const flash = scene.getLightByName("remoteMuzzleFlash") as BABYLON.PointLight;
+```
+
+`getLightByName()` does a linear string-match scan over all scene lights on every `REMOTE_SHOOT` event. Cache the reference once during system init (or in `ParticleManager`) and reuse it.
+
+---
+
+### P8. WeaponViewSystem.ts — Iterates All Weapon Meshes Every Frame ⬜ STILL RELEVANT
+**File:** `systems/player/WeaponViewSystem.ts` (lines ~37–40)
+
+```typescript
+for (const key in ctx.gameState.weaponMeshes) {
+    const m = ctx.gameState.weaponMeshes[key];
+    if (m) m.setEnabled(false);
+}
+```
+
+Every frame, all weapon meshes are disabled then the active one re-enabled. `for...in` enumerates all enumerable properties including inherited ones. Track the previously active weapon index and only toggle two meshes (disable previous, enable current) on weapon switch rather than scanning every frame.
+
+---
+
+### P9. ProjectileSystem.ts — Vector3 Allocations in Explosion Blast Direction ⬜ STILL RELEVANT
+**File:** `systems/ProjectileSystem.ts` (line ~137)
+
+```typescript
+const blastDir = z.mesh.position.subtract(impactPoint).normalize();
+```
+
+`.subtract()` and `.normalize()` each return a new `Vector3`. This runs per zombie within the explosion radius — with 30+ nearby zombies, one grenade/explosive creates 60+ Vector3 allocations in a single frame. Use `subtractToRef` / `normalizeToRef` with a module-level scratch vector.
+
+---
+
+### P10. HellhoundManager.ts — Vector3 Allocations in Spawn Distance Check Loop ⬜ STILL RELEVANT
+**File:** `managers/HellhoundManager.ts` (lines ~191–192)
+
+```typescript
+new BABYLON.Vector3(spawnPos.x, 0, spawnPos.z),
+new BABYLON.Vector3(playerPos.x, 0, playerPos.z)
+```
+
+Two `new Vector3` allocations per iteration of the spawn attempt loop (up to 20 attempts per hellhound). Also `this.camera.position.clone()` (line ~151) and `remotePos.clone()` (line ~154) are called at the top of each spawn pass. That is up to 40+ allocations per hellhound spawn event. Pre-allocate module-level scratch vectors and use `.set()` / `copyFromFloats()`.
+
+---
+
+### P11. ZombieAISystem.ts — Math.sqrt() for Separation Force Normalization ⬜ STILL RELEVANT
+**File:** `systems/zombie/ZombieAISystem.ts` (line ~176)
+
+```typescript
+const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
+```
+
+Separation force normalization uses `Math.sqrt` even though only the normalised direction is needed. With a spatial grid limiting neighbors to ~8, this fires ~8 × zombie_count times per frame. If the separation grid already guarantees a minimum push distance, the length can be approximated or the division skipped when `len` is below a threshold.
+
+---
+
+### P12. ZombieAISystem.ts — console.warn() in Pathfinding Fallback Paths ⬜ STILL RELEVANT
+**File:** `systems/zombie/ZombieAISystem.ts` (lines ~228, ~232, ~246)
+
+`console.warn()` calls fire in pathfinding fallback branches. If a zombie strays from the navmesh (which happens more frequently in later rounds with many agents), these can fire many times per second. Console output flushes to DevTools and incurs measurable cost. Guard with a `DEV` flag or remove.
+
+---
+
+### P13. DecalManager.ts + GoreManager.ts — pickWithRay for Every Blood Decal ⬜ STILL RELEVANT
+**Files:** `managers/visual/DecalManager.ts` (line ~91), `managers/visual/GoreManager.ts` (line ~107)
+
+```typescript
+const floorPick = this.scene.pickWithRay(DecalManager._floorRay, (m) => m.checkCollisions && m.isEnabled());
+```
+
+Every blood splatter casts a ray downward to find the exact floor Y position. With 10–15 blood particles per zombie kill, a kill event triggers 10–15 full scene raycasts in a single frame. Cache the floor mesh reference(s) at level load and restrict the predicate to those meshes only, or use the zombie's last known ground Y directly.
+
+---
+
+### P14. ZombieMeshFactory.ts — String includes() Mesh Child Search Per Zombie Creation ⬜ STILL RELEVANT
+**File:** `meshes/ZombieMeshFactory.ts` (lines ~216–221, ~239–243)
+
+```typescript
+const head = instance.getChildMeshes().find(m => m.name.includes("zombie_head"))!;
+const torso = instance.getChildMeshes().find(m => m.name.includes("zombie_body"))!;
+```
+
+`getChildMeshes()` rebuilds the child array each call and `String.includes()` is called on every child name. With ~50 zombies per round this fires on every spawn. Return child mesh references directly from the loader by index or tag rather than doing string matching.
+
+---
+
+### P15. Scene — No freezeActiveMeshes() for Static Level Geometry ⬜ STILL RELEVANT
+**File:** `engine/LevelBuilder.ts` / `game/Game.ts`
+
+Babylon.js re-evaluates active meshes (frustum culling pass) every frame. For static level geometry that never moves, calling `scene.freezeActiveMeshes()` after level load eliminates this per-frame CPU cost. Meshes that do move (zombies, projectiles, pickups) must be unfrozen or managed via `mesh.alwaysSelectAsActiveMesh`. This can be toggled around spawning events. Expected gain: 5–15% CPU render thread reduction on complex maps.
