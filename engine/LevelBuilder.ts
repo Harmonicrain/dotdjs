@@ -120,7 +120,6 @@ export class LevelBuilder {
             skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
             skybox.material = skyboxMaterial;
             skybox.infiniteDistance = true;
-            skybox.parent = this.root;
         }
 
         if (env.fog) {
