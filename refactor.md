@@ -240,14 +240,12 @@ Two `new Vector3` allocations per iteration of the spawn attempt loop (up to 20 
 
 ---
 
-### P11. ZombieAISystem.ts — Math.sqrt() for Separation Force Normalization ⬜ STILL RELEVANT
+### P11. ZombieAISystem.ts — Math.sqrt() for Separation Force Normalization ✅ RESOLVED
 **File:** `systems/zombie/ZombieAISystem.ts` (line ~176)
 
-```typescript
-const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
-```
+Recast crowd handles separation natively (`separationWeight: 1.0`). The `Math.sqrt` in `computeSeparationForce` only fires for non-crowd agents (window climbers, fallback chase) — a small population, negligible cost.
 
-Separation force normalization uses `Math.sqrt` even though only the normalised direction is needed. With a spatial grid limiting neighbors to ~8, this fires ~8 × zombie_count times per frame. If the separation grid already guarantees a minimum push distance, the length can be approximated or the division skipped when `len` is below a threshold.
+**Fix applied:** `buildSeparationGrid` now skips crowd-managed zombies (`crowdAgentIndex !== undefined`), eliminating grid insertion for the majority of the zombie population. `computeSeparationForce` itself is kept for non-crowd agents.
 
 ---
 

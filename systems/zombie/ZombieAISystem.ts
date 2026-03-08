@@ -71,6 +71,7 @@ const buildSeparationGrid = (zombies: Zombie[]): void => {
     for (const bucket of _separationGrid.values()) bucket.length = 0;
     for (const z of zombies) {
         if (z.isDead) continue;
+        if (z.crowdAgentIndex !== undefined) continue; // crowd handles separation natively
         const key = _gridKey(z.mesh.position.x, z.mesh.position.z);
         let bucket = _separationGrid.get(key);
         if (!bucket) { bucket = []; _separationGrid.set(key, bucket); }
