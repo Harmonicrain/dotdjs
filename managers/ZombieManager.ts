@@ -36,7 +36,7 @@ export class ZombieManager {
         groundSpawns: GroundSpawn[],
         private camera: BABYLON.UniversalCamera,
         private getZone: (pos: BABYLON.Vector3) => number,
-        private createSpawnEffect: (pos: BABYLON.Vector3) => void,
+        private createSpawnEffect: (pos: BABYLON.Vector3, type: 'window' | 'ground') => void,
         private createExplosion: (pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3) => void,
         private createHeadExplosion: ((pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3) => void) | null = null,
         private getRemotePlayerPos: () => BABYLON.Vector3 | null,
@@ -200,6 +200,8 @@ export class ZombieManager {
             }
         });
 
+        let spawnSourceType: 'window' | 'ground' = 'window';
+
         // Collect valid ground spawns from accessible zones
         const validGroundSpawns: GroundSpawn[] = [];
         accessibleZones.forEach(zoneId => {
@@ -221,6 +223,7 @@ export class ZombieManager {
                 spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
                 selectedWindow = w;
+                spawnSourceType = 'window';
             } else {
                 // Ground hole spawn
                 const gs = validGroundSpawns[pick - validWindows.length];
@@ -229,6 +232,7 @@ export class ZombieManager {
                 spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
                 selectedWindow = null;
+                spawnSourceType = 'ground';
             }
         }
         
@@ -265,7 +269,7 @@ export class ZombieManager {
                  }
              };
 
-             this.createSpawnEffect(spawnPos);
+             this.createSpawnEffect(spawnPos, spawnSourceType);
              
              // Play spawn sound with cooldown - only play if sound isn't already playing
              const now = Date.now();

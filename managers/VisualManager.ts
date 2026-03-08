@@ -74,6 +74,10 @@ export class VisualManager {
         this.particleManager.createWoodDebris(pos);
     }
 
+    public createGroundSpawnEruption(pos: BABYLON.Vector3) {
+        this.particleManager.createDirtBurst(pos);
+    }
+
     public createSpawnEffect(pos: BABYLON.Vector3) {
         this.particleManager.createSpawnEffect(pos);
     }

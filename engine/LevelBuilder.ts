@@ -496,6 +496,11 @@ export class LevelBuilder {
         holeMat.specularColor = BABYLON.Color3.Black();
         holeMat.emissiveColor = new BABYLON.Color3(0.01, 0.005, 0.0);
 
+        // Dirt material for the mound around the hole
+        const dirtMat = new BABYLON.StandardMaterial("groundDirtMat", this.scene);
+        dirtMat.diffuseColor = new BABYLON.Color3(0.15, 0.1, 0.05); // Dark brown
+        dirtMat.specularColor = BABYLON.Color3.Black();
+
         groundSpawns.forEach(gs => {
             // Create a dark disc on the ground to mark the spawn hole
             const disc = BABYLON.MeshBuilder.CreateDisc(
@@ -508,6 +513,18 @@ export class LevelBuilder {
             disc.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.02, gs.pos[2]); // Slightly above ground to prevent z-fighting
             disc.isPickable = false;
             disc.parent = this.root;
+
+            // Create a Torus for the dirt mound around the hole
+            const mound = BABYLON.MeshBuilder.CreateTorus(
+                `groundSpawnMound_${gs.id}`,
+                { diameter: 2.6, thickness: 0.6, tessellation: 16 },
+                this.scene
+            );
+            mound.material = dirtMat;
+            mound.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] - 0.1, gs.pos[2]); // Half-buried
+            mound.scaling.y = 0.5; // Squashed
+            mound.isPickable = false;
+            mound.parent = this.root;
 
             // Store the runtime GroundSpawn object
             this.groundSpawnsRef.push({

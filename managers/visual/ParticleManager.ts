@@ -28,6 +28,10 @@ export class ParticleManager {
     private debrisPSPool: BABYLON.ParticleSystem[] = [];
     private debrisPSCursor = 0;
 
+    private static readonly MAX_DIRT_BURST_PS = 5;
+    private dirtBurstPSPool: BABYLON.ParticleSystem[] = [];
+    private dirtBurstPSCursor = 0;
+
     private static readonly MAX_ZOMBIE_EXPLOSIONS = 5;
     private burstPSPool: BABYLON.ParticleSystem[] = [];
     private mistPSPool: BABYLON.ParticleSystem[] = [];
@@ -84,6 +88,7 @@ export class ParticleManager {
         this.initImpactPSPool();
         this.initBloodPSPool();
         this.initDebrisPSPool();
+        this.initDirtBurstPSPool();
         this.initZombieExplosionPool();
         this.initHeadExplosionPool();
         this.initHoundExplosionPool();
@@ -238,6 +243,32 @@ export class ParticleManager {
         }
     }
 
+    private initDirtBurstPSPool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/wood.jpg"); // Reusing for blocky dirt chunks
+        for (let i = 0; i < ParticleManager.MAX_DIRT_BURST_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`dirtBurstPS_${i}`, 50, this.scene);
+            ps.particleTexture = tex;
+            ps.minEmitBox = new BABYLON.Vector3(-0.8, -0.1, -0.8);
+            ps.maxEmitBox = new BABYLON.Vector3(0.8, 0.1, 0.8);
+            ps.color1 = new BABYLON.Color4(0.2, 0.15, 0.1, 1.0); // Dark brown dirt
+            ps.color2 = new BABYLON.Color4(0.15, 0.1, 0.05, 1.0);
+            ps.colorDead = new BABYLON.Color4(0.1, 0.05, 0.02, 0.0);
+            ps.minSize = 0.08;
+            ps.maxSize = 0.25;
+            ps.minLifeTime = 0.4;
+            ps.maxLifeTime = 0.8;
+            ps.emitRate = 300;
+            ps.targetStopDuration = 0.15;
+            ps.gravity = new BABYLON.Vector3(0, -12.0, 0); // Heavy gravity
+            ps.direction1 = new BABYLON.Vector3(-0.5, 3.0, -0.5); // Explode upwards
+            ps.direction2 = new BABYLON.Vector3(0.5, 5.0, 0.5);
+            ps.minAngularSpeed = -Math.PI;
+            ps.maxAngularSpeed = Math.PI;
+            ps.disposeOnStop = false;
+            this.dirtBurstPSPool.push(ps);
+        }
+    }
+
     private initZombieExplosionPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
         for (let i = 0; i < ParticleManager.MAX_ZOMBIE_EXPLOSIONS; i++) {
@@ -379,6 +410,18 @@ export class ParticleManager {
         const idx = this.debrisPSCursor % ParticleManager.MAX_DEBRIS_PS;
         this.debrisPSCursor++;
         const ps = this.debrisPSPool[idx];
+        if (ps.isStarted()) {
+            ps.stop();
+            ps.reset();
+        }
+        ps.emitter = pos;
+        ps.start();
+    }
+
+    public createDirtBurst(pos: BABYLON.Vector3) {
+        const idx = this.dirtBurstPSCursor % ParticleManager.MAX_DIRT_BURST_PS;
+        this.dirtBurstPSCursor++;
+        const ps = this.dirtBurstPSPool[idx];
         if (ps.isStarted()) {
             ps.stop();
             ps.reset();
@@ -590,6 +633,10 @@ export class ParticleManager {
         this.impactPSPool = [];
         for (const ps of this.bloodPSPool) { ps.dispose(false); }
         this.bloodPSPool = [];
+        for (const ps of this.debrisPSPool) { ps.dispose(false); }
+        this.debrisPSPool = [];
+        for (const ps of this.dirtBurstPSPool) { ps.dispose(false); }
+        this.dirtBurstPSPool = [];
         for (const ps of this.spawnEffectPSPool) { ps.dispose(false); }
         this.spawnEffectPSPool = [];
         for (const ps of this.spawnSmokePSPool) { ps.dispose(false); }

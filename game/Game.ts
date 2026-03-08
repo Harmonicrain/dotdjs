@@ -183,7 +183,13 @@ export class Game {
             sm.groundSpawns,
             this.camera,
             (pos) => sm.getZone(pos),
-            (pos) => visualManager.createSpawnEffect(pos),
+            (pos, type) => {
+                if (type === 'ground') {
+                    visualManager.createGroundSpawnEruption(pos);
+                } else {
+                    visualManager.createSpawnEffect(pos);
+                }
+            },
             (pos, hitDir) => visualManager.createZombieExplosion(pos, hitDir),
             (pos, hitDir) => visualManager.createHeadExplosion(pos, hitDir),
             () => sm.remote.pos,
