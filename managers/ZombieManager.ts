@@ -259,14 +259,22 @@ export class ZombieManager {
                 selectedWindow = w;
                 spawnSourceType = 'window';
             } else {
-                // Ground hole spawn — copy instead of clone
+                // Ground hole spawn — copy exactly to the center
                 const gs = validGroundSpawns[pick - validWindows.length];
                 spawnPos.copyFrom(gs.position);
-                spawnPos.x += (Math.random() - 0.5);
-                spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
                 selectedWindow = null;
                 spawnSourceType = 'ground';
+            }
+        } else {
+            // FALLBACK: If no windows or holes, use zone spawn bounds (e.g. for open test maps)
+            const playerZone = this.getZone(this.camera.position);
+            const randomPoint = this.zoneSystem.getRandomSpawnPoint(playerZone);
+            if (randomPoint) {
+                spawnPos.copyFrom(randomPoint);
+                validSpawnFound = true;
+                selectedWindow = null;
+                spawnSourceType = 'window'; // Treat as window/default so it doesn't start underground
             }
         }
 

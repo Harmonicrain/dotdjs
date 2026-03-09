@@ -51,6 +51,12 @@ export const MapTestDefinition: MapDefinition = {
     interactables: {
         doors: [],
         windows: [],
+        groundSpawns: [
+            { id: "hole_1", zone: 1, pos: [-20, 0, -20] },
+            { id: "hole_2", zone: 1, pos: [20, 0, -20] },
+            { id: "hole_3", zone: 1, pos: [-20, 0, 20] },
+            { id: "hole_4", zone: 1, pos: [20, 0, 20] },
+        ],
         perks: [
              { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-6, 0, 10], rotation: Math.PI },
              { type: "juggernog", id: "juggernog", zone: 1, pos: [-2, 0, 10], rotation: Math.PI },

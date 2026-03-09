@@ -497,41 +497,53 @@ export class LevelBuilder {
     private buildGroundSpawns(groundSpawns: MapDefinition['interactables']['groundSpawns']) {
         if (!groundSpawns || groundSpawns.length === 0) return;
 
-        // Dark ground material for the hole disc
+        // Perfect black void for the hole
         const holeMat = new BABYLON.StandardMaterial("groundHoleMat", this.scene);
-        holeMat.diffuseColor = new BABYLON.Color3(0.05, 0.03, 0.02);
+        holeMat.diffuseColor = BABYLON.Color3.Black();
         holeMat.specularColor = BABYLON.Color3.Black();
-        holeMat.emissiveColor = new BABYLON.Color3(0.01, 0.005, 0.0);
+        holeMat.emissiveColor = BABYLON.Color3.Black();
+        holeMat.disableLighting = true;
 
-        // Dirt material for the mound around the hole
-        const dirtMat = new BABYLON.StandardMaterial("groundDirtMat", this.scene);
-        dirtMat.diffuseColor = new BABYLON.Color3(0.15, 0.1, 0.05); // Dark brown
-        dirtMat.specularColor = BABYLON.Color3.Black();
+        // Metal material for the frame
+        const metalMat = this.materials.get('metal') || new BABYLON.StandardMaterial("fallbackMetal", this.scene);
+
+        const holeMeshes: BABYLON.Mesh[] = [];
+        const frameMeshes: BABYLON.Mesh[] = [];
 
         groundSpawns.forEach(gs => {
-            // Create a dark disc on the ground to mark the spawn hole
-            const disc = BABYLON.MeshBuilder.CreateDisc(
-                `groundSpawn_${gs.id}`,
-                { radius: 0.9, tessellation: 16 },
-                this.scene
-            );
-            disc.material = holeMat;
-            disc.rotation.x = Math.PI / 2; // Lay flat on ground
-            disc.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.02, gs.pos[2]); // Slightly above ground to prevent z-fighting
-            disc.isPickable = false;
-            disc.parent = this.root;
+            // Dark void square
+            const holeWidth = 1.4;
+            const hole = BABYLON.MeshBuilder.CreateGround(`groundSpawn_${gs.id}`, { width: holeWidth, height: holeWidth }, this.scene);
+            hole.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.015, gs.pos[2]);
+            holeMeshes.push(hole);
 
-            // Create a Torus for the dirt mound around the hole
-            const mound = BABYLON.MeshBuilder.CreateTorus(
-                `groundSpawnMound_${gs.id}`,
-                { diameter: 1.95, thickness: 0.45, tessellation: 16 },
-                this.scene
-            );
-            mound.material = dirtMat;
-            mound.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] - 0.1, gs.pos[2]); // Half-buried
-            mound.scaling.y = 0.5; // Squashed
-            mound.isPickable = false;
-            mound.parent = this.root;
+            // Metal reinforced square frame
+            const frameThickness = 0.2;
+            const frameHeight = 0.06;
+            const innerExtent = holeWidth / 2;
+            const outerExtent = innerExtent + frameThickness;
+
+            // Top edge
+            const t = BABYLON.MeshBuilder.CreateBox(`frame_t_${gs.id}`, { width: outerExtent * 2, height: frameHeight, depth: frameThickness }, this.scene);
+            t.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + frameHeight / 2, gs.pos[2] + innerExtent + frameThickness / 2);
+            frameMeshes.push(t);
+
+            // Bottom edge
+            const b = BABYLON.MeshBuilder.CreateBox(`frame_b_${gs.id}`, { width: outerExtent * 2, height: frameHeight, depth: frameThickness }, this.scene);
+            b.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + frameHeight / 2, gs.pos[2] - innerExtent - frameThickness / 2);
+            frameMeshes.push(b);
+
+            // Left edge
+            const l = BABYLON.MeshBuilder.CreateBox(`frame_l_${gs.id}`, { width: frameThickness, height: frameHeight, depth: holeWidth }, this.scene);
+            l.position = new BABYLON.Vector3(gs.pos[0] - innerExtent - frameThickness / 2, gs.pos[1] + frameHeight / 2, gs.pos[2]);
+            frameMeshes.push(l);
+
+            // Right edge
+            const r = BABYLON.MeshBuilder.CreateBox(`frame_r_${gs.id}`, { width: frameThickness, height: frameHeight, depth: holeWidth }, this.scene);
+            r.position = new BABYLON.Vector3(gs.pos[0] + innerExtent + frameThickness / 2, gs.pos[1] + frameHeight / 2, gs.pos[2]);
+            frameMeshes.push(r);
+
+            // Add inner danger stripes or sub-frames? We'll keep it simple to ensure low overhead
 
             // Store the runtime GroundSpawn object
             this.groundSpawnsRef.push({
@@ -540,6 +552,31 @@ export class LevelBuilder {
                 zone: gs.zone,
             });
         });
+
+        // Merge all hole centers for 1 draw call
+        if (holeMeshes.length > 0) {
+            const mergedHoles = BABYLON.Mesh.MergeMeshes(holeMeshes, true, true);
+            if (mergedHoles) {
+                mergedHoles.name = "merged_spawn_holes";
+                mergedHoles.material = holeMat;
+                mergedHoles.isPickable = false;
+                mergedHoles.receiveShadows = false;
+                mergedHoles.parent = this.root;
+            }
+        }
+
+        // Merge all frame parts for 1 draw call
+        if (frameMeshes.length > 0) {
+            const mergedFrames = BABYLON.Mesh.MergeMeshes(frameMeshes, true, true);
+            if (mergedFrames) {
+                mergedFrames.name = "merged_spawn_frames";
+                mergedFrames.material = metalMat;
+                mergedFrames.isPickable = false;
+                mergedFrames.receiveShadows = true;
+                mergedFrames.parent = this.root;
+                this.shadowCasters.push(mergedFrames);
+            }
+        }
     }
 
     private buildPerks(perks: MapDefinition['interactables']['perks'], def: MapDefinition) {
