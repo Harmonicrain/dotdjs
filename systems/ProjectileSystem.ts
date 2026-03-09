@@ -10,6 +10,20 @@ import { ZombieManager } from '../managers/ZombieManager';
 import { HellhoundManager } from '../managers/HellhoundManager';
 import { MapConfigManager } from '../managers/MapConfigManager';
 
+/** Shape passed to setDebugInfo when an object is picked in debug mode. */
+export interface DebugMeshInfo {
+    name: string;
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    scaling: { x: number; y: number; z: number };
+    material: string;
+    parent: string;
+    metadata: unknown;
+}
+
+/** Narrowed SHOOT variant from the GameMessage union. */
+export type ShootMessage = Extract<GameMessage, { type: 'SHOOT' }>;
+
 export interface IProjectileContext {
     gameState: GameStateData;
     scene: BABYLON.Scene;
@@ -31,7 +45,7 @@ export interface IProjectileContext {
     send(data: GameMessage): void;
     addPoints(amount: number): void;
     hasDoublePoints(): boolean;
-    setDebugInfo(v: any): void;
+    setDebugInfo(v: DebugMeshInfo): void;
     setFlashColor(v: string | null): void;
     setHealth(v: number): void;
     setIsDowned(v: boolean): void;
@@ -134,7 +148,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
     const hitsProcessed = new Set<string>();
 
     // Subscribe to Remote Shoot Events once during setup
-    const handleRemoteShoot = (msg: any) => {
+    const handleRemoteShoot = (msg: ShootMessage) => {
         const scene = ctx.scene;
         const engine = ctx.gameEngine;
 

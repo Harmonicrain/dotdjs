@@ -1,6 +1,6 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { GameMessage, PowerUpType, GameStateData, WindowBarrier, MysteryBox } from '../types/index';
+import { GameMessage, PowerUpType, GameStateData, WindowBarrier, MysteryBox, ZombieSyncData } from '../types/index';
 import { EventBus } from '../engine/EventBus';
 import { System } from '../types/systems';
 import { SYNC_CONFIG } from '../config';
@@ -31,12 +31,12 @@ export interface INetworkContext {
  */
 export const createNetworkSystem = (ctx: INetworkContext): System => {
     const lastSendRef = { current: 0 };
-    const compressor  = new NetworkDeltaCompressor();
-    
+    const compressor = new NetworkDeltaCompressor();
+
     let windowStatesCache: Record<string, number> = {};
     let windowsDirty = true;
-    
-    const _zombiesSnapshot: any[] = [];
+
+    const _zombiesSnapshot: ZombieSyncData[] = [];
     const _activePowerUpTypes: PowerUpType[] = [];
 
     // Reset compressor snapshot whenever a new game session begins so we
@@ -72,13 +72,13 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
             if (now - lastSendRef.current <= SYNC_CONFIG.NETWORK_TICK_MS) return;
             lastSendRef.current = now;
 
-            const mode      = ctx.gameModeRef.current;
+            const mode = ctx.gameModeRef.current;
             const gameState = ctx.gameState;
 
             if (!gameState.weapons || !gameState.weapons[gameState.activeWeaponIndex]) return;
 
             const currentWeaponId = gameState.weapons[gameState.activeWeaponIndex].id;
-            const localName       = gameState.playerName || 'Unknown';
+            const localName = gameState.playerName || 'Unknown';
 
             // ── CLIENT → HOST ────────────────────────────────────────────────
             if (mode === 'CLIENT') {
@@ -88,20 +88,20 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                         rot: camera.rotation.y, pitch: camera.rotation.x,
                     },
                     activeWeaponIndex: gameState.activeWeaponIndex,
-                    activeWeaponId:    currentWeaponId,
-                    clientHealth:      gameState.health,
-                    clientPoints:      gameState.points,
+                    activeWeaponId: currentWeaponId,
+                    clientHealth: gameState.health,
+                    clientPoints: gameState.points,
                     clientTotalEarned: gameState.totalEarnedPoints,
-                    clientPerks:       gameState.perkStates,
-                    clientIsDowned:    gameState.isDowned,
-                    clientName:        localName,
-                    clientKills:       gameState.kills,
-                    clientShots:       gameState.shots,
+                    clientPerks: gameState.perkStates,
+                    clientIsDowned: gameState.isDowned,
+                    clientName: localName,
+                    clientKills: gameState.kills,
+                    clientShots: gameState.shots,
                 });
 
                 ctx.send(delta as GameMessage);
 
-            // ── HOST → CLIENT ────────────────────────────────────────────────
+                // ── HOST → CLIENT ────────────────────────────────────────────────
             } else if (mode === 'HOST') {
                 // Build window bitmask map only if dirty
                 if (windowsDirty) {
@@ -124,7 +124,7 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                 _zombiesSnapshot.length = ctx.zombies.length;
                 for (let i = 0; i < ctx.zombies.length; i++) {
                     const z = ctx.zombies[i];
-                    if (!_zombiesSnapshot[i]) _zombiesSnapshot[i] = {};
+                    if (!_zombiesSnapshot[i]) _zombiesSnapshot[i] = {} as ZombieSyncData;
                     const s = _zombiesSnapshot[i];
                     s.id = z.id;
                     s.type = z.type;
@@ -139,38 +139,38 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                 }
 
                 const delta = compressor.computeHostDelta(now, {
-                    doors:             gameState.doorStates,
+                    doors: gameState.doorStates,
                     hostPos: {
                         x: camera.position.x, y: camera.position.y, z: camera.position.z,
                         rot: camera.rotation.y, pitch: camera.rotation.x,
                     },
                     activeWeaponIndex: gameState.activeWeaponIndex,
-                    activeWeaponId:    currentWeaponId,
-                    hostHealth:        gameState.health,
-                    hostPoints:        gameState.points,
-                    hostTotalEarned:   gameState.totalEarnedPoints,
-                    hostName:          localName,
-                    hostPerks:         gameState.perkStates,
-                    hostIsDowned:      gameState.isDowned,
-                    hostKills:         gameState.kills,
-                    hostShots:         gameState.shots,
-                    zombies:           _zombiesSnapshot,
-                    windowStates:       windowStatesCache,
+                    activeWeaponId: currentWeaponId,
+                    hostHealth: gameState.health,
+                    hostPoints: gameState.points,
+                    hostTotalEarned: gameState.totalEarnedPoints,
+                    hostName: localName,
+                    hostPerks: gameState.perkStates,
+                    hostIsDowned: gameState.isDowned,
+                    hostKills: gameState.kills,
+                    hostShots: gameState.shots,
+                    zombies: _zombiesSnapshot,
+                    windowStates: windowStatesCache,
                     activeZombiesCount: ctx.zombies.length,
-                    totalRoundZombies:  gameState.totalZombiesInRound,
-                    zombiesSpawned:     gameState.zombiesSpawned,
+                    totalRoundZombies: gameState.totalZombiesInRound,
+                    zombiesSpawned: gameState.zombiesSpawned,
                     zombiesKilledInRound: gameState.zombiesKilledInRound,
-                    round:              gameState.round,
-                    powerOn:            gameState.powerOn,
-                    isDogRound:         gameState.isDogRound,
-                    activePowerUps:     _activePowerUpTypes,
+                    round: gameState.round,
+                    powerOn: gameState.powerOn,
+                    isDogRound: gameState.isDogRound,
+                    activePowerUps: _activePowerUpTypes,
                     mysteryBox: {
-                        state:     ctx.mysteryBox.state,
-                        locIndex:  ctx.mysteryBox.activeLocationIndex,
-                        lidAngle:  ctx.mysteryBox.lidAngle,
-                        weaponId:  ctx.mysteryBox.resultWeaponId,
+                        state: ctx.mysteryBox.state,
+                        locIndex: ctx.mysteryBox.activeLocationIndex,
+                        lidAngle: ctx.mysteryBox.lidAngle,
+                        weaponId: ctx.mysteryBox.resultWeaponId,
                         rollIndex: ctx.mysteryBox.currentWeaponIndex,
-                        owner:     ctx.mysteryBox.ownerName,
+                        owner: ctx.mysteryBox.ownerName,
                     },
                 });
 

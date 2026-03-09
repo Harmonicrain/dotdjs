@@ -325,7 +325,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     // The map is rebuilt lazily whenever ctx.windows grows (windows are registered
     // after the system is created, so we can't build it once at factory time).
     const windowMap = new Map<string, (typeof ctx.windows)[0]>();
-    let windowMapSnapshot: any = null;
+    let windowMapSnapshot: WindowBarrier | null = null;
 
     const rebuildWindowMap = () => {
         windowMap.clear();

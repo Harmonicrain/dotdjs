@@ -2,6 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { GameMessage } from '../types/index';
 import { CachedHostState, CachedClientState } from '../network/NetworkMessageHandler';
 import { ReviveEvent } from '../types/systems';
+import type { ShootMessage } from '../systems/ProjectileSystem';
 
 export interface GameEvents {
     'HELLHOUND_DEATH': { id: string, position: BABYLON.Vector3 };
@@ -16,7 +17,7 @@ export interface GameEvents {
     'DOOR_OPEN_REQUEST': string;
     'POWER_ON_REQUEST': null;
     'COMMAND_REQUEST': string;
-    'REMOTE_SHOOT': GameMessage;
+    'REMOTE_SHOOT': ShootMessage;
     'RESPAWN_REQUEST': { round: number, points: number };
     'REVIVE_EVENT': ReviveEvent;
     'NET_GAME_STATE_UPDATE': CachedHostState;
