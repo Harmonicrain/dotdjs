@@ -14,13 +14,13 @@ export class GameEngine {
 
     private static readonly _lookAtTarget = new BABYLON.Vector3();
 
-    constructor() {}
+    constructor() { }
 
     public initialize(scene: BABYLON.Scene) {
         this.scene = scene;
         this.activeProjectiles = [];
         this.remoteProjectileCount = 0;
-        
+
         // Initialize Projectile Pool
 
         this.projectilePool = new ObjectPool<Projectile>(
@@ -29,67 +29,67 @@ export class GameEngine {
                 // Real bullets are short and fast - we make them visible but not beam-like
                 const length = 0.15; // Short like a real bullet
                 const diameter = 0.04; // Slightly wider for visibility
-                
+
                 // Create a bullet shape: cylinder body with cone tip
                 const body = BABYLON.MeshBuilder.CreateCylinder("projectile_body", {
                     height: length * 0.7,
                     diameter: diameter,
                     tessellation: 8
                 }, scene);
-                
+
                 const tip = BABYLON.MeshBuilder.CreateCylinder("projectile_tip", {
                     height: length * 0.3,
                     diameterTop: 0,
                     diameterBottom: diameter,
                     tessellation: 8
                 }, scene);
-                
+
                 // Position tip at front of body
                 tip.position.y = length * 0.5;
-                
+
                 // Merge into single mesh
                 const mesh = BABYLON.Mesh.MergeMeshes([body, tip], true, true, undefined, false, true);
                 if (!mesh) {
                     // Fallback to simple cylinder if merge fails
-                    const fallback = BABYLON.MeshBuilder.CreateCylinder("projectile", {height: length, diameter: diameter}, scene);
+                    const fallback = BABYLON.MeshBuilder.CreateCylinder("projectile", { height: length, diameter: diameter }, scene);
                     fallback.rotation.x = Math.PI / 2;
                     fallback.position.z = length / 2;
                     fallback.bakeCurrentTransformIntoVertices();
                     fallback.setEnabled(false);
                     fallback.checkCollisions = false;
                     fallback.isPickable = false;
-                    return { 
-                        mesh: fallback, 
-                        direction: BABYLON.Vector3.Zero(), 
-                        speed: 0, 
-                        damage: 0, 
-                        life: 0, 
+                    return {
+                        mesh: fallback,
+                        direction: BABYLON.Vector3.Zero(),
+                        speed: 0,
+                        damage: 0,
+                        life: 0,
                         isRemote: false,
                         isPacked: false,
                         owner: 'HOST'
                     };
                 }
-                
+
                 mesh.name = "projectile";
-                
+
                 // Rotate to align with Z axis (bullet travels forward)
                 mesh.rotation.x = Math.PI / 2;
-                
+
                 // Shift position forward so origin is at the back of the bullet
                 mesh.position.z = length / 2;
-                
+
                 // Bake transform: Now vertices are permanently in Z axis with origin at tail
                 mesh.bakeCurrentTransformIntoVertices();
-                
+
                 mesh.setEnabled(false);
                 mesh.checkCollisions = false;
                 mesh.isPickable = false; // Performance optimization
-                return { 
-                    mesh, 
-                    direction: BABYLON.Vector3.Zero(), 
-                    speed: 0, 
-                    damage: 0, 
-                    life: 0, 
+                return {
+                    mesh,
+                    direction: BABYLON.Vector3.Zero(),
+                    speed: 0,
+                    damage: 0,
+                    life: 0,
                     isRemote: false,
                     isPacked: false,
                     owner: 'HOST'
@@ -120,11 +120,11 @@ export class GameEngine {
     }
 
     public spawnProjectile(
-        position: BABYLON.Vector3, 
-        direction: BABYLON.Vector3, 
-        speed: number, 
-        damage: number, 
-        isRemote: boolean, 
+        position: BABYLON.Vector3,
+        direction: BABYLON.Vector3,
+        speed: number,
+        damage: number,
+        isRemote: boolean,
         isPacked: boolean,
         owner: 'HOST' | 'CLIENT' = 'HOST',
         isExplosive?: boolean,
@@ -144,10 +144,10 @@ export class GameEngine {
         // Reuse direction vector for lookAt target to avoid allocating a new Vector3
         GameEngine._lookAtTarget.copyFrom(position).addInPlace(direction);
         p.mesh.lookAt(GameEngine._lookAtTarget);
-        
+
         // Material handling - use different material for explosive projectiles
-        const matName = isExplosive 
-            ? (isPacked ? "projectileMatExplosivePacked" : "projectileMatExplosive") 
+        const matName = isExplosive
+            ? (isPacked ? "projectileMatExplosivePacked" : "projectileMatExplosive")
             : (isPacked ? "projectileMatPacked" : "projectileMat");
         const mat = this.scene.getMaterialByName(matName);
         if (mat) p.mesh.material = mat;
@@ -174,6 +174,9 @@ export class GameEngine {
     }
 
 
+    // Scratch vector for trail detachment — avoids per-release allocation
+    private static readonly _trailDetachPos = new BABYLON.Vector3();
+
     public releaseProjectile(p: Projectile) {
         if (!this.projectilePool) return;
         p.mesh.setEnabled(false); // Hide immediately
@@ -183,7 +186,8 @@ export class GameEngine {
             // snapshot position so remaining particles fade out naturally without following the recycled projectile mesh.
             // We NO LONGER call dispose here as the system is now pooled.
             if (ps.emitter instanceof BABYLON.AbstractMesh) {
-                ps.emitter = ps.emitter.position.clone();
+                GameEngine._trailDetachPos.copyFrom(ps.emitter.position);
+                ps.emitter = GameEngine._trailDetachPos;
             }
             ps.stop();
             p.trailParticleSystem = null;

@@ -3,7 +3,7 @@ import { GameStateData, PowerUpType, DebugInfo } from '../types/index';
 import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, useGameStore } from '../store/useGameStore';
 
 type UpdatePlayer = (updates: Partial<PlayerFields>) => void;
-type UpdateGame   = (updates: Partial<GameFields>)   => void;
+type UpdateGame = (updates: Partial<GameFields>) => void;
 
 /**
  * UIBridge
@@ -20,26 +20,32 @@ export class UIBridge {
     private readonly UI_UPDATE_THROTTLE = 50; // ms
     private lastUiUpdate: Record<string, number> = {};
     private uiCache = {
-        points:             -1,
-        totalEarnedPoints:  -1,
-        health:             -1,
-        ammo:               -1,
-        reserveAmmo:        -1,
-        activeWeaponIndex:  -1,
-        weaponName:         '',
+        points: -1,
+        totalEarnedPoints: -1,
+        health: -1,
+        ammo: -1,
+        reserveAmmo: -1,
+        activeWeaponIndex: -1,
+        weaponName: '',
         activeZombiesCount: -1,
-        totalRoundZombies:  -1,
-        hoverMsg:           null as string | null,
-        interactionMsg:     null as string | null,
-        isBeingRevived:     false,
-        kills:              -1,
-        shotsFired:         -1,
-        playerName:         '',
-        debugInfo:          null as DebugInfo | null,
+        totalRoundZombies: -1,
+        hoverMsg: null as string | null,
+        interactionMsg: null as string | null,
+        isBeingRevived: false,
+        kills: -1,
+        shotsFired: -1,
+        playerName: '',
+        debugInfo: null as DebugInfo | null,
+        flashColor: null as string | null,
+        zombiesSpawned: -1,
+        zombiesKilledInRound: -1,
+        zombiesToSpawn: -1,
+        debugControlsFps: 0,
+        debugControlsSource: 'NONE' as string,
     };
 
     private checkThrottle(key: string): boolean {
-        const now  = Date.now();
+        const now = Date.now();
         const last = this.lastUiUpdate[key] ?? 0;
         if (now - last > this.UI_UPDATE_THROTTLE) {
             this.lastUiUpdate[key] = now;
@@ -52,7 +58,7 @@ export class UIBridge {
         private readonly gameState: GameStateData,
         private readonly _updatePlayer: UpdatePlayer,
         private readonly _updateGame: UpdateGame,
-    ) {}
+    ) { }
 
     // ── Player setters ───────────────────────────────────────────────────
 
@@ -163,7 +169,10 @@ export class UIBridge {
     }
 
     public setFlashColor(v: string | null) {
-        this._updatePlayer({ flashColor: v });
+        if (this.uiCache.flashColor !== v) {
+            this.uiCache.flashColor = v;
+            this._updatePlayer({ flashColor: v });
+        }
     }
 
     public setPlayerName(v: string) {
@@ -238,17 +247,26 @@ export class UIBridge {
 
     public setZombiesSpawned(v: number) {
         this.gameState.zombiesSpawned = v;
-        this._updateGame({ zombiesSpawned: v });
+        if (this.uiCache.zombiesSpawned !== v) {
+            this.uiCache.zombiesSpawned = v;
+            this._updateGame({ zombiesSpawned: v });
+        }
     }
 
     public setZombiesKilledInRound(v: number) {
         this.gameState.zombiesKilledInRound = v;
-        this._updateGame({ zombiesKilledInRound: v });
+        if (this.uiCache.zombiesKilledInRound !== v) {
+            this.uiCache.zombiesKilledInRound = v;
+            this._updateGame({ zombiesKilledInRound: v });
+        }
     }
 
     public setZombiesToSpawn(v: number) {
         this.gameState.zombiesToSpawn = v;
-        this._updateGame({ zombiesToSpawn: v });
+        if (this.uiCache.zombiesToSpawn !== v) {
+            this.uiCache.zombiesToSpawn = v;
+            this._updateGame({ zombiesToSpawn: v });
+        }
     }
 
     public setIsConsoleOpen(v: boolean) {
@@ -268,10 +286,15 @@ export class UIBridge {
     }
 
     public setDebugInfo(v: DebugInfo | null) {
-        if (JSON.stringify(this.uiCache.debugInfo) !== JSON.stringify(v)) {
-            this.uiCache.debugInfo = v;
-            this._updateGame({ debugInfo: v });
-        }
+        const cached = this.uiCache.debugInfo;
+        if (cached === v) return;
+        if (cached && v &&
+            cached.name === v.name &&
+            cached.position.x === v.position.x &&
+            cached.position.y === v.position.y &&
+            cached.position.z === v.position.z) return;
+        this.uiCache.debugInfo = v;
+        this._updateGame({ debugInfo: v });
     }
 
     public setScaleWeaponMode(v: ScaleWeaponModeData | null) {
@@ -281,21 +304,29 @@ export class UIBridge {
     public setPlayerStats(zone: number, pos: { x: number, y: number, z: number, rot: number }) {
         // Position is high frequency, throttle it
         if (this.checkThrottle('playerStats')) {
-            this._updateGame({ 
+            this._updateGame({
                 currentZone: zone,
-                playerPosition: pos 
+                playerPosition: pos
             });
         }
     }
 
     public setDebugControls(data: Partial<DebugControlsData>) {
         // Only update if debug controls is active or we're toggling it
-        if (this.checkThrottle('debugControls') || data.isActive !== undefined) {
-            this._updateGame({ 
+        const fps = data.fps ?? 0;
+        const src = data.inputSource ?? 'NONE';
+        const isToggle = data.isActive !== undefined;
+        if (!isToggle &&
+            this.uiCache.debugControlsFps === fps &&
+            this.uiCache.debugControlsSource === src) return;
+        if (isToggle || this.checkThrottle('debugControls')) {
+            this.uiCache.debugControlsFps = fps;
+            this.uiCache.debugControlsSource = src;
+            this._updateGame({
                 debugControls: {
                     isActive: data.isActive ?? false,
-                    fps: data.fps ?? 0,
-                    inputSource: data.inputSource ?? 'NONE',
+                    fps,
+                    inputSource: src,
                     cameraRotation: data.cameraRotation ?? { x: 0, y: 0 },
                     rawMouseDelta: data.rawMouseDelta ?? { x: 0, y: 0 },
                     rawControllerLook: data.rawControllerLook ?? { x: 0, y: 0 },

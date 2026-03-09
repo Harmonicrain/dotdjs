@@ -67,10 +67,12 @@ const handleExplosion = (
 
     const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
     const playerPos = ctx.camera.position;
+    const splashRadiusSq = splashRadius * splashRadius;
 
     // Check distance from explosion to player for self-damage
-    const distToPlayer = BABYLON.Vector3.Distance(impactPoint, playerPos);
-    if (distToPlayer < splashRadius) {
+    const distToPlayerSq = BABYLON.Vector3.DistanceSquared(impactPoint, playerPos);
+    if (distToPlayerSq < splashRadiusSq) {
+        const distToPlayer = Math.sqrt(distToPlayerSq);
         const damageRatio = 1 - (distToPlayer / splashRadius);
         const gc = ctx.configManager.gameplay;
         const rawSelfDamage = splashDamage * (selfDamageMultiplier ?? 0.5) * damageRatio;
@@ -112,8 +114,9 @@ const handleExplosion = (
     for (const z of ctx.zombies) {
         if (z.isDead) continue;
 
-        const dist = BABYLON.Vector3.Distance(impactPoint, z.mesh.position);
-        if (dist <= splashRadius) {
+        const distSq = BABYLON.Vector3.DistanceSquared(impactPoint, z.mesh.position);
+        if (distSq <= splashRadiusSq) {
+            const dist = Math.sqrt(distSq);
             // Linear falloff - max damage at center, minimum at edge
             const damageRatio = 1 - (dist / splashRadius);
             const finalDamage = isInstaKill ? z.maxHealth : (splashDamage * damageRatio);
@@ -200,22 +203,48 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
     // Rebuilt once per frame (O(n)) at the top of update() so every in-flight
     // raycast hit resolves in O(1) instead of O(n * chain_depth).
     const zombieMeshMap = new Map<BABYLON.AbstractMesh, Zombie>();
+    // Set of ALL zombie/hellhound meshes (root + children) for O(1) pick predicate
+    const allEnemyMeshes = new Set<BABYLON.AbstractMesh>();
 
     const rebuildZombieMeshMap = () => {
         zombieMeshMap.clear();
+        allEnemyMeshes.clear();
         for (const z of ctx.zombies) {
             zombieMeshMap.set(z.mesh, z);
+            allEnemyMeshes.add(z.mesh);
+            // Register child meshes (head, torso, limbs) for O(1) lookup
+            if (z.headMesh) { zombieMeshMap.set(z.headMesh, z); allEnemyMeshes.add(z.headMesh); }
+            if (z.torsoMesh) { zombieMeshMap.set(z.torsoMesh, z); allEnemyMeshes.add(z.torsoMesh); }
+            if (z.limbs) {
+                if (z.limbs.armL) { zombieMeshMap.set(z.limbs.armL, z); allEnemyMeshes.add(z.limbs.armL); }
+                if (z.limbs.armR) { zombieMeshMap.set(z.limbs.armR, z); allEnemyMeshes.add(z.limbs.armR); }
+                if (z.limbs.legL) { zombieMeshMap.set(z.limbs.legL, z); allEnemyMeshes.add(z.limbs.legL); }
+                if (z.limbs.legR) { zombieMeshMap.set(z.limbs.legR, z); allEnemyMeshes.add(z.limbs.legR); }
+            }
+            // Also register deep children (eyes, jaw, pants, flesh patch)
+            for (const child of z.mesh.getChildMeshes(false)) {
+                if (!zombieMeshMap.has(child)) {
+                    zombieMeshMap.set(child, z);
+                    allEnemyMeshes.add(child);
+                }
+            }
         }
     };
 
     const findZombieFromMesh = (mesh: BABYLON.AbstractMesh) => {
-        let curr: BABYLON.AbstractMesh | null = mesh;
-        while (curr) {
-            const z = zombieMeshMap.get(curr);
-            if (z) return z;
-            curr = curr.parent as BABYLON.AbstractMesh | null;
-        }
-        return undefined;
+        return zombieMeshMap.get(mesh);
+    };
+
+    // ── Pick predicate using O(1) set/set lookups ─────────────────────────────
+    const staticMeshes = ctx.staticLevelMeshes;
+    const localPickPredicate = (mesh: BABYLON.AbstractMesh): boolean => {
+        if (!mesh.isPickable || !mesh.isEnabled() || !mesh.isVisible) return false;
+        if (allEnemyMeshes.has(mesh)) return true;
+        return staticMeshes.has(mesh);
+    };
+    const remotePickPredicate = (mesh: BABYLON.AbstractMesh): boolean => {
+        if (allEnemyMeshes.has(mesh)) return true;
+        return mesh.checkCollisions && mesh.isVisible && staticMeshes.has(mesh);
     };
 
     return {
@@ -261,14 +290,8 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                     _reusableRay.length = rayLen;
                     const ray = _reusableRay;
 
-                    // Combined raycast for zombies and environment
-                    const pick = scene.pickWithRay(ray, (mesh) => {
-                        if (!mesh.isPickable || !mesh.isEnabled() || !mesh.isVisible) return false;
-                        // Zombie/Hellhound check
-                        if (mesh.name.includes("zombie") || mesh.name.includes("hellhound")) return true;
-                        // Environment check
-                        return mesh.checkCollisions && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
-                    });
+                    // Combined raycast for zombies and environment — O(1) set lookups
+                    const pick = scene.pickWithRay(ray, localPickPredicate);
 
                     // ── DEBUG SELECTION (reuse the combined pick — no extra raycast) ──
                     if (isDebugActive && pick && pick.hit && pick.pickedMesh) {
@@ -287,7 +310,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
 
                     if (pick && pick.hit && pick.pickedMesh) {
                         hit = true;
-                        const isEnemy = pick.pickedMesh.name.includes("zombie") || pick.pickedMesh.name.includes("hellhound");
+                        const isEnemy = allEnemyMeshes.has(pick.pickedMesh);
 
                         if (isEnemy) {
                             ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
@@ -374,17 +397,12 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                     _reusableRay.length = rayLen;
                     const ray = _reusableRay;
 
-                    // Combined raycast for zombies and environment (O(1) instead of O(2))
-                    const pick = scene.pickWithRay(ray, (mesh) => {
-                        // Zombie/Hellhound check
-                        if (mesh.name.includes("zombie") || mesh.name.includes("hellhound")) return true;
-                        // Environment check
-                        return mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
-                    });
+                    // Combined raycast for zombies and environment — O(1) set lookups
+                    const pick = scene.pickWithRay(ray, remotePickPredicate);
 
                     if (pick && pick.hit && pick.pickedMesh) {
                         hit = true;
-                        const isEnemy = pick.pickedMesh.name.includes("zombie") || pick.pickedMesh.name.includes("hellhound");
+                        const isEnemy = allEnemyMeshes.has(pick.pickedMesh);
 
                         if (isEnemy) {
                             ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);

@@ -38,7 +38,7 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
             if (!camera) return;
             const currentGameMode = ctx.gameModeRef.current;
             const gameState = ctx.gameState;
-            
+
             const pc = ctx.configManager.powerUps;
             const vc = ctx.configManager.visuals;
 
@@ -64,32 +64,37 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                         activePowerUpIds.add(pending.id);
                     }
                 }
-                gameState.pendingPowerUps = []; 
+                gameState.pendingPowerUps = [];
             }
 
 
             // Host/Solo: Spawn checks & cleanup active effects
             if ((currentGameMode === 'SOLO' || currentGameMode === 'HOST') && !gameState.isGameOver) {
-                 if (gameState.accumulatedDropPoints >= gameState.nextDropThreshold) {
-                     const forward = camera.getDirection(BABYLON.Vector3.Forward());
-                     forward.y = 0;
-                     forward.normalize();
-                     const spawnPos = camera.position.add(forward.scale(2));
-                     spawnPos.y = 0; // Ground level — mesh factory adds +0.3
-                     ctx.powerUpManager.spawnPowerUp(spawnPos);
-                     
-                     gameState.accumulatedDropPoints = 0;
-                     gameState.nextDropThreshold = Math.floor(gameState.nextDropThreshold * pc.POINTS_THRESHOLD_MULTIPLIER);
-                 }
-                 
-                  for (const key in gameState.activePowerUps) {
-                      const type = key as PowerUpType;
-                      if (gameState.activePowerUps[type]! < now) {
-                          delete gameState.activePowerUps[type];
-                      }
-                  }
+                if (gameState.accumulatedDropPoints >= gameState.nextDropThreshold) {
+                    const forward = camera.getDirection(BABYLON.Vector3.Forward());
+                    forward.y = 0;
+                    forward.normalize();
+                    const spawnPos = camera.position.add(forward.scale(2));
+                    spawnPos.y = 0; // Ground level — mesh factory adds +0.3
+                    ctx.powerUpManager.spawnPowerUp(spawnPos);
 
-                 ctx.setActivePowerUps({...gameState.activePowerUps});
+                    gameState.accumulatedDropPoints = 0;
+                    gameState.nextDropThreshold = Math.floor(gameState.nextDropThreshold * pc.POINTS_THRESHOLD_MULTIPLIER);
+                }
+
+                let powerUpExpired = false;
+                for (const key in gameState.activePowerUps) {
+                    const type = key as PowerUpType;
+                    if (gameState.activePowerUps[type]! < now) {
+                        delete gameState.activePowerUps[type];
+                        powerUpExpired = true;
+                    }
+                }
+
+                // Only push to React when something actually changed
+                if (powerUpExpired) {
+                    ctx.setActivePowerUps({ ...gameState.activePowerUps });
+                }
             }
 
             // Client & Host: Update existing powerup meshes
@@ -99,17 +104,17 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                     // Frame-rate independent rotation
                     p.mesh.rotation.y += 0.02 * (dt * 60);
                     const lifeTime = now - p.spawnTime;
-                    
-                    if (lifeTime > pc.DURATION) { 
-                        p.mesh.dispose(); 
-                        gameState.powerUps.splice(i, 1); 
-                        continue; 
+
+                    if (lifeTime > pc.DURATION) {
+                        p.mesh.dispose();
+                        gameState.powerUps.splice(i, 1);
+                        continue;
                     }
-                    
+
                     if (lifeTime > pc.BLINK_START) {
                         p.mesh.setEnabled(Math.floor(now / 200) % 2 === 0);
                     }
-                    
+
                     if (!gameState.isSpectating && !gameState.isGameOver) {
                         const powerUpPos = p.mesh ? p.mesh.position : p.position;
                         // Use horizontal (XZ) squared distance — faster than sqrt
@@ -117,20 +122,20 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                         const dz = camera.position.z - powerUpPos.z;
                         const horizDistSq = dx * dx + dz * dz;
                         if (horizDistSq < pc.PICKUP_RADIUS * pc.PICKUP_RADIUS) {
-                            ctx.powerUpManager.activatePowerUp(p.type); 
+                            ctx.powerUpManager.activatePowerUp(p.type);
 
-                            
-                            ctx.setInteractionMsg(p.type.replace('_', ' ') + "!"); 
+
+                            ctx.setInteractionMsg(p.type.replace('_', ' ') + "!");
                             ctx.timerManager.schedule('pu_msg_clear', vc.HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
-                            
+
                             // Play powerup pickup sound
                             if (p.type === PowerUpType.INSTA_KILL) {
                                 ctx.soundManager?.play('instakill');
                             } else if (p.type === PowerUpType.NUKE) {
                                 ctx.soundManager?.play('nuke');
                             }
-                            
-                            p.mesh.dispose(); 
+
+                            p.mesh.dispose();
                             gameState.powerUps.splice(i, 1);
                         }
                     }

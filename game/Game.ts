@@ -777,7 +777,16 @@ export class Game {
     }
 
     public startLoop(onTick: (dt: number) => void) {
+        const TARGET_FPS = 60;
+        const FRAME_TIME = 1000 / TARGET_FPS;
+        let lastFrameTime = performance.now();
+
         this.engine.runRenderLoop(() => {
+            const now = performance.now();
+            const elapsed = now - lastFrameTime;
+            if (elapsed < FRAME_TIME) return; // skip — too soon
+            lastFrameTime = now - (elapsed % FRAME_TIME); // preserve remainder for smooth timing
+
             const dt = this.engine.getDeltaTime() / 1000;
             onTick(dt);
             if (this.scene) {

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PowerUpType } from '../../types/index';
+import { useGameStore } from '../../store/useGameStore';
 
 interface PowerUpIconProps {
     type: PowerUpType;
@@ -9,63 +10,63 @@ interface PowerUpIconProps {
 
 const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
     const [timeLeft, setTimeLeft] = useState(expireTime - Date.now());
-    
+
     useEffect(() => {
         const interval = setInterval(() => {
             setTimeLeft(expireTime - Date.now());
         }, 100);
         return () => clearInterval(interval);
     }, [expireTime]);
-    
+
     const isExpiring = timeLeft < 5000;
     const isBlinking = timeLeft < 3000;
     const seconds = Math.max(0, Math.ceil(timeLeft / 1000));
-    
+
     // Power-up configurations
-    const config: Record<PowerUpType, { 
-        icon: string; 
+    const config: Record<PowerUpType, {
+        icon: string;
         label: string;
-        bgGradient: string; 
+        bgGradient: string;
         glowColor: string;
         borderColor: string;
     }> = {
-        [PowerUpType.INSTA_KILL]: { 
-            icon: '☠', 
+        [PowerUpType.INSTA_KILL]: {
+            icon: '☠',
             label: 'INSTA-KILL',
             bgGradient: 'from-red-600 via-red-700 to-red-900',
             glowColor: 'rgba(220,38,38,0.8)',
             borderColor: 'border-red-400/50'
         },
-        [PowerUpType.DOUBLE_POINTS]: { 
-            icon: '×2', 
+        [PowerUpType.DOUBLE_POINTS]: {
+            icon: '×2',
             label: 'DOUBLE POINTS',
             bgGradient: 'from-amber-500 via-amber-600 to-amber-800',
             glowColor: 'rgba(245,158,11,0.8)',
             borderColor: 'border-amber-300/50'
         },
-        [PowerUpType.MAX_AMMO]: { 
-            icon: '∞', 
+        [PowerUpType.MAX_AMMO]: {
+            icon: '∞',
             label: 'MAX AMMO',
             bgGradient: 'from-emerald-500 via-emerald-600 to-emerald-800',
             glowColor: 'rgba(16,185,129,0.8)',
             borderColor: 'border-emerald-300/50'
         },
-        [PowerUpType.NUKE]: { 
-            icon: '☢', 
+        [PowerUpType.NUKE]: {
+            icon: '☢',
             label: 'NUKE',
             bgGradient: 'from-yellow-400 via-orange-500 to-red-600',
             glowColor: 'rgba(251,191,36,0.8)',
             borderColor: 'border-yellow-300/50'
         },
-        [PowerUpType.CARPENTER]: { 
-            icon: '🔨', 
+        [PowerUpType.CARPENTER]: {
+            icon: '🔨',
             label: 'CARPENTER',
             bgGradient: 'from-amber-700 via-amber-800 to-amber-900',
             glowColor: 'rgba(180,83,9,0.8)',
             borderColor: 'border-amber-500/50'
         },
-        [PowerUpType.FIRE_SALE]: { 
-            icon: '$', 
+        [PowerUpType.FIRE_SALE]: {
+            icon: '$',
             label: 'FIRE SALE',
             bgGradient: 'from-blue-500 via-blue-600 to-blue-800',
             glowColor: 'rgba(59,130,246,0.8)',
@@ -77,40 +78,40 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
     if (!powerUpConfig) return null;
 
     return (
-        <div 
+        <div
             className={`relative group ${isBlinking ? 'animate-pulse' : ''}`}
             style={{ animation: 'powerUpAppear 0.5s ease-out' }}
         >
             {/* Outer glow */}
-            <div 
+            <div
                 className="absolute -inset-2 rounded-lg blur-lg opacity-60"
-                style={{ 
+                style={{
                     background: `radial-gradient(circle, ${powerUpConfig.glowColor} 0%, transparent 70%)`,
                     animation: 'pulseGlow 1.5s ease-in-out infinite'
                 }}
             />
-            
+
             {/* Main container */}
             <div className={`relative w-14 h-14 rounded-lg overflow-hidden
                            bg-gradient-to-br ${powerUpConfig.bgGradient}
                            border-2 ${powerUpConfig.borderColor}
                            shadow-lg transition-transform duration-200
                            ${isExpiring ? 'scale-95' : 'scale-100'}`}
-                 style={{ 
-                     boxShadow: `0 0 20px ${powerUpConfig.glowColor}, inset 0 0 20px rgba(255,255,255,0.1)`
-                 }}>
-                
+                style={{
+                    boxShadow: `0 0 20px ${powerUpConfig.glowColor}, inset 0 0 20px rgba(255,255,255,0.1)`
+                }}>
+
                 {/* Inner shine */}
                 <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/20" />
-                
+
                 {/* Rotating border effect */}
                 <div className="absolute inset-0 overflow-hidden rounded-lg">
-                    <div 
+                    <div
                         className="absolute inset-[-50%] bg-gradient-conic from-white/30 via-transparent to-white/30"
                         style={{ animation: 'spin 3s linear infinite' }}
                     />
                 </div>
-                
+
                 {/* Icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
                     <span className={`${type === PowerUpType.DOUBLE_POINTS ? 'text-xl' : 'text-2xl'} 
@@ -118,7 +119,7 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
                         {powerUpConfig.icon}
                     </span>
                 </div>
-                
+
                 {/* Timer ring */}
                 <svg className="absolute inset-0 w-full h-full -rotate-90">
                     <circle
@@ -140,14 +141,14 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
                     />
                 </svg>
             </div>
-            
+
             {/* Timer text */}
             <div className={`absolute -bottom-5 left-1/2 -translate-x-1/2 
                            text-[10px] font-bold font-mono tracking-wider
                            ${isExpiring ? 'text-red-400 animate-pulse' : 'text-white/80'}`}>
                 {seconds}s
             </div>
-            
+
             {/* Label tooltip on hover - visible on larger screens */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
                           transition-opacity duration-200 whitespace-nowrap
@@ -159,11 +160,8 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
     );
 };
 
-interface PowerUpDisplayProps {
-    activePowerUps: Partial<Record<PowerUpType, number>>;
-}
-
-export const PowerUpDisplay: React.FC<PowerUpDisplayProps> = ({ activePowerUps }) => {
+export const PowerUpDisplay: React.FC = () => {
+    const activePowerUps = useGameStore(s => s.activePowerUps);
     const activePowerUpEntries = Object.entries(activePowerUps)
         .filter(([_, expTime]) => expTime && expTime > Date.now())
         .map(([type, expTime]) => ({ type: type as PowerUpType, expTime: expTime! }));

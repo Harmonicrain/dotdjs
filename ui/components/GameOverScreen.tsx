@@ -1,44 +1,35 @@
 
 import React, { useState, useEffect } from 'react';
+import { useGameStore } from '../../store/useGameStore';
 
 interface GameOverScreenProps {
-    round: number;
-    playerName: string;
-    kills: number;
-    shotsFired: number;
-    score: number;
-    gameMode: string;
-    remotePlayerName?: string;
-    remoteKills?: number;
-    remoteShots?: number;
-    remoteScore?: number;
     onQuit: () => void;
 }
 
 // Animated stat reveal component
-const StatReveal: React.FC<{ 
-    label: string; 
-    value: number | string; 
+const StatReveal: React.FC<{
+    label: string;
+    value: number | string;
     delay: number;
     highlight?: boolean;
 }> = ({ label, value, delay, highlight }) => {
     const [show, setShow] = useState(false);
     const [countedValue, setCountedValue] = useState(0);
-    
+
     useEffect(() => {
         const showTimer = setTimeout(() => setShow(true), delay);
         return () => clearTimeout(showTimer);
     }, [delay]);
-    
+
     // Count-up animation for numbers
     useEffect(() => {
         if (!show || typeof value !== 'number') return;
-        
+
         const duration = 1000;
         const steps = 30;
         const increment = value / steps;
         let current = 0;
-        
+
         const interval = setInterval(() => {
             current += increment;
             if (current >= value) {
@@ -48,14 +39,14 @@ const StatReveal: React.FC<{
                 setCountedValue(Math.floor(current));
             }
         }, duration / steps);
-        
+
         return () => clearInterval(interval);
     }, [show, value]);
 
     if (!show) return <div className="h-8" />;
 
     return (
-        <div 
+        <div
             className="flex justify-between items-center py-2 border-b border-stone-800/50"
             style={{ animation: 'statSlideIn 0.4s ease-out' }}
         >
@@ -68,15 +59,21 @@ const StatReveal: React.FC<{
     );
 };
 
-export const GameOverScreen: React.FC<GameOverScreenProps> = ({ 
-    round, playerName, kills, shotsFired, score, gameMode, 
-    remotePlayerName, remoteKills, remoteShots, remoteScore, 
-    onQuit 
-}) => {
+export const GameOverScreen: React.FC<GameOverScreenProps> = ({ onQuit }) => {
+    const round = useGameStore(s => s.round);
+    const playerName = useGameStore(s => s.playerName);
+    const kills = useGameStore(s => s.kills);
+    const shotsFired = useGameStore(s => s.shotsFired);
+    const score = useGameStore(s => s.totalEarnedPoints);
+    const gameMode = useGameStore(s => s.gameMode);
+    const remotePlayerName = useGameStore(s => s.remotePlayerName);
+    const remoteKills = useGameStore(s => s.remoteKills);
+    const remoteShots = useGameStore(s => s.remoteShots);
+    const remoteScore = useGameStore(s => s.remoteTotalEarnedPoints);
     const [phase, setPhase] = useState(0);
     const accuracy = shotsFired > 0 ? ((kills / shotsFired) * 100).toFixed(1) : '0.0';
-    const remoteAccuracy = remoteShots && remoteShots > 0 
-        ? ((remoteKills! / remoteShots) * 100).toFixed(1) 
+    const remoteAccuracy = remoteShots && remoteShots > 0
+        ? ((remoteKills! / remoteShots) * 100).toFixed(1)
         : '0.0';
 
     // Phase progression for cinematic reveal
@@ -96,21 +93,21 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
             {/* Animated background */}
             <div className="absolute inset-0 bg-black">
                 {/* Noise texture */}
-                <div 
+                <div
                     className="absolute inset-0 opacity-[0.03]"
-                    style={{ 
+                    style={{
                         backgroundImage: 'url("https://playground.babylonjs.com/textures/noise.png")',
                         backgroundSize: '200px'
                     }}
                 />
-                
+
                 {/* Vignette */}
                 <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/50 to-black" />
-                
+
                 {/* Blood drip effect at top */}
                 <div className="absolute top-0 left-0 right-0 h-32 overflow-hidden">
                     {[...Array(12)].map((_, i) => (
-                        <div 
+                        <div
                             key={i}
                             className="absolute top-0 w-1 bg-gradient-to-b from-red-900 to-transparent rounded-full"
                             style={{
@@ -122,11 +119,11 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                         />
                     ))}
                 </div>
-                
+
                 {/* Ambient particles */}
                 <div className="absolute inset-0">
                     {[...Array(20)].map((_, i) => (
-                        <div 
+                        <div
                             key={i}
                             className="absolute w-1 h-1 bg-red-900/30 rounded-full"
                             style={{
@@ -138,7 +135,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                     ))}
                 </div>
             </div>
-            
+
             {/* Content container */}
             <div className="relative w-full max-w-4xl px-8">
                 {/* GAME OVER title */}
@@ -146,13 +143,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                     <div className="text-center mb-8" style={{ animation: 'titleReveal 1s ease-out' }}>
                         <h1 className="text-[120px] font-black text-red-700 leading-none tracking-tighter
                                      drop-shadow-[0_0_60px_rgba(127,29,29,0.5)]"
-                            style={{ 
+                            style={{
                                 textShadow: '0 8px 0 rgba(0,0,0,0.8), 0 0 100px rgba(127,29,29,0.3)',
                                 animation: 'glitchText 0.3s ease-in-out 0.5s 3'
                             }}>
                             GAME OVER
                         </h1>
-                        
+
                         {/* Glitch layers */}
                         <div className="absolute inset-0 flex items-start justify-center pointer-events-none">
                             <h1 className="text-[120px] font-black text-red-500/30 leading-none tracking-tighter
@@ -170,7 +167,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                         </div>
                     </div>
                 )}
-                
+
                 {/* Round survived */}
                 {phase >= 2 && (
                     <div className="text-center mb-12" style={{ animation: 'fadeSlideUp 0.6s ease-out' }}>
@@ -194,7 +191,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                 {phase >= 3 && (
                     <div className={`grid gap-8 mb-12 ${gameMode !== 'SOLO' ? 'grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'}`}>
                         {/* Player 1 stats */}
-                        <div 
+                        <div
                             className="bg-stone-950/80 border border-stone-800 rounded-lg p-6
                                      backdrop-blur-sm"
                             style={{ animation: 'cardSlideIn 0.5s ease-out' }}
@@ -205,16 +202,16 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                                     {playerName}
                                 </h3>
                             </div>
-                            
+
                             <StatReveal label="Score" value={score} delay={0} highlight />
                             <StatReveal label="Kills" value={kills} delay={200} />
                             <StatReveal label="Shots Fired" value={shotsFired} delay={400} />
                             <StatReveal label="Accuracy" value={`${accuracy}%`} delay={600} />
                         </div>
-                        
+
                         {/* Player 2 stats (co-op) */}
                         {gameMode !== 'SOLO' && (
-                            <div 
+                            <div
                                 className="bg-stone-950/80 border border-stone-800 rounded-lg p-6
                                          backdrop-blur-sm"
                                 style={{ animation: 'cardSlideIn 0.5s ease-out 0.2s both' }}
@@ -225,7 +222,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                                         {remotePlayerName || '---'}
                                     </h3>
                                 </div>
-                                
+
                                 <StatReveal label="Score" value={remoteScore || 0} delay={100} highlight />
                                 <StatReveal label="Kills" value={remoteKills || 0} delay={300} />
                                 <StatReveal label="Shots Fired" value={remoteShots || 0} delay={500} />
@@ -238,7 +235,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                 {/* Return button */}
                 {phase >= 4 && (
                     <div className="text-center" style={{ animation: 'fadeSlideUp 0.5s ease-out' }}>
-                        <button 
+                        <button
                             onClick={onQuit}
                             className="group relative px-12 py-4 overflow-hidden
                                      bg-transparent border-2 border-stone-700
@@ -248,14 +245,14 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                             <div className="absolute inset-0 bg-gradient-to-r from-red-950/0 via-red-950/50 to-red-950/0
                                           translate-x-[-100%] group-hover:translate-x-[100%]
                                           transition-transform duration-500" />
-                            
+
                             <span className="relative text-stone-400 group-hover:text-red-100
                                            text-sm tracking-[0.3em] uppercase font-bold
                                            transition-colors duration-300">
                                 Return to Main Menu
                             </span>
                         </button>
-                        
+
                         <p className="mt-6 text-stone-700 text-xs tracking-widest uppercase font-mono">
                             Press ESC or click to continue
                         </p>
