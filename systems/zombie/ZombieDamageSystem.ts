@@ -90,9 +90,9 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                         _pushDir.y = 0;
                         _pushDir.normalize();
                         gameState.externalForce.addInPlaceFromFloats(
-                            _pushDir.x * 0.5,
+                            _pushDir.x * combat.KNOCKBACK_FORCE,
                             0,
-                            _pushDir.z * 0.5
+                            _pushDir.z * combat.KNOCKBACK_FORCE
                         );
                     }
                 }
