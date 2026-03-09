@@ -36,6 +36,7 @@ export interface IProjectileContext {
     setHealth(v: number): void;
     setIsDowned(v: boolean): void;
     setIsGameOver(v: boolean): void;
+    applyDamageToLocalPlayer(amount: number, flashColor: string): void;
 }
 
 const COLOR_FLASH_NORMAL = new BABYLON.Color3(1, 0.9, 0.6);
@@ -77,36 +78,11 @@ const handleExplosion = (
         const gc = ctx.configManager.gameplay;
         const rawSelfDamage = splashDamage * (selfDamageMultiplier ?? 0.5) * damageRatio;
         const selfDamage = Math.min(rawSelfDamage, gc.ZOMBIE_DAMAGE);
-        if (selfDamage > 0 && !ctx.gameState.isGodMode) {
-            ctx.gameState.lastDamageTime = Date.now();
-            ctx.gameState.health = Math.max(0, ctx.gameState.health - selfDamage);
-            ctx.setHealth(ctx.gameState.health);
-            ctx.setFlashColor("rgba(255, 100, 0, 0.5)");
+        if (selfDamage > 0) {
+            ctx.applyDamageToLocalPlayer(selfDamage, "rgba(255, 100, 0, 0.5)");
             ctx.timerManager.schedule('explosion_flash', 100, () => {
                 ctx.setFlashColor(null);
             });
-
-            if (ctx.gameState.health <= 0 && !ctx.gameState.isDowned) {
-                const isSolo = ctx.gameModeRef.current === 'SOLO';
-                const hasQuickRevive = ctx.gameState.perkStates['quickRevive'];
-
-                if (isSolo && !hasQuickRevive) {
-                    ctx.setHealth(0);
-                    ctx.setIsGameOver(true);
-                } else {
-                    ctx.gameState.isDowned = true;
-                    ctx.gameState.downedStartTime = Date.now();
-                    ctx.gameState.downedTimeLimit = gc.DOWNED_BLEED_OUT_TIME;
-                    ctx.setIsDowned(true);
-                    if (!isSolo) {
-                        ctx.send({
-                            type: 'PLAYER_DOWNED',
-                            playerName: ctx.gameState.playerName || "Survivor",
-                            position: { x: playerPos.x, y: playerPos.y, z: playerPos.z }
-                        });
-                    }
-                }
-            }
         }
     }
 

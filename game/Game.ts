@@ -300,6 +300,7 @@ export class Game {
             setHealth: (v) => sm.setHealth(v),
             setIsDowned: (v) => sm.setIsDowned(v),
             setIsGameOver: (v) => sm.setIsGameOver(v),
+            applyDamageToLocalPlayer: (amount: number, flashColor: string) => sm.applyDamageToLocalPlayer(amount, flashColor),
             staticLevelMeshes: sm.staticLevelMeshes
         }));
 

@@ -9,6 +9,7 @@ import { ZombieManager } from '../../managers/ZombieManager';
 import { HellhoundManager } from '../../managers/HellhoundManager';
 import { VisualManager } from '../../managers/VisualManager';
 import { MapConfigManager } from '../../managers/MapConfigManager';
+import { getHorizontalDist, getHorizontalDistSq } from '../../engine/GeometryUtils';
 
 export interface IZombieAIContext {
     gameState: GameStateData;
@@ -43,7 +44,6 @@ export interface IZombieAIContext {
 const _tempNavEndVec = new BABYLON.Vector3();
 const _tempSeparation = new BABYLON.Vector3();
 const _tempDirectDir = new BABYLON.Vector3();
-const _tempGravity = new BABYLON.Vector3();
 const _tempBlended = new BABYLON.Vector3();
 const _tempMoveResult = new BABYLON.Vector3();
 const _tempLookAt = new BABYLON.Vector3();
@@ -101,24 +101,6 @@ const _BASE_AGENT_PARAMS: BABYLON.IAgentParameters = {
     separationWeight: 1.0,    // crowd handles separation natively
 };
 
-/**
- * Computes horizontal distance between two positions (ignoring Y).
- */
-const getHorizontalDist = (p1: BABYLON.Vector3, p2: BABYLON.Vector3): number => {
-    const dx = p1.x - p2.x;
-    const dz = p1.z - p2.z;
-    return Math.sqrt(dx * dx + dz * dz);
-};
-
-/**
- * Computes horizontal squared distance between two positions (ignoring Y).
- */
-const getHorizontalDistSq = (p1: BABYLON.Vector3, p2: BABYLON.Vector3): number => {
-    const dx = p1.x - p2.x;
-    const dz = p1.z - p2.z;
-    return dx * dx + dz * dz;
-};
-
 
 /**
  * Updates burning damage for a zombie.
@@ -130,7 +112,7 @@ const updateBurningDamage = (
     ctx: IZombieAIContext
 ): boolean => {
     if (!z.isBurning) return false;
-    
+
     const zc = ctx.configManager.zombieAI;
     if (!z.lastBurnTime || now - z.lastBurnTime > zc.BURN_INTERVAL) {
         z.health -= zc.BURN_DAMAGE;
@@ -480,7 +462,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 _tempLungeDir.y = 0;
                 _tempMoveResult.copyFrom(_tempLungeDir);
                 _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
-                
+
                 const distFromStartSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lungeStartPos);
                 const distToPlayerSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
                 if (distFromStartSq >= hc.LUNGE_DISTANCE * hc.LUNGE_DISTANCE || distToPlayerSq <= 2.25) {
@@ -760,7 +742,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             if (crowd) {
                 for (const z of ctx.zombies) {
                     if (z.crowdAgentIndex !== undefined) {
-                        try { crowd.removeAgent(z.crowdAgentIndex); } catch (_) {}
+                        try { crowd.removeAgent(z.crowdAgentIndex); } catch (_) { }
                         z.crowdAgentIndex = undefined;
                     }
                 }
@@ -844,7 +826,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     // Ground spawn emergence
                     const emergeSpeed = 0.5; // Very slow emergence speed
                     z.mesh.position.y += emergeSpeed * dt;
-                    
+
                     if (z.mesh.position.y >= 0) {
                         z.mesh.position.y = 0;
                         z.state = ZombieState.CHASING;

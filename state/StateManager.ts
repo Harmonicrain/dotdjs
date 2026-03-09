@@ -40,7 +40,7 @@ export class StateManager {
     public mysteryBoxSystem: MysteryBoxSystem | null = null;
     public timerManager: TimerManager;
     public zoneSystem: ZoneSystem;
-    
+
     // Core Engine Refs (Assigned by Game.ts)
     public inputManager: InputManager | null = null;
     public navPlugin: BABYLON.RecastJSPlugin | undefined = undefined;
@@ -88,7 +88,7 @@ export class StateManager {
     public groundSpawns: GroundSpawn[] = [];
     public lights: BABYLON.PointLight[] = [];
     public spawnPoints: SpawnPoints | null = null;
-    
+
     // Map Visuals (for Systems to animate)
     public mapVisuals: {
         powerSwitchActivate: (() => void) | null;
@@ -112,7 +112,7 @@ export class StateManager {
     public connectionStatusRef: { current: string };
 
     // ── UI Bridge ─────────────────────────────────────────────────────
-    public ui: UIBridge = null!; 
+    public ui: UIBridge = null!;
 
     // ── HUD Sync Methods ─────────────────────
     public setPoints(v: number) { this.ui.setPoints(v); }
@@ -145,6 +145,44 @@ export class StateManager {
     public getConnectionStatus(): string { return this.ui.getConnectionStatus(); }
     public getIsSpectating(): boolean { return this.ui.getIsSpectating(); }
 
+    public applyDamageToLocalPlayer(amount: number, flashColor: string): void {
+        const isAuthority = this.gameModeRef.current === 'SOLO' || this.gameModeRef.current === 'HOST';
+        if (!isAuthority || this.gameState.isGodMode) return;
+        if (this.gameState.health <= 0 || this.gameState.isDowned) return;
+
+        this.gameState.lastDamageTime = Date.now();
+        this.gameState.health = Math.max(0, this.gameState.health - amount);
+        this.setHealth(this.gameState.health);
+        this.setFlashColor(flashColor);
+
+        if (this.gameState.health <= 0 && !this.gameState.isDowned) {
+            const isSolo = this.gameModeRef.current === 'SOLO';
+            const hasQuickRevive = this.gameState.perkStates['quickRevive'];
+
+            if (isSolo && !hasQuickRevive) {
+                this.setHealth(0);
+                this.setIsGameOver(true);
+            } else {
+                this.gameState.isDowned = true;
+                this.gameState.downedStartTime = Date.now();
+                this.gameState.downedTimeLimit = this.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
+                this.setIsDowned(true);
+                if (!isSolo) {
+                    this.send({
+                        type: 'PLAYER_DOWNED',
+                        playerName: this.gameState.playerName || "Survivor",
+                        position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z }
+                    });
+
+                    // In multiplayer, if both players are now downed, trigger game over
+                    if (this.remote.gameState.isDowned) {
+                        this.setIsGameOver(true);
+                    }
+                }
+            }
+        }
+    }
+
     constructor(
         public scene: BABYLON.Scene,
         public camera: BABYLON.UniversalCamera,
@@ -156,7 +194,7 @@ export class StateManager {
     ) {
         this.eventBus = new EventBus();
         this.timerManager = new TimerManager();
-        this.zoneSystem = new ZoneSystem([], []); 
+        this.zoneSystem = new ZoneSystem([], []);
         this.configManager = new MapConfigManager();
 
         // Console Commands
@@ -166,6 +204,11 @@ export class StateManager {
                 this.ui.setConsoleResult(result);
                 this.timerManager.schedule('clear_console', 5000, () => this.ui.setConsoleResult(null));
             }
+        });
+
+        // Player Damage Event
+        this.eventBus.on('PLAYER_DAMAGE', (data: { amount: number; source: string }) => {
+            this.applyDamageToLocalPlayer(data.amount, "rgba(200, 50, 0, 0.4)");
         });
 
         // Some commands (e.g. /scaleweapon) need to close the console and return to gameplay
@@ -190,7 +233,7 @@ export class StateManager {
             weaponMeshes: {} as { [key: string]: BABYLON.TransformNode },
             activeWeaponIndex: 0, isReloading: false, isFiring: false, isAiming: false, isKnifing: false, lastShotTime: 0,
             knifeMesh: null,
-            doorStates: {}, 
+            doorStates: {},
             windowBarriers: {},
             perkStates: {},
             interactableStates: {},

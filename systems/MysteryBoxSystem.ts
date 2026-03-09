@@ -11,7 +11,7 @@ import { StateManager } from '../state/StateManager';
  * Uses MapConfigManager for map-specific tuning.
  */
 export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSystem => {
-    
+
     const transition = (newState: MysteryBoxState, duration: number = 0) => {
         stateManager.mysteryBox.state = newState;
         stateManager.mysteryBox.stateTimer = duration;
@@ -25,10 +25,10 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
     const updateBoxVisibility = (force: boolean = false) => {
         const box = stateManager.mysteryBox;
-        
+
         const len = box.instances.length;
         if (len === 0) return;
-        
+
         // Only show the active box
         const activeIdx = box.activeLocationIndex;
         for (let i = 0; i < len; i++) {
@@ -68,17 +68,17 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         children.forEach((node, i) => {
             const c = node as BABYLON.TransformNode;
             if (c.name === "box_teddy") { c.setEnabled(false); return; }
-            
-            const isVisible = resultWeaponId 
+
+            const isVisible = resultWeaponId
                 ? (resultWeaponId === weapons[i]?.id && c.name !== "box_teddy")
                 : (i === showIndex);
-            
+
             c.setEnabled(isVisible);
-            
+
             if (isVisible && animateOptions) {
                 c.rotation.y += animateOptions.rotSpeed;
                 c.position.y = animateOptions.posY;
-                c.scaling = new BABYLON.Vector3(animateOptions.scale, animateOptions.scale, animateOptions.scale);
+                c.scaling.copyFromFloats(animateOptions.scale, animateOptions.scale, animateOptions.scale);
             }
         });
     };
@@ -106,7 +106,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         const glowPulse = 5 + Math.sin(Date.now() * 0.01) * 1.5;
         updateGlow(activeInstance, glowPulse);
 
-        const cycleSpeed = 100; 
+        const cycleSpeed = 100;
         const index = Math.floor(Date.now() / cycleSpeed) % weapons.length;
         box.currentWeaponIndex = index;
 
@@ -127,7 +127,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 const pool = availableWeapons.length > 0 ? availableWeapons : weapons;
                 const winWeapon = pool[Math.floor(Math.random() * pool.length)];
                 const originalIndex = weapons.findIndex(w => w.id === winWeapon.id);
-                
+
                 box.resultWeaponId = winWeapon.id;
                 box.currentWeaponIndex = originalIndex;
                 transition(MysteryBoxState.BOX_WEAPON_PRESENT, mbc.TIMING.WEAPON_PRESENT);
@@ -164,7 +164,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 const children = activeInstance.weaponAnchor.getChildren();
                 children.forEach(node => {
                     const t = node as BABYLON.TransformNode;
-                    t.scaling = new BABYLON.Vector3(2, 2, 2);
+                    t.scaling.copyFromFloats(2, 2, 2);
                     t.setEnabled(false);
                 });
             }
@@ -182,7 +182,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                     const progress = 1 - (box.stateTimer / mbc.TIMING.TEDDY_REVEAL);
                     c.position.y = BABYLON.Scalar.Lerp(0, 1.2, progress);
                     c.rotation.y += 0.05;
-                    c.scaling = new BABYLON.Vector3(1.5, 1.5, 1.5);
+                    c.scaling.copyFromFloats(1.5, 1.5, 1.5);
                 } else {
                     c.setEnabled(false);
                 }
@@ -218,15 +218,15 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 newIndex = (newIndex + 1) % stateManager.boxLocations.length;
             }
             box.activeLocationIndex = newIndex;
-            
+
             updateBoxVisibility(true);
-            
+
             // Get the NEW active instance after index change
             const newActiveInstance = box.instances[box.activeLocationIndex];
             if (newActiveInstance?.mesh) {
                 newActiveInstance.mesh.position = stateManager.boxLocations[newIndex];
                 newActiveInstance.mesh.rotation.y = stateManager.boxRotations[newIndex];
-                newActiveInstance.mesh.scaling = new BABYLON.Vector3(1, 1, 1);
+                newActiveInstance.mesh.scaling.copyFromFloats(1, 1, 1);
                 box.lidAngle = 0;
             }
             transition(MysteryBoxState.BOX_IDLE);
@@ -236,7 +236,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
             if (currentActiveInstance?.mesh) {
                 currentActiveInstance.mesh.position = stateManager.boxLocations[box.activeLocationIndex];
                 currentActiveInstance.mesh.rotation.y = stateManager.boxRotations[box.activeLocationIndex];
-                currentActiveInstance.mesh.scaling = new BABYLON.Vector3(1, 1, 1);
+                currentActiveInstance.mesh.scaling.copyFromFloats(1, 1, 1);
             }
         }
     };
@@ -300,28 +300,28 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const interact = (remotePlayerName?: string, costOverride?: number) => {
         const box = stateManager.mysteryBox;
         const boxCost = costOverride ?? stateManager.configManager.mysteryBox.COST;
-        
+
         if (box.state === MysteryBoxState.BOX_IDLE) {
             if (remotePlayerName) {
-                 transition(MysteryBoxState.BOX_OPENING, stateManager.configManager.mysteryBox.TIMING.OPENING);
-                 box.ownerName = remotePlayerName;
-                 return true;
+                transition(MysteryBoxState.BOX_OPENING, stateManager.configManager.mysteryBox.TIMING.OPENING);
+                box.ownerName = remotePlayerName;
+                return true;
             }
             if (stateManager.gameState.points >= boxCost) {
-                 stateManager.gameState.points -= boxCost;
-                 stateManager.setPoints(stateManager.gameState.points);
-                 transition(MysteryBoxState.BOX_OPENING, stateManager.configManager.mysteryBox.TIMING.OPENING);
-                 box.ownerName = stateManager.gameState.playerName;
-                 return true;
+                stateManager.gameState.points -= boxCost;
+                stateManager.setPoints(stateManager.gameState.points);
+                transition(MysteryBoxState.BOX_OPENING, stateManager.configManager.mysteryBox.TIMING.OPENING);
+                box.ownerName = stateManager.gameState.playerName;
+                return true;
             }
             return "NO_POINTS";
         }
         else if (box.state === MysteryBoxState.BOX_WEAPON_PRESENT) {
-             const owner = remotePlayerName || stateManager.gameState.playerName;
-             if (box.ownerName === owner) {
-                 transition(MysteryBoxState.BOX_CLOSING_SUCCESS, stateManager.configManager.mysteryBox.TIMING.CLOSING);
-                 if (box.resultWeaponId) return box.resultWeaponId; 
-             }
+            const owner = remotePlayerName || stateManager.gameState.playerName;
+            if (box.ownerName === owner) {
+                transition(MysteryBoxState.BOX_CLOSING_SUCCESS, stateManager.configManager.mysteryBox.TIMING.CLOSING);
+                if (box.resultWeaponId) return box.resultWeaponId;
+            }
         }
         return false;
     };
