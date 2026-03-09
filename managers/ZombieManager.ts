@@ -225,9 +225,17 @@ export class ZombieManager {
         const zs = this.configManager.zombieSpeeds;
         const zc = this.configManager.zombieAI;
 
-        // Rebuild spawn cache only when door states have changed
+        // Rebuild spawn cache when door states change OR when the map has been reloaded
+        // (same-map reload produces new GroundSpawn instances with the same IDs)
         const currentKey = this.buildDoorStateKey();
-        if (currentKey !== this.cachedDoorStateKey) {
+        const groundSpawnsStale = this.groundSpawns.length > 0 && this.groundSpawnById.get(this.groundSpawns[0].id) !== this.groundSpawns[0];
+        if (currentKey !== this.cachedDoorStateKey || groundSpawnsStale) {
+            if (groundSpawnsStale) {
+                // Map was reloaded — force re-init of zone/id maps so we don't
+                // hold stale GroundSpawn references (wrong hasLid, lingering queues)
+                this.initWindowsByZone();
+                this.initGroundSpawnsByZone();
+            }
             this.rebuildSpawnCache();
         }
 
