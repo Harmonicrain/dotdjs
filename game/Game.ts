@@ -323,6 +323,7 @@ export class Game {
             configManager: sm.configManager,
             zombies: sm.zombies,
             windows: sm.windows,
+            groundSpawns: sm.groundSpawns,
             zoneSystem: sm.zoneSystem,
             navPlugin: sm.navPlugin,
             remote: {
@@ -632,6 +633,7 @@ export class Game {
         this.shadowCasters = [];
         this.stateManager.mapVisuals.doorMeshes.clear();
         this.stateManager.windows.length = 0; // Clear array but keep reference
+        this.stateManager.groundSpawns.length = 0; // Clear array but keep reference
 
         // 2. Load New Map
 

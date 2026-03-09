@@ -308,7 +308,15 @@ export class ZombieManager {
             if (selectedWindow) {
                 zEntity.state = ZombieState.APPROACHING_WINDOW;
             } else if (spawnSourceType === 'ground') {
-                zEntity.state = ZombieState.SPAWNING;
+                // Check if this ground spawn has a lid covering it
+                const gs = this.cachedValidGroundSpawns.find(g => g.position.equals(spawnPos));
+                if (gs && gs.hasLid) {
+                    zEntity.state = ZombieState.BREAKING_LID;
+                    zEntity.targetLidId = gs.id;
+                    zEntity.lidBreakTimer = 0;
+                } else {
+                    zEntity.state = ZombieState.SPAWNING;
+                }
                 zEntity.mesh.position.y = -1.5; // Start underground
             } else {
                 zEntity.state = ZombieState.CHASING;

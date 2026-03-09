@@ -3,6 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 
 export enum ZombieState {
     SPAWNING = 'SPAWNING',
+    BREAKING_LID = 'BREAKING_LID',
     APPROACHING_WINDOW = 'APPROACHING_WINDOW',
     ATTACKING_BARRIER = 'ATTACKING_BARRIER',
     ENTERING = 'ENTERING',
@@ -27,7 +28,7 @@ export type WanderState = {
 
 export type Zombie = {
     id: string;
-    type: EnemyType; 
+    type: EnemyType;
     mesh: BABYLON.AbstractMesh;
     headMesh: BABYLON.AbstractMesh;
     torsoMesh?: BABYLON.AbstractMesh; // Added for crawling mechanics
@@ -36,7 +37,7 @@ export type Zombie = {
         armR: BABYLON.AbstractMesh;
         legL: BABYLON.AbstractMesh;
         legR: BABYLON.AbstractMesh;
-    }; 
+    };
     health: number;
     maxHealth: number;
     speed: number;
@@ -56,9 +57,9 @@ export type Zombie = {
 
     targetWindowId: string | null;
     barrierAttackTimer: number;
-    isBurning?: boolean; 
-    lastBurnTime?: number; 
-    fireSystem?: BABYLON.ParticleSystem; 
+    isBurning?: boolean;
+    lastBurnTime?: number;
+    fireSystem?: BABYLON.ParticleSystem;
     smokeEffect?: BABYLON.ParticleSystem;
     lastHitTime?: number;
     // Navigation Helpers
@@ -84,6 +85,9 @@ export type Zombie = {
     warnedNavEnd?: boolean;       // Track if we've warned about end position
     // Recast Crowd — index into the ICrowd agent array; undefined = not in crowd
     crowdAgentIndex?: number;
+    // Spawn hole lid breaking
+    targetLidId?: string;           // Ground spawn ID whose lid we're breaking
+    lidBreakTimer?: number;         // Timer for lid bounce animation
     // Door Crossing
     doorGraceTimer?: number;
     lastDoorTarget?: BABYLON.Vector3;
@@ -132,4 +136,8 @@ export type GroundSpawn = {
     id: string;
     position: BABYLON.Vector3;
     zone: number;
+    lidMesh?: BABYLON.AbstractMesh;       // The visible lid mesh (null = open hole)
+    triggerMesh?: BABYLON.AbstractMesh;   // Invisible trigger for player interaction
+    hasLid: boolean;                      // Runtime state: is the lid currently placed?
+    lastPointsRound?: number;             // Track the last round points were given to prevent farming
 };

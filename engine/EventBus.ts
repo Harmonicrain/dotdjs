@@ -9,6 +9,7 @@ export interface GameEvents {
     'PLAYER_DAMAGE': { amount: number; source: string };
     'GAME_STARTED': { startPoints: number } | null;
     'BOARD_STATE_CHANGE': { windowId: string };
+    'LID_STATE_CHANGE': { groundSpawnId: string };
     'ZOMBIE_DEATH': { id: string, position: BABYLON.Vector3 };
     'GAME_OVER': null;
     'COMMAND_CLOSE_CONSOLE': null;

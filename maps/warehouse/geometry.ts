@@ -50,45 +50,45 @@ export const WAREHOUSE_NAV_FLOORS: GroundDefinition[] = [
 export const WAREHOUSE_GEOMETRY: GeometryDefinition[] = [
     // === ZONE 1: BACK LEFT AREA (Z: -30 to 0, X: -10 to 10) ===
     // Left wall
-    { type: "wall", pos: [-10, 4.5, -23.5], size: [1, 9, 33], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [-10, 4.5, -23.5], size: [1, 9, 33], texture: "brick2", uvScale: WALL_UV, uvOffset: [0.5, 0.5] },
     // Back wall
-    { type: "wall", pos: [0, 4.5, -30], size: [20, 9, 1], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [0, 4.5, -30], size: [20, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.0, 0.0] },
 
     // === ZONE 4: PACK-A-PUNCH ROOM (X: -16 to -13, Z: -8 to -2) ===
-    { type: "ceiling", pos: [-13, 9.1, -5], size: [6, 0.2, 6] },
-    { type: "wall", pos: [-16, 4.5, -5], size: [1, 9, 6], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [-13, 4.5, -2], size: [6, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [-13, 4.5, -8], size: [6, 9, 1], texture: "brick", uvScale: WALL_UV },
+    { type: "ceiling", pos: [-13, 9.1, -5], size: [6, 0.2, 6], uvScale: 0.1 },
+    { type: "wall", pos: [-16, 4.5, -5], size: [1, 9, 6], texture: "brick", uvScale: WALL_UV, uvOffset: [0.7, 0.3] },
+    { type: "wall", pos: [-13, 4.5, -2], size: [6, 9, 1], texture: "brick2", uvScale: WALL_UV, uvOffset: [0.2, 0.8] },
+    { type: "wall", pos: [-13, 4.5, -8], size: [6, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.4, 0.6] },
     // Partial wall separating PaP from Zone 1
-    { type: "wall", pos: [-10, 7.5, -5], size: [1, 3, 4], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [-10, 7.5, -5], size: [1, 3, 4], texture: "brick2", uvScale: WALL_UV, uvOffset: [0.8, 0.1] },
 
     // === ZONE 2: FRONT LEFT AREA (Z: 0 to 40, X: -10 to 10) ===
     // Left wall (front section)
-    { type: "wall", pos: [-10, 4.5, 18.5], size: [1, 9, 43], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [-10, 4.5, 18.5], size: [1, 9, 43], texture: "brick", uvScale: WALL_UV, uvOffset: [0.3, 0.7] },
     // Front wall
-    { type: "wall", pos: [0, 4.5, 40], size: [20, 9, 1], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [0, 4.5, 40], size: [20, 9, 1], texture: "brick2", uvScale: WALL_UV, uvOffset: [0.6, 0.4] },
 
     // === ZONES 1-2 DIVIDER (at Z: 0) ===
-    { type: "wall", pos: [-6, 4.5, 0], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [6, 4.5, 0], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [0, 6.5, 0], size: [4, 5, 1], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [-6, 4.5, 0], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.1, 0.5] },
+    { type: "wall", pos: [6, 4.5, 0], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.6, 0.2] },
+    { type: "wall", pos: [0, 6.5, 0], size: [4, 5, 1], texture: "brick2", uvScale: WALL_UV, uvOffset: [0.9, 0.7] },
 
     // === MAIN CEILING (covers Zones 1, 2, 3) ===
-    { type: "ceiling", pos: [8, 9.1, 0], size: [45, 0.2, 80] },
+    { type: "ceiling", pos: [8, 9.1, 0], size: [45, 0.2, 80], uvScale: 0.1 },
 
     // === ZONE 3: RIGHT ROOM (X: 10 to 30, Z: -30 to 40) ===
     // Right wall (full length)
-    { type: "wall", pos: [10, 4.5, -31], size: [1, 9, 18], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 6, -20], size: [1, 6, 4], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 4.5, -7], size: [1, 9, 22], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 4.5, 15.5], size: [1, 9, 15], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 6.5, 6], size: [1, 5, 4], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 6, 25], size: [1, 6, 4], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [10, 4.5, 33.5], size: [1, 9, 13], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [10, 4.5, -31], size: [1, 9, 18], texture: "brick", uvScale: WALL_UV, uvOffset: [0.0, 0.4] },
+    { type: "wall", pos: [10, 6, -20], size: [1, 6, 4], texture: "brick", uvScale: WALL_UV, uvOffset: [0.5, 0.9] },
+    { type: "wall", pos: [10, 4.5, -7], size: [1, 9, 22], texture: "brick", uvScale: WALL_UV, uvOffset: [0.8, 0.2] },
+    { type: "wall", pos: [10, 4.5, 15.5], size: [1, 9, 15], texture: "brick", uvScale: WALL_UV, uvOffset: [0.2, 0.6] },
+    { type: "wall", pos: [10, 6.5, 6], size: [1, 5, 4], texture: "brick", uvScale: WALL_UV, uvOffset: [0.4, 0.1] },
+    { type: "wall", pos: [10, 6, 25], size: [1, 6, 4], texture: "brick", uvScale: WALL_UV, uvOffset: [0.7, 0.8] },
+    { type: "wall", pos: [10, 4.5, 33.5], size: [1, 9, 13], texture: "brick", uvScale: WALL_UV, uvOffset: [0.1, 0.3] },
     // Room 3 internal walls
-    { type: "wall", pos: [19.5, 4.5, -5], size: [19, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [29, 4.5, 2], size: [1, 9, 15], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [14, 4.5, 9], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [25.5, 4.5, 9], size: [7, 9, 1], texture: "brick", uvScale: WALL_UV },
-    { type: "wall", pos: [20, 6, 9], size: [4, 6, 1], texture: "brick", uvScale: WALL_UV },
+    { type: "wall", pos: [19.5, 4.5, -5], size: [19, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.6, 0.5] },
+    { type: "wall", pos: [29, 4.5, 2], size: [1, 9, 15], texture: "brick", uvScale: WALL_UV, uvOffset: [0.3, 0.0] },
+    { type: "wall", pos: [14, 4.5, 9], size: [8, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.9, 0.4] },
+    { type: "wall", pos: [25.5, 4.5, 9], size: [7, 9, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.2, 0.9] },
+    { type: "wall", pos: [20, 6, 9], size: [4, 6, 1], texture: "brick", uvScale: WALL_UV, uvOffset: [0.5, 0.3] },
 ];

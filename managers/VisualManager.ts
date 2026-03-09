@@ -93,6 +93,11 @@ export class VisualManager {
         this.particleManager.stopHoleSmoke();
     }
 
+    /** Enable or disable hole smoke at a specific position. */
+    public setHoleSmokeEnabled(pos: BABYLON.Vector3, enabled: boolean): void {
+        this.particleManager.setHoleSmokeEnabled(pos, enabled);
+    }
+
     public createPlasmaExplosion(pos: BABYLON.Vector3, isPacked: boolean = false) {
         this.particleManager.createPlasmaExplosion(pos, isPacked);
     }

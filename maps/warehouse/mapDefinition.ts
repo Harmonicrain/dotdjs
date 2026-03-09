@@ -21,8 +21,8 @@ export const WarehouseMapDefinition: MapDefinition = {
             power_switch: "/models/switch.glb"
         },
         textures: {
-            wall: "/textures/wall_grunge.jpg",
-            floor: "/textures/warehouse_floor.jpg",
+            wall: "/textures/warehouse_walls.png",
+            floor: "/textures/warehouse_floor.png",
             door: "/textures/door.jpg"
         }
     },
@@ -33,9 +33,10 @@ export const WarehouseMapDefinition: MapDefinition = {
         directionalLight: { direction: [-0.3, -1, 0.2], intensity: 0.4 },
     },
     textures: {
-        wall:      "/textures/wall_grunge.jpg",
-        floor:     "/textures/warehouse_floor.jpg",
-        ceiling:   "https://playground.babylonjs.com/textures/ground.jpg",
+        wall:      "/textures/warehouse_walls.png",
+        wall2:     "/textures/warehouse_walls_2.png",
+        floor:     "/textures/warehouse_floor.png",
+        ceiling:   "/textures/warehouse_ceiling.png",
         door:      "https://playground.babylonjs.com/textures/crate.png",
         plank:     "https://playground.babylonjs.com/textures/wood.jpg",
         powerDoor: "https://playground.babylonjs.com/textures/wood.jpg",

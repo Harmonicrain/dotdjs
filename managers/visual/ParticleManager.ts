@@ -611,6 +611,16 @@ export class ParticleManager {
         this.activeHoleSmokeCount = 0;
     }
 
+    /** Enable or disable hole smoke at a specific position. */
+    public setHoleSmokeEnabled(pos: BABYLON.Vector3, enabled: boolean): void {
+        for (let i = 0; i < this.activeHoleSmokeCount; i++) {
+            const ps = this.holeSmokePSPool[i];
+            if (ps.emitter && (ps.emitter as BABYLON.Vector3).equalsWithEpsilon(pos, 0.1)) {
+                ps.emitRate = enabled ? 8 : 0;
+            }
+        }
+    }
+
     public createPlasmaExplosion(pos: BABYLON.Vector3, isPacked: boolean = false) {
         const idx = this.explosionPSCursor % ParticleManager.MAX_EXPLOSION_PS;
         this.explosionPSCursor++;

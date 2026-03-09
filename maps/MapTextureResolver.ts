@@ -8,6 +8,7 @@ export type ResolvedTextureSet = Required<MapTextureSet>;
 /** Global fallback textures */
 const DEFAULTS: ResolvedTextureSet = {
     wall:      TEXTURES.WALL_TEX,
+    wall2:     TEXTURES.WALL_TEX,
     floor:     TEXTURES.FLOOR_TEX,
     ceiling:   TEXTURES.CEILING_TEX,
     door:      TEXTURES.DOOR_TEX,

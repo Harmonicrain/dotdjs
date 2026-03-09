@@ -180,6 +180,10 @@ export class LevelBuilder {
         const wallMat = this.materials.get('wall') as BABYLON.StandardMaterial;
         wallMat.diffuseTexture = new BABYLON.Texture(textures.wall, this.scene);
 
+        this.materials.set('wall2', new BABYLON.StandardMaterial("wall2Mat", this.scene));
+        const wall2Mat = this.materials.get('wall2') as BABYLON.StandardMaterial;
+        wall2Mat.diffuseTexture = new BABYLON.Texture(textures.wall2 || textures.wall, this.scene);
+
         this.materials.set('ceiling', new BABYLON.StandardMaterial("ceilingMat", this.scene));
         const ceilingMat = this.materials.get('ceiling') as BABYLON.StandardMaterial;
         ceilingMat.diffuseTexture = new BABYLON.Texture(textures.ceiling, this.scene);
@@ -190,6 +194,7 @@ export class LevelBuilder {
 
         // Aliases
         this.materials.set('brick', this.materials.get('wall')!);
+        this.materials.set('brick2', this.materials.get('wall2')!);
         this.materials.set('wood', this.materials.get('floor')!);
         this.materials.set('wood_small', createMaterial(this.scene, "woodSmallMat", textures.floor, new BABYLON.Color3(0.5, 0.5, 0.5), 1.0666, 1.2, 0.8));
         this.materials.set('wood_large', createMaterial(this.scene, "woodLargeMat", textures.floor, new BABYLON.Color3(1, 1, 1), 0.5, 0.15, 0.8));
@@ -228,7 +233,7 @@ export class LevelBuilder {
         const groups: Record<string, { meshes: BABYLON.Mesh[], mat: BABYLON.Material, isWalkable: boolean }> = {};
 
         def.geometry.forEach((geo, idx) => {
-            const matName = geo.material || geo.texture || (geo.type === 'wall' ? 'wall' : 'floor');
+            const matName = geo.material || geo.texture || (geo.type === 'wall' ? 'wall' : geo.type === 'ceiling' ? 'ceiling' : 'floor');
             const mat = this.materials.get(matName) || this.materials.get('wall')!;
 
             if (geo.type === 'box' || geo.type === 'wall' || geo.type === 'floor' || geo.type === 'ceiling') {
@@ -248,7 +253,8 @@ export class LevelBuilder {
                     geo.uvScale || 1.0,
                     false, // Handle shadows post-merge
                     [],    // Temp array
-                    []     // Temp array
+                    [],    // Temp array
+                    geo.uvOffset
                 );
 
                 if (geo.rotation) {
@@ -543,13 +549,29 @@ export class LevelBuilder {
             r.position = new BABYLON.Vector3(gs.pos[0] + innerExtent + frameThickness / 2, gs.pos[1] + frameHeight / 2, gs.pos[2]);
             frameMeshes.push(r);
 
-            // Add inner danger stripes or sub-frames? We'll keep it simple to ensure low overhead
+            // ── Lid mesh (disabled until player places it) ───────────────
+            const lidMesh = BABYLON.MeshBuilder.CreateBox(`groundSpawn_${gs.id}_lid`, { width: holeWidth, height: 0.08, depth: holeWidth }, this.scene);
+            lidMesh.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.04, gs.pos[2]);
+            lidMesh.material = metalMat;
+            lidMesh.isPickable = false;
+            lidMesh.setEnabled(false); // Hidden until placed
+            lidMesh.parent = this.root;
+
+            // ── Trigger mesh (always active, invisible, for crosshair raycast) ──
+            const trigger = BABYLON.MeshBuilder.CreateBox(`groundSpawn_${gs.id}_trigger`, { width: 1.6, height: 2, depth: 1.6 }, this.scene);
+            trigger.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 1, gs.pos[2]);
+            trigger.visibility = 0;
+            trigger.checkCollisions = false;
+            trigger.parent = this.root;
 
             // Store the runtime GroundSpawn object
             this.groundSpawnsRef.push({
                 id: gs.id,
                 position: new BABYLON.Vector3(gs.pos[0], gs.pos[1], gs.pos[2]),
                 zone: gs.zone,
+                lidMesh,
+                triggerMesh: trigger,
+                hasLid: false,
             });
         });
 

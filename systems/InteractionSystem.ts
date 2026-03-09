@@ -17,6 +17,7 @@ import { PowerHandler } from './interaction/handlers/PowerHandler';
 import { PackAPunchHandler } from './interaction/handlers/PackAPunchHandler';
 import { MysteryBoxHandler } from './interaction/handlers/MysteryBoxHandler';
 import { WindowHandler } from './interaction/handlers/WindowHandler';
+import { SpawnHoleLidHandler } from './interaction/handlers/SpawnHoleLidHandler';
 
 import { StateManager } from '../state/StateManager';
 
@@ -105,7 +106,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         if (ctx.mapVisuals.powerSwitchActivate) {
             ctx.mapVisuals.powerSwitchActivate();
         } else if (ctx.mapVisuals.powerSwitchHandle) {
-            ctx.mapVisuals.powerSwitchHandle.rotation.x = -Math.PI / 4; 
+            ctx.mapVisuals.powerSwitchHandle.rotation.x = -Math.PI / 4;
         }
         if (ctx.mapVisuals.powerDoor) {
             animateDoorMeshToY(ctx.mapVisuals.powerDoor,
@@ -115,9 +116,9 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         if (ctx.gameState.doorStates["powerDoor"]) {
             ctx.gameState.doorStates["powerDoor"].isOpen = true;
         }
-        ctx.setInteractionMsg("POWER ACTIVATED!"); 
+        ctx.setInteractionMsg("POWER ACTIVATED!");
         ctx.timerManager.schedule('power_msg', ctx.configManager.visuals.POWER_HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
-        
+
         // Play power on sound
         ctx.soundManager?.play('power');
     };
@@ -161,7 +162,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         if (scene) {
             // GLB weapons need upright orientation for PAP display; _world transforms are for ground pickup
             let papOverride: { rotation: [number, number, number] } | undefined;
-            if (weapon.id === 'pistol')    papOverride = { rotation: [0, Math.PI / 2, 0] };
+            if (weapon.id === 'pistol') papOverride = { rotation: [0, Math.PI / 2, 0] };
             else if (weapon.id === 'ray_gun') papOverride = { rotation: [0, Math.PI, 0] };
             animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode, papOverride);
             animMesh.parent = null;
@@ -234,17 +235,17 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
             for (let baseY = 0; baseY < texSize; baseY += verticalSpacing) {
                 // To ensure seamless tiling horizontally, the wave must complete a full cycle exactly at texSize
                 // frequency determines how many full waves fit across the width
-                
+
                 for (let yOffset of [-texSize, 0, texSize]) {
                     ctx2d.beginPath();
                     for (let x = 0; x <= texSize; x += 4) { // 4px step for smooth curves
                         // Use exact Math.PI * 2 multiples to guarantee seamless horizontal tiling
                         const angle = (x / texSize) * Math.PI * 2 * frequency + phaseOffset;
-                        
+
                         // Add some organic "wobble" that also perfectly loops
                         const wobbleAngle = (x / texSize) * Math.PI * 2 * (frequency * 2.5);
                         const organicY = baseY + Math.sin(angle) * amplitude + Math.sin(wobbleAngle) * (amplitude * 0.3) + yOffset;
-                        
+
                         if (x === 0) {
                             ctx2d.moveTo(x, organicY);
                         } else {
@@ -254,19 +255,19 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                     ctx2d.stroke();
                 }
             }
-            
+
             // Reset blur so we don't bleed into other operations accidentally
-            ctx2d.shadowBlur = 0; 
+            ctx2d.shadowBlur = 0;
         };
 
         // 3. Draw Topography Layers (Damascus / Dark Matter style)
-        
+
         // Base Layer: Deep thick purple traces
         drawSeamlessWave("rgba(80, 0, 255, 0.4)", 8, 15, 60, 2, 0, 100);
-        
+
         // Mid Layer: Neon pink energy
         drawSeamlessWave("rgba(255, 0, 180, 0.6)", 4, 10, 40, 3, Math.PI / 4, 80);
-        
+
         // Top Layer: Thin, sharp, bright cyan electrical lines
         drawSeamlessWave("rgba(0, 255, 255, 0.9)", 2, 5, 20, 5, Math.PI, 60);
 
@@ -381,51 +382,51 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
     };
 
     const handleWeaponPickup = (weaponId: string) => {
-         const weaponConfig = ctx.configManager.weapons.find(w => w.id === weaponId)!;
-         const weapons = ctx.gameState.weapons;
-         const existingSlot = weapons.findIndex((w: WeaponState) => w.id === weaponId);
-         
-         if (existingSlot !== -1) {
-              const w = weapons[existingSlot];
-              w.currentAmmo = w.clipSize;
-              w.currentReserve = w.maxReserve;
-              if (ctx.gameState.activeWeaponIndex === existingSlot) {
-                  ctx.setAmmo(w.currentAmmo);
-                  ctx.setReserveAmmo(w.currentReserve);
-              }
-              ctx.setInteractionMsg("AMMO REFILLED!");
-         } else {
-              const activeIdx = ctx.gameState.activeWeaponIndex;
-              const currentWeapon = weapons[activeIdx];
-              const newMesh = ctx.gameState.weaponMeshes[weaponId];
-              
-              const newWeaponState = { 
-                  ...weaponConfig, 
-                  currentAmmo: weaponConfig.clipSize, 
-                  currentReserve: weaponConfig.maxReserve, 
-                  mesh: newMesh, 
-                  isPacked: false 
-              };
-              
-              if (currentWeapon.mesh) currentWeapon.mesh.setEnabled(false);
-              
-              if (weapons.length < 2) {
-                  weapons.push(newWeaponState);
-                  const newIndex = weapons.length - 1;
-                  ctx.gameState.activeWeaponIndex = newIndex;
-                  ctx.setActiveWeaponIndex(newIndex);
-                  ctx.setWeaponName(newWeaponState.name);
-              } else {
-                  weapons[activeIdx] = newWeaponState;
-                  ctx.setWeaponName(newWeaponState.name);
-              }
-              
-              if (newWeaponState.mesh) newWeaponState.mesh.setEnabled(true);
-              ctx.setAmmo(newWeaponState.currentAmmo); 
-              ctx.setReserveAmmo(newWeaponState.currentReserve);
-              ctx.setInteractionMsg(`ACQUIRED ${weaponConfig.name}!`);
-         }
-         ctx.timerManager.schedule('clear_pickup_msg', ctx.configManager.visuals.HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
+        const weaponConfig = ctx.configManager.weapons.find(w => w.id === weaponId)!;
+        const weapons = ctx.gameState.weapons;
+        const existingSlot = weapons.findIndex((w: WeaponState) => w.id === weaponId);
+
+        if (existingSlot !== -1) {
+            const w = weapons[existingSlot];
+            w.currentAmmo = w.clipSize;
+            w.currentReserve = w.maxReserve;
+            if (ctx.gameState.activeWeaponIndex === existingSlot) {
+                ctx.setAmmo(w.currentAmmo);
+                ctx.setReserveAmmo(w.currentReserve);
+            }
+            ctx.setInteractionMsg("AMMO REFILLED!");
+        } else {
+            const activeIdx = ctx.gameState.activeWeaponIndex;
+            const currentWeapon = weapons[activeIdx];
+            const newMesh = ctx.gameState.weaponMeshes[weaponId];
+
+            const newWeaponState = {
+                ...weaponConfig,
+                currentAmmo: weaponConfig.clipSize,
+                currentReserve: weaponConfig.maxReserve,
+                mesh: newMesh,
+                isPacked: false
+            };
+
+            if (currentWeapon.mesh) currentWeapon.mesh.setEnabled(false);
+
+            if (weapons.length < 2) {
+                weapons.push(newWeaponState);
+                const newIndex = weapons.length - 1;
+                ctx.gameState.activeWeaponIndex = newIndex;
+                ctx.setActiveWeaponIndex(newIndex);
+                ctx.setWeaponName(newWeaponState.name);
+            } else {
+                weapons[activeIdx] = newWeaponState;
+                ctx.setWeaponName(newWeaponState.name);
+            }
+
+            if (newWeaponState.mesh) newWeaponState.mesh.setEnabled(true);
+            ctx.setAmmo(newWeaponState.currentAmmo);
+            ctx.setReserveAmmo(newWeaponState.currentReserve);
+            ctx.setInteractionMsg(`ACQUIRED ${weaponConfig.name}!`);
+        }
+        ctx.timerManager.schedule('clear_pickup_msg', ctx.configManager.visuals.HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
     };
 
     // ── Proximity Detection ──────────────────────────────────────────
@@ -434,7 +435,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         if (!ctx.camera || !ctx.scene) return null;
         const ray = ctx.camera.getForwardRay(3);
         const hit = ctx.scene.pickWithRay(ray);
-        
+
         if (hit && hit.hit && hit.pickedMesh) {
             return { mesh: hit.pickedMesh, metadata: hit.pickedMesh.metadata as InteractableMetadata };
         }
@@ -447,16 +448,22 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
 
         const { mesh, metadata } = target;
         const now = Date.now();
-        
+
         // Window Handler - allow continuous interaction but keep standard cooldown
         if (WindowHandler.interact({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice })) {
             ctx.gameState.lastRepairTime = now;
             return true;
         }
 
+        // Spawn hole lid handler - same pattern as windows
+        if (SpawnHoleLidHandler.interact({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice })) {
+            ctx.gameState.lastRepairTime = now;
+            return true;
+        }
+
         // Metadata Based Handlers
         if (!metadata || !metadata.type) return false;
-        
+
         // For other interactions, use standard cooldown unless continuous
         const cooldown = isContinuous ? 200 : 500;
         if (now - ctx.gameState.lastRepairTime < cooldown) return false;
@@ -480,6 +487,10 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         const winHover = WindowHandler.getHoverLabel({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice });
         if (winHover) return winHover;
 
+        // Spawn hole lid hover
+        const lidHover = SpawnHoleLidHandler.getHoverLabel({ stateManager: ctx, mesh, metadata, inputDevice: ctx.inputDevice });
+        if (lidHover) return lidHover;
+
         // Metadata Based Hover
         if (!metadata || !metadata.type) return null;
         const handler = HANDLERS[metadata.type];
@@ -497,7 +508,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         } else if (ctx.inputManager?.isDown(GameAction.INTERACT)) {
             interact(true);
         }
-        
+
         // Throttle hover check to reduce raycast frequency
         if (now - lastHoverCheck > HOVER_CHECK_INTERVAL) {
             lastHoverCheck = now;
@@ -511,7 +522,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
             if (ctx.gameState.doorStates[doorId]) {
                 ctx.gameState.doorStates[doorId].isOpen = true;
             }
-            
+
             // Remove NavMesh obstacle if it exists
             const entry = ctx.mapVisuals.doorMeshes.get(doorId);
             if (entry && entry.obstacle && ctx.navPlugin) {
@@ -522,7 +533,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                     console.error(`Failed to remove nav obstacle for door ${doorId}:`, e);
                 }
             }
-            
+
             actionOpenDoor(doorId);
         });
 

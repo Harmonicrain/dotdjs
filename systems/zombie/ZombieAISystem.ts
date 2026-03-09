@@ -1,7 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { ZombieState, HellhoundState, GameStateData, WindowBarrier, RemoteGameState, GameMessage } from '../../types/index';
 import { System } from '../../types/systems';
-import { Zombie } from '../../types/entities';
+import { Zombie, GroundSpawn } from '../../types/entities';
 import { ZoneSystem } from '../ZoneSystem';
 import { EventBus } from '../../engine/EventBus';
 import { TimerManager } from '../../engine/TimerManager';
@@ -25,6 +25,7 @@ export interface IZombieAIContext {
     zombies: Zombie[];
 
     windows: WindowBarrier[];
+    groundSpawns: GroundSpawn[];
     zoneSystem: ZoneSystem;
     navPlugin?: BABYLON.RecastJSPlugin;
     remote: {
@@ -834,6 +835,51 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                             addZombieToCrowd(z);
                         }
                     }
+                } else if (z.state === ZombieState.BREAKING_LID) {
+                    // Keep the zombie underground while breaking the lid
+                    z.mesh.position.y = -3.5;
+
+                    if (z.targetLidId) {
+                        const gs = ctx.groundSpawns.find(g => g.id === z.targetLidId);
+                        if (gs && gs.lidMesh && gs.hasLid) {
+                            if (z.lidBreakTimer === undefined) {
+                                z.lidBreakTimer = 0;
+                            }
+                            z.lidBreakTimer += dt;
+
+                            // Bouncing animation: 5 slow bounces over 4 seconds
+                            const breakDuration = 4.0;
+                            const totalBounces = 5;
+                            const progress = z.lidBreakTimer / breakDuration;
+
+                            // Math.abs(Math.sin()) creates a bounce shape where each PI is one bounce
+                            const bounceHeight = 0.15 * Math.abs(Math.sin(progress * Math.PI * totalBounces));
+                            gs.lidMesh.position.y = gs.position.y + 0.04 + bounceHeight;
+
+                            if (z.lidBreakTimer >= breakDuration) {
+                                // Destroy the lid
+                                gs.hasLid = false;
+                                gs.lidMesh.position.y = gs.position.y + 0.04;
+                                gs.lidMesh.setEnabled(false);
+                                z.targetLidId = undefined;
+                                z.lidBreakTimer = undefined;
+
+                                // Create dirt burst effect and re-enable ambient hole smoke
+                                ctx.visualManager.createGroundSpawnEruption(gs.position);
+                                ctx.visualManager.setHoleSmokeEnabled(gs.position, true);
+                            }
+                        } else {
+                            // Lid was already removed by another zombie or reset
+                            z.targetLidId = undefined;
+                            z.lidBreakTimer = undefined;
+                        }
+                    }
+
+                    // Once the lid is removed (by this zombie or another), emerge normally
+                    if (!z.targetLidId) {
+                        z.mesh.position.y = -1.5; // Reset to expected spawning depth
+                        z.state = ZombieState.SPAWNING;
+                    }
                 } else if (z.state === ZombieState.CHASING) {
                     updateZombieChase(z, dt, separation, frameFactor);
                 } else if (z.type === 'ZOMBIE') {
@@ -844,7 +890,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 // Apply gravity (except when entering window, spawning, or crowd-managed)
                 // Crowd agents have their Y set from navmesh; skip moveWithCollisions for them.
-                if (z.state !== ZombieState.ENTERING && z.state !== ZombieState.SPAWNING && z.crowdAgentIndex === undefined) {
+                if (z.state !== ZombieState.ENTERING && z.state !== ZombieState.SPAWNING && z.state !== ZombieState.BREAKING_LID && z.crowdAgentIndex === undefined) {
                     _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
                     z.mesh.moveWithCollisions(_tempMoveResult);
                     if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;

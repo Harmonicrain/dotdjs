@@ -69,16 +69,18 @@ export const createTiledBox = (
     uvScale: number = 1.0,
     castShadows: boolean,
     shadowCasters: BABYLON.AbstractMesh[],
-    navMeshes: BABYLON.Mesh[]
+    navMeshes: BABYLON.Mesh[],
+    uvOffset: [number, number] = [0, 0]
 ) => {
     const { w, h, d } = options;
+    const [ou, ov] = uvOffset;
     const faceUV = [
-        new BABYLON.Vector4(0, 0, w * uvScale, h * uvScale),
-        new BABYLON.Vector4(0, 0, w * uvScale, h * uvScale),
-        new BABYLON.Vector4(0, 0, d * uvScale, h * uvScale),
-        new BABYLON.Vector4(0, 0, d * uvScale, h * uvScale),
-        new BABYLON.Vector4(0, 0, w * uvScale, d * uvScale),
-        new BABYLON.Vector4(0, 0, w * uvScale, d * uvScale)
+        new BABYLON.Vector4(ou, ov, ou + w * uvScale, ov + h * uvScale),
+        new BABYLON.Vector4(ou, ov, ou + w * uvScale, ov + h * uvScale),
+        new BABYLON.Vector4(ou, ov, ou + d * uvScale, ov + h * uvScale),
+        new BABYLON.Vector4(ou, ov, ou + d * uvScale, ov + h * uvScale),
+        new BABYLON.Vector4(ou, ov, ou + w * uvScale, ov + d * uvScale),
+        new BABYLON.Vector4(ou, ov, ou + w * uvScale, ov + d * uvScale)
     ];
     const box = BABYLON.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d, faceUV: faceUV, wrap: true }, scene);
     box.position = position;

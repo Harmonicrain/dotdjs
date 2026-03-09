@@ -122,6 +122,7 @@ export interface WindowBarrierState {
 
 export interface MapTextureSet {
     wall?: string;
+    wall2?: string;
     floor?: string;
     ceiling?: string;
     door?: string;
@@ -140,10 +141,11 @@ export interface GeometryDefinition {
     type: 'wall' | 'floor' | 'ceiling' | 'box' | 'ramp';
     pos: [number, number, number];
     size: [number, number, number];
-    rotation?: [number, number, number]; 
+    rotation?: [number, number, number];
     texture?: string; // 'wall', 'floor', 'ceiling' keys from MapTextureSet
     material?: string;
     uvScale?: number;
+    uvOffset?: [number, number]; // UV start offset to reduce visible tiling
 }
 
 export interface DoorDefinition {
