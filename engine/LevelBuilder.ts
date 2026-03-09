@@ -73,13 +73,21 @@ export class LevelBuilder {
 
     public build(definition: MapDefinition, textures: ResolvedTextureSet) {
         this.mapGameplay = definition.config?.gameplay as MapGameplay || {};
-        this.initializeEnvironment(definition);
+        const shadowGenerator = this.initializeEnvironment(definition);
         this.initializeMaterials(textures);
         this.buildGeometry(definition);
         this.buildGrounds(definition);
         this.buildNavFloors(definition);
         this.buildInteractables(definition);
         this.buildFixtures(definition);
+
+        if (shadowGenerator) {
+            Promise.all(this.loadPromises).then(() => {
+                if (!this.scene.isDisposed) {
+                    this.shadowCasters.forEach(mesh => shadowGenerator.addShadowCaster(mesh));
+                }
+            });
+        }
 
         return {
             root: this.root,
@@ -105,8 +113,8 @@ export class LevelBuilder {
         };
     }
 
-    private initializeEnvironment(def: MapDefinition) {
-        if (!def.environment) return;
+    private initializeEnvironment(def: MapDefinition): BABYLON.ShadowGenerator | null {
+        if (!def.environment) return null;
 
         const env = def.environment;
 
@@ -154,12 +162,9 @@ export class LevelBuilder {
             shadowGenerator.useBlurExponentialShadowMap = true;
             shadowGenerator.blurKernel = shadow?.blurKernel ?? 32;
             shadowGenerator.darkness = shadow?.darkness ?? 0.5;
-            this.scene.onNewMeshAddedObservable.add((mesh) => {
-                if (this.shadowCasters.includes(mesh)) {
-                    shadowGenerator.addShadowCaster(mesh);
-                }
-            });
+            return shadowGenerator;
         }
+        return null;
     }
 
     private initializeMaterials(textures: ResolvedTextureSet) {
