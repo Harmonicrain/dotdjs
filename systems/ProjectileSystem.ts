@@ -283,10 +283,11 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
 
                       // Combined raycast for zombies and environment (O(1) instead of O(2))
                       const pick = scene.pickWithRay(ray, (mesh) => {
+                          if (!mesh.isPickable || !mesh.isEnabled() || !mesh.isVisible) return false;
                           // Zombie/Hellhound check
                           if (mesh.name.includes("zombie") || mesh.name.includes("hellhound")) return true;
                           // Environment check
-                          return mesh.checkCollisions && mesh.isVisible && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
+                          return mesh.checkCollisions && !mesh.name.includes("trigger") && !mesh.name.includes("weapon");
                       });
                       
                        if (pick && pick.hit && pick.pickedMesh) {

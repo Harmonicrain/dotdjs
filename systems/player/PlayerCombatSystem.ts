@@ -189,8 +189,8 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
              _aimRay.length = maxTargetDist;
              const aimHit = ctx.scene.pickWithRay(_aimRay, (mesh) => {
                  // Ignore weapon meshes, projectiles, and non-collidable objects
-                 return mesh.isPickable &&
-                        !mesh.name.includes("weapon") &&
+                 if (!mesh.isPickable || !mesh.isEnabled() || !mesh.isVisible) return false;
+                 return !mesh.name.includes("weapon") &&
                         !mesh.name.includes("projectile") &&
                         !mesh.name.includes("knife") &&
                         mesh !== ctx.gameState.knifeMesh;
@@ -300,7 +300,10 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
             _knifeRay.origin.copyFrom(origin);
             _knifeRay.direction.copyFrom(_knifeDir);
             _knifeRay.length = cc.KNIFE_RANGE;
-            const hit = ctx.scene.pickWithRay(_knifeRay, (m) => m.name.includes("zombie") || m.name.includes("hellhound"));
+            const hit = ctx.scene.pickWithRay(_knifeRay, (m) => {
+                if (!m.isPickable || !m.isEnabled() || !m.isVisible) return false;
+                return m.name.includes("zombie") || m.name.includes("hellhound");
+            });
             if (hit && hit.hit && hit.pickedMesh) {
                 ctx.visualManager.createBloodSplatter(hit.pickedPoint!, hit.getNormal(true)!, hit.pickedMesh);
                 const z = ctx.zombies.find(z => z.mesh === hit.pickedMesh || z.headMesh === hit.pickedMesh || z.mesh === hit.pickedMesh?.parent);
