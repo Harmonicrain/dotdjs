@@ -45,7 +45,7 @@ export class VisualManager {
 
     public createBloodSplatter(pos: BABYLON.Vector3, normal: BABYLON.Vector3, targetMesh?: BABYLON.AbstractMesh) {
         this.particleManager.createBloodSplatterParticles(pos, normal);
-        
+
         if (targetMesh) {
             this.decalManager.createBloodDecalOnMesh(pos, normal, targetMesh);
         }
@@ -81,6 +81,16 @@ export class VisualManager {
 
     public createSpawnSmokeEffect(pos: BABYLON.Vector3): BABYLON.ParticleSystem {
         return this.particleManager.createSpawnSmokeEffect(pos);
+    }
+
+    /** Start persistent ambient smoke on ground spawn holes. */
+    public startHoleSmoke(positions: BABYLON.Vector3[]): void {
+        this.particleManager.startHoleSmoke(positions);
+    }
+
+    /** Stop all persistent hole smoke. */
+    public stopHoleSmoke(): void {
+        this.particleManager.stopHoleSmoke();
     }
 
     public createPlasmaExplosion(pos: BABYLON.Vector3, isPacked: boolean = false) {

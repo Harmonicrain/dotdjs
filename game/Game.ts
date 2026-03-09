@@ -705,6 +705,12 @@ export class Game {
             this.stateManager.updateZoneSystem(lvl.zones, lvl.doorConnections);
             this.stateManager.visualManager.setLights(this.stateManager.lights);
 
+            // Start persistent ambient smoke on all ground spawn holes
+            if (sm.groundSpawns.length > 0) {
+                const holePositions = sm.groundSpawns.map(gs => gs.position);
+                sm.visualManager.startHoleSmoke(holePositions);
+            }
+
             await this.scene.whenReadyAsync();
             console.log(`Level ${selectedMap} loaded successfully.`);
         } catch (e) {

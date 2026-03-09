@@ -54,6 +54,11 @@ export class ParticleManager {
     private spawnSmokePSPool: BABYLON.ParticleSystem[] = [];
     private spawnSmokeCursor = 0;
 
+    // Ambient hole smoke — persistent, always-on, one per ground spawn (max 8)
+    private static readonly MAX_HOLE_SMOKE_PS = 8;
+    private holeSmokePSPool: BABYLON.ParticleSystem[] = [];
+    private activeHoleSmokeCount = 0;
+
     private static readonly _scratchColor3 = new BABYLON.Color3();
     private static readonly _scratchDir1 = new BABYLON.Vector3();
     private static readonly _scratchDir2 = new BABYLON.Vector3();
@@ -94,6 +99,7 @@ export class ParticleManager {
         this.initHoundExplosionPool();
         this.initSpawnEffectPool();
         this.initSpawnSmokePool();
+        this.initHoleSmokePool();
     }
 
     private initFlashLightPool() {
@@ -406,6 +412,35 @@ export class ParticleManager {
         }
     }
 
+    private initHoleSmokePool() {
+        const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
+        for (let i = 0; i < ParticleManager.MAX_HOLE_SMOKE_PS; i++) {
+            const ps = new BABYLON.ParticleSystem(`holeSmoke_${i}`, 15, this.scene);
+            ps.particleTexture = tex;
+            // Red-orange hellish glow
+            ps.color1 = new BABYLON.Color4(0.8, 0.15, 0.05, 0.4);
+            ps.color2 = new BABYLON.Color4(0.5, 0.08, 0.02, 0.3);
+            ps.colorDead = new BABYLON.Color4(0.15, 0.0, 0.0, 0);
+            ps.minSize = 0.4; ps.maxSize = 1.0;
+            ps.minLifeTime = 1.2; ps.maxLifeTime = 2.5;
+            ps.emitRate = 8;
+            // Sphere emitter for round, organic spread instead of square box
+            ps.createSphereEmitter(0.5);
+            // Slow upward drift with slight spread
+            ps.direction1 = new BABYLON.Vector3(-0.15, 0.3, -0.15);
+            ps.direction2 = new BABYLON.Vector3(0.15, 0.8, 0.15);
+            ps.minEmitPower = 0.2; ps.maxEmitPower = 0.5;
+            ps.gravity = new BABYLON.Vector3(0, 0.1, 0); // slight updraft
+            ps.minAngularSpeed = -0.5;
+            ps.maxAngularSpeed = 0.5;
+            // Additive blending for glowing effect
+            ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+            ps.disposeOnStop = false;
+            // Don't auto-start — these are positioned and started by startHoleSmoke()
+            this.holeSmokePSPool.push(ps);
+        }
+    }
+
     public createWoodDebris(pos: BABYLON.Vector3) {
         const idx = this.debrisPSCursor % ParticleManager.MAX_DEBRIS_PS;
         this.debrisPSCursor++;
@@ -551,6 +586,31 @@ export class ParticleManager {
         return ps;
     }
 
+    /**
+     * Start persistent ambient smoke on all ground spawn holes.
+     * One ParticleSystem per position, capped at MAX_HOLE_SMOKE_PS.
+     * Very low overhead: ~8 emitRate × 15 capacity per hole.
+     */
+    public startHoleSmoke(positions: BABYLON.Vector3[]): void {
+        this.stopHoleSmoke();
+        const count = Math.min(positions.length, ParticleManager.MAX_HOLE_SMOKE_PS);
+        for (let i = 0; i < count; i++) {
+            const ps = this.holeSmokePSPool[i];
+            ps.emitter = positions[i];
+            ps.start();
+        }
+        this.activeHoleSmokeCount = count;
+    }
+
+    /** Stop all persistent hole smoke particle systems. */
+    public stopHoleSmoke(): void {
+        for (let i = 0; i < this.activeHoleSmokeCount; i++) {
+            const ps = this.holeSmokePSPool[i];
+            if (ps.isStarted()) { ps.stop(); ps.reset(); }
+        }
+        this.activeHoleSmokeCount = 0;
+    }
+
     public createPlasmaExplosion(pos: BABYLON.Vector3, isPacked: boolean = false) {
         const idx = this.explosionPSCursor % ParticleManager.MAX_EXPLOSION_PS;
         this.explosionPSCursor++;
@@ -612,6 +672,7 @@ export class ParticleManager {
         this.bloodPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
         this.spawnEffectPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.spawnSmokePSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.stopHoleSmoke();
     }
 
     public dispose() {
@@ -641,5 +702,8 @@ export class ParticleManager {
         this.spawnEffectPSPool = [];
         for (const ps of this.spawnSmokePSPool) { ps.dispose(false); }
         this.spawnSmokePSPool = [];
+        for (const ps of this.holeSmokePSPool) { ps.dispose(false); }
+        this.holeSmokePSPool = [];
+        this.activeHoleSmokeCount = 0;
     }
 }
