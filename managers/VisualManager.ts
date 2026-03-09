@@ -8,9 +8,6 @@ import { VISUAL_CONFIG } from '../config';
 export class VisualManager {
     public lights: BABYLON.PointLight[] = [];
 
-    private zombieResidue: { meshes: BABYLON.AbstractMesh[], timestamp: number }[] = [];
-    private floorGorePieces: BABYLON.Mesh[] = [];
-
     private particleManager: ParticleManager;
     private decalManager: DecalManager;
     private goreManager: GoreManager;
@@ -103,10 +100,6 @@ export class VisualManager {
         this.goreManager.reset();
         this.particleManager.reset();
 
-        this.zombieResidue.forEach(r => r.meshes.forEach(m => m.dispose()));
-        this.zombieResidue = [];
-        this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
-        this.floorGorePieces = [];
         this.lights = [];
     }
 
@@ -115,10 +108,6 @@ export class VisualManager {
         this.goreManager.dispose();
         this.particleManager.dispose();
 
-        this.zombieResidue.forEach(r => r.meshes.forEach(m => m.dispose()));
-        this.zombieResidue = [];
-        this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
-        this.floorGorePieces = [];
         this.lights = [];
     }
 }

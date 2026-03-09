@@ -1,6 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { GameStateData, RemoteGameState } from '../../types/index';
 import { System, RemotePlayerVisuals } from '../../types/systems';
+import { frameIndependentLerp } from '../../engine/MathUtils';
 
 export interface IWeaponViewContext {
     gameState: GameStateData;
@@ -23,7 +24,6 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
     
     const _tempLerpTarget = new BABYLON.Vector3();
     const LERP_FACTOR = 0.2;
-    const frameIndependentLerp = (t: number) => 1 - Math.pow(1 - LERP_FACTOR, t * 60);
 
     return {
         name: 'weaponView',
@@ -56,7 +56,7 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
                 }
 
                 // Position Lerp (frame-rate independent)
-                const lerpAmount = frameIndependentLerp(dt);
+                const lerpAmount = frameIndependentLerp(LERP_FACTOR, dt);
                 _tempLerpTarget.copyFromFloats(finalTargetX, finalTargetY, targetPos.z);
                 BABYLON.Vector3.LerpToRef(mesh.position, _tempLerpTarget, lerpAmount, mesh.position);
                 ctx.camera.fov = BABYLON.Scalar.Lerp(ctx.camera.fov, targetFov, lerpAmount);

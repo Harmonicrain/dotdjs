@@ -44,11 +44,6 @@ export const getAvailableMapIds = (): string[] =>
     Object.keys(MAP_DEFINITIONS);
 
 /** Get map metadata for UI display */
-export const getMapMetadata = (id: string) => {
-    const def = MAP_DEFINITIONS[id];
-    return def?.meta ?? null;
-};
-
 export const loadMap = (
     id: string,
     scene: BABYLON.Scene,

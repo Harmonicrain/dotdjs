@@ -4,6 +4,8 @@ import { GAME_CONFIG } from '../../config';
 import { GameStateData } from '../../types/index';
 import { TimerManager } from '../../engine/TimerManager';
 import { System } from '../../types/systems';
+import { frameIndependentLerp } from '../../engine/MathUtils';
+
 
 import { MapConfigManager } from '../../managers/MapConfigManager';
 
@@ -22,13 +24,11 @@ export interface IDownedContext {
     setInteractionMsg(v: string | null): void;
 }
 
-// Frame-rate independent lerp factor (targeting ~60fps base)
-const frameIndependentLerp = (baseFactor: number, dt: number) => 1 - Math.pow(1 - baseFactor, dt * 60);
+// DownedSystem
 
 /**
- * DownedSystem
- *
  * Runs every frame while the local player is in the "downed" (DBNO) state.
+
  * Responsibilities:
  *   - Lerps the camera down to crawl height when downed.
  *   - Lerps the camera back up to eye height after being revived.

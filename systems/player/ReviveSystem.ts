@@ -43,7 +43,7 @@ export const createReviveSystem = (
         ctx.send({ type: 'REVIVE_CANCEL', revivorName: ctx.gameState.playerName });
     };
 
-    ctx.eventBus.on('REVIVE_EVENT', (data: ReviveEvent) => {
+    const handleReviveEvent = (data: ReviveEvent) => {
         const gameState = ctx.gameState;
         if (data.type === 'START') {
             if (gameState.isDowned) {
@@ -74,10 +74,14 @@ export const createReviveSystem = (
                 ctx.remote.gameState.isDowned = false;
             }
         }
-    });
+    };
+    ctx.eventBus.on('REVIVE_EVENT', handleReviveEvent);
 
     return {
         name: 'revive',
+        dispose: () => {
+            ctx.eventBus.off('REVIVE_EVENT', handleReviveEvent);
+        },
         update: (dt: number) => {
             const gameState = ctx.gameState;
 
