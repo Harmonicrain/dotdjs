@@ -100,41 +100,21 @@ export class ZombieManager {
         const sm = this.scene;
         const rm = this.resourceManager;
 
-        // 1. Pre-warm materials
-        const bodyMat = rm.getMaterial("zombieBodyMat", () => {
-            const mat = new BABYLON.StandardMaterial("zombieBodyMat", sm);
-            mat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.12);
-            mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
-            mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-            mat.specularPower = 32;
-            mat.maxSimultaneousLights = 8;
-            return mat;
-        });
-        const headMat = rm.getMaterial("zombieHeadMat", () => {
-            const mat = new BABYLON.StandardMaterial("zombieHeadMat", sm);
-            mat.diffuseColor = new BABYLON.Color3(0.15, 0.2, 0.15);
-            mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
-            mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-            mat.maxSimultaneousLights = 8;
-            return mat;
-        });
-        const eyeMat = rm.getMaterial("zombieEyeMat", () => {
-            const mat = new BABYLON.StandardMaterial("zombieEyeMat", sm);
-            mat.emissiveColor = new BABYLON.Color3(1, 1, 0.5);
-            mat.specularColor = BABYLON.Color3.Black();
-            mat.maxSimultaneousLights = 8;
-            return mat;
-        });
-
-        // 2. Pre-warm Mesh Templates
         preWarmTemplates(sm, rm);
 
-        // 3. Force compilation if a mesh is available
+        const bodyMat = rm.getMaterial("zombieBodyMat", () => new BABYLON.StandardMaterial("zombieBodyMat", sm));
+        const clothesMat = rm.getMaterial("zombieClothesMat", () => new BABYLON.StandardMaterial("zombieClothesMat", sm));
+        const headMat = rm.getMaterial("zombieHeadMat", () => new BABYLON.StandardMaterial("zombieHeadMat", sm));
+        const eyeMat = rm.getMaterial("zombieEyeMat", () => new BABYLON.StandardMaterial("zombieEyeMat", sm));
+        const boneMat = rm.getMaterial("zombieBoneMat", () => new BABYLON.StandardMaterial("zombieBoneMat", sm));
+
         const compilerMesh = sm.meshes[0];
         if (compilerMesh) {
             bodyMat.forceCompilation(compilerMesh);
+            clothesMat.forceCompilation(compilerMesh);
             headMat.forceCompilation(compilerMesh);
             eyeMat.forceCompilation(compilerMesh);
+            boneMat.forceCompilation(compilerMesh);
         }
     }
 

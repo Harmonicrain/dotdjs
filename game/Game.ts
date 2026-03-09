@@ -430,6 +430,12 @@ export class Game {
         sm.gameState.zombiesToSpawn = 0;
         sm.gameState.zombiesSpawned = 0;
         sm.gameState.zombiesKilledInRound = 0;
+
+        sm.setActiveZombiesCount(0);
+        sm.setTotalRoundZombies(0);
+        sm.ui.setZombiesToSpawn(0);
+        sm.ui.setZombiesSpawned(0);
+        sm.ui.setZombiesKilledInRound(0);
     }
 
     /** Clear all power-ups */
@@ -440,6 +446,8 @@ export class Game {
         sm.gameState.powerUps.length = 0;
         sm.gameState.activePowerUps = {};
         sm.gameState.pendingPowerUps = [];
+
+        sm.setActivePowerUps({});
     }
 
     /** Clear all projectiles */
@@ -489,6 +497,7 @@ export class Game {
         sm.gameState.hasStarted = false;
         sm.gameState.round = 1;
         sm.setRound(1);
+        sm.setShowRoundIntro(false);
         sm.gameState.isPackAPunching = false;
         sm.gameState.isReloading = false;
         sm.gameState.isFiring = false;
@@ -497,11 +506,46 @@ export class Game {
         sm.gameState.powerOn = false;
         sm.gameState.isGameOver = false;
         sm.gameState.isSpectating = false;
+        sm.setIsSpectating(false);
         sm.gameState.isDowned = false;
         sm.gameState.isBeingRevived = false;
         sm.gameState.isRevivingTeammate = false;
+
+        sm.gameState.reviveProgress = 0;
+        sm.setReviveProgress(0);
+
+        sm.gameState.doorStates = {};
+        sm.gameState.windowBarriers = {};
+        sm.gameState.interactableStates = {};
+
+        sm.gameState.accumulatedDropPoints = 0;
+        sm.gameState.nextDropThreshold = 2000;
+        sm.gameState.repairPointsRound = 0;
+        sm.gameState.externalForce = BABYLON.Vector3.Zero();
+        sm.gameState.currentVelocity = BABYLON.Vector3.Zero();
+
+        sm.gameState.quickRevivesRemaining = GAME_CONFIG.MAX_QUICK_REVIVES_SOLO;
+
         sm.gameState.points = GAME_CONFIG.STARTING_POINTS;
         sm.setPoints(GAME_CONFIG.STARTING_POINTS);
+
+        sm.gameState.totalEarnedPoints = GAME_CONFIG.STARTING_POINTS;
+        sm.setTotalEarnedPoints(GAME_CONFIG.STARTING_POINTS);
+
+        sm.gameState.health = GAME_CONFIG.PLAYER_BASE_HEALTH;
+        sm.gameState.maxHealth = GAME_CONFIG.PLAYER_BASE_HEALTH;
+        sm.setHealth(GAME_CONFIG.PLAYER_BASE_HEALTH);
+
+        sm.gameState.kills = 0;
+        sm.setKills(0);
+
+        sm.gameState.shots = 0;
+        sm.setShotsFired(0);
+
+        sm.gameState.perkStates = {};
+        sm.setPerks({});
+
+        sm.setFlashColor(null);
         sm.setInteractionMsg(null);
         sm.setHoverMsg(null);
 
