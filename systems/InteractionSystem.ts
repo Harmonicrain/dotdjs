@@ -208,41 +208,75 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         const dynamicTexture = new BABYLON.DynamicTexture("papCamoTex", texSize, ctx.scene, true);
         const ctx2d = dynamicTexture.getContext();
 
-        ctx2d.clearRect(0, 0, texSize, texSize);
+        // 1. Dark obsidian background
+        ctx2d.fillStyle = "#08080b";
+        ctx2d.fillRect(0, 0, texSize, texSize);
 
-        ctx2d.shadowBlur = 10;
-        ctx2d.lineWidth = 4;
-
-        for (let i = 0; i < 30; i++) {
-            const hue = (i / 30) * 360;
-            const color = `hsl(${hue}, 100%, 50%)`;
+        // 2. Helper to draw seamless waves
+        // We render at Y - texSize, Y, and Y + texSize to guarantee perfectly seamless vertical wrapping
+        const drawSeamlessWave = (
+            color: string,
+            thickness: number,
+            blur: number,
+            amplitude: number,
+            frequency: number,
+            phaseOffset: number,
+            verticalSpacing: number
+        ) => {
             ctx2d.shadowColor = color;
+            ctx2d.shadowBlur = blur;
             ctx2d.strokeStyle = color;
+            ctx2d.lineWidth = thickness;
+            ctx2d.lineJoin = "round";
+            (ctx2d as CanvasRenderingContext2D).lineCap = "round"; // Fix LSP error: cast to CanvasRenderingContext2D
 
-            ctx2d.beginPath();
-            let x = Math.random() * texSize;
-            let y = Math.random() * texSize;
-            ctx2d.moveTo(x, y);
-            for (let j = 0; j < 5; j++) {
-                x += (Math.random() - 0.5) * 150;
-                y += (Math.random() - 0.5) * 150;
-                ctx2d.lineTo(x, y);
+            // Draw multiple parallel waves
+            for (let baseY = 0; baseY < texSize; baseY += verticalSpacing) {
+                // To ensure seamless tiling horizontally, the wave must complete a full cycle exactly at texSize
+                // frequency determines how many full waves fit across the width
+                
+                for (let yOffset of [-texSize, 0, texSize]) {
+                    ctx2d.beginPath();
+                    for (let x = 0; x <= texSize; x += 4) { // 4px step for smooth curves
+                        // Use exact Math.PI * 2 multiples to guarantee seamless horizontal tiling
+                        const angle = (x / texSize) * Math.PI * 2 * frequency + phaseOffset;
+                        
+                        // Add some organic "wobble" that also perfectly loops
+                        const wobbleAngle = (x / texSize) * Math.PI * 2 * (frequency * 2.5);
+                        const organicY = baseY + Math.sin(angle) * amplitude + Math.sin(wobbleAngle) * (amplitude * 0.3) + yOffset;
+                        
+                        if (x === 0) {
+                            ctx2d.moveTo(x, organicY);
+                        } else {
+                            ctx2d.lineTo(x, organicY);
+                        }
+                    }
+                    ctx2d.stroke();
+                }
             }
-            ctx2d.stroke();
-        }
+            
+            // Reset blur so we don't bleed into other operations accidentally
+            ctx2d.shadowBlur = 0; 
+        };
 
-        ctx2d.shadowBlur = 0;
-        for (let i = 0; i < 50; i++) {
-            const hue = Math.random() * 360;
-            ctx2d.fillStyle = `hsla(${hue}, 100%, 50%, 0.2)`;
-            const s = 5 + Math.random() * 20;
-            ctx2d.fillRect(Math.random() * texSize, Math.random() * texSize, s, s);
-        }
+        // 3. Draw Topography Layers (Damascus / Dark Matter style)
+        
+        // Base Layer: Deep thick purple traces
+        drawSeamlessWave("rgba(80, 0, 255, 0.4)", 8, 15, 60, 2, 0, 100);
+        
+        // Mid Layer: Neon pink energy
+        drawSeamlessWave("rgba(255, 0, 180, 0.6)", 4, 10, 40, 3, Math.PI / 4, 80);
+        
+        // Top Layer: Thin, sharp, bright cyan electrical lines
+        drawSeamlessWave("rgba(0, 255, 255, 0.9)", 2, 5, 20, 5, Math.PI, 60);
+
+        // Optional: Very thin white core lines for intensity
+        drawSeamlessWave("rgba(255, 255, 255, 0.8)", 1, 2, 20, 5, Math.PI, 60);
 
         dynamicTexture.update();
         dynamicTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
         dynamicTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
-        dynamicTexture.hasAlpha = true;
+        dynamicTexture.hasAlpha = false; // We use a solid background now
 
         const obs = ctx.scene.onBeforeRenderObservable.add(() => {
             const dt = ctx.scene.getEngine().getDeltaTime() / 1000;
@@ -266,6 +300,8 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
 
         weapon.mesh.setEnabled(true);
 
+        const newPapMats: (BABYLON.PBRMaterial | BABYLON.StandardMaterial)[] = [];
+
         weapon.mesh.getChildMeshes().forEach((c: BABYLON.AbstractMesh) => {
             if (c instanceof BABYLON.Mesh && c.material) {
                 const matName = c.material.name.toLowerCase();
@@ -288,12 +324,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                     papMat.roughness = Math.min(papMat.roughness ?? 0.5, 0.2);
                     papMat.emissiveTexture = papCamoTex;
                     papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-
-                    const timeObs = ctx.scene.onBeforeRenderObservable.add(() => {
-                        const time = Date.now() / 1000;
-                        papMat.emissiveIntensity = 1.0 + Math.sin(time * 4) * 0.4;
-                    });
-                    papMat.onDisposeObservable.add(() => ctx.scene.onBeforeRenderObservable.remove(timeObs));
+                    newPapMats.push(papMat);
                 } else if (papMat instanceof BABYLON.StandardMaterial) {
                     papMat.emissiveTexture = papCamoTex;
                     papMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
@@ -302,6 +333,22 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                 c.material = papMat;
             }
         });
+
+        if (newPapMats.length > 0) {
+            const timeObs = ctx.scene.onBeforeRenderObservable.add(() => {
+                const time = Date.now() / 1000;
+                const intensity = 1.0 + Math.sin(time * 4) * 0.4;
+                for (let i = 0; i < newPapMats.length; i++) {
+                    (newPapMats[i] as BABYLON.PBRMaterial).emissiveIntensity = intensity;
+                }
+            });
+
+            // Cleanup the shared observer when ANY of the upgraded materials are disposed.
+            // (They are all disposed together when the weapon is swapped or re-packed).
+            newPapMats[0].onDisposeObservable.add(() => {
+                ctx.scene.onBeforeRenderObservable.remove(timeObs);
+            });
+        }
     };
 
     const performPackAPunch = (targetMachine: BABYLON.AbstractMesh) => {
