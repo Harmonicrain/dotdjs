@@ -206,50 +206,66 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
 
 export const createZombieMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterZombie) preWarmTemplates(scene, resourceManager);
-    
-    const instance = masterZombie!.mesh.instantiateHierarchy() as BABYLON.Mesh;
+    const master = masterZombie!;
+
+    let head: BABYLON.AbstractMesh | undefined;
+    let torso: BABYLON.AbstractMesh | undefined;
+    let armL: BABYLON.AbstractMesh | undefined;
+    let armR: BABYLON.AbstractMesh | undefined;
+    let legL: BABYLON.AbstractMesh | undefined;
+    let legR: BABYLON.AbstractMesh | undefined;
+
+    const instance = master.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
+        if      (source === master.head)        head  = clone as BABYLON.AbstractMesh;
+        else if (source === master.torso)       torso = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.armL)  armL  = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.armR)  armR  = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.legL)  legL  = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.legR)  legR  = clone as BABYLON.AbstractMesh;
+    }) as BABYLON.Mesh;
+
     instance.name = "zombie_" + Date.now();
     instance.position.copyFrom(position);
     instance.setEnabled(true);
     
-    // Wire up the ZombieMeshResult parts by finding them in the cloned hierarchy
-    const head = instance.getChildMeshes().find(m => m.name.includes("zombie_head"))!;
-    const torso = instance.getChildMeshes().find(m => m.name.includes("zombie_body"))!;
-    const armL = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_l"))!;
-    const armR = instance.getChildMeshes().find(m => m.name.includes("zombie_arm_r"))!;
-    const legL = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_l"))!;
-    const legR = instance.getChildMeshes().find(m => m.name.includes("zombie_leg_r"))!;
-
     return {
         mesh: instance,
-        head,
+        head: head!,
         torso,
-        limbs: { armL, armR, legL, legR }
+        limbs: { armL: armL!, armR: armR!, legL: legL!, legR: legR! }
     };
 };
 
 export const createHellhoundMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterHellhound) preWarmTemplates(scene, resourceManager);
+    const master = masterHellhound!;
 
-    const instance = masterHellhound!.mesh.instantiateHierarchy() as BABYLON.Mesh;
+    let head: BABYLON.AbstractMesh | undefined;
+    let legFL: BABYLON.AbstractMesh | undefined;
+    let legFR: BABYLON.AbstractMesh | undefined;
+    let legBL: BABYLON.AbstractMesh | undefined;
+    let legBR: BABYLON.AbstractMesh | undefined;
+
+    const instance = master.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
+        if      (source === master.head)        head  = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.armL)  legFL = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.armR)  legFR = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.legL)  legBL = clone as BABYLON.AbstractMesh;
+        else if (source === master.limbs.legR)  legBR = clone as BABYLON.AbstractMesh;
+    }) as BABYLON.Mesh;
+
     instance.name = "hellhound_" + Date.now();
     instance.position.copyFrom(position);
     instance.setEnabled(true);
 
-    const head = instance.getChildMeshes().find(m => m.name.includes("hellhound_head"))!;
-    const legFL = instance.getChildMeshes().find(m => m.name.includes("hellhound_legFL"))!;
-    const legFR = instance.getChildMeshes().find(m => m.name.includes("hellhound_legFR"))!;
-    const legBL = instance.getChildMeshes().find(m => m.name.includes("hellhound_legBL"))!;
-    const legBR = instance.getChildMeshes().find(m => m.name.includes("hellhound_legBR"))!;
-
     return { 
         mesh: instance, 
-        head: head, 
+        head: head!, 
         limbs: {
-            armL: legFL, 
-            armR: legFR, 
-            legL: legBL, 
-            legR: legBR  
+            armL: legFL!, 
+            armR: legFR!, 
+            legL: legBL!, 
+            legR: legBR!  
         }
     };
 };
