@@ -21,12 +21,14 @@ export class ZombieManager {
     private windowsByZone: Map<number, WindowBarrier[]> = new Map();
     public groundSpawns: GroundSpawn[];
     private groundSpawnsByZone: Map<number, GroundSpawn[]> = new Map();
+    private groundSpawnById: Map<string, GroundSpawn> = new Map();
     private spawnPowerUpCallback: ((pos: BABYLON.Vector3) => void) | null = null;
 
     private addPointsCallback: ((amount: number) => void) | null = null;
     private sendNetworkMessage: ((msg: GameMessage) => void) | null = null;
     private setKillsCallback: ((kills: number) => void) | null = null;
     private lastSpawnSoundTime: number = 0;
+    private pendingSpawnQueue: { round: number }[] = [];
 
     // ── Cached spawn-point arrays (rebuilt only when door state changes) ──
     private cachedValidWindows: WindowBarrier[] = [];
@@ -72,11 +74,13 @@ export class ZombieManager {
 
     private initGroundSpawnsByZone() {
         this.groundSpawnsByZone.clear();
+        this.groundSpawnById.clear();
         for (const gs of this.groundSpawns) {
             if (!this.groundSpawnsByZone.has(gs.zone)) {
                 this.groundSpawnsByZone.set(gs.zone, []);
             }
             this.groundSpawnsByZone.get(gs.zone)!.push(gs);
+            this.groundSpawnById.set(gs.id, gs);
         }
     }
 
@@ -123,6 +127,13 @@ export class ZombieManager {
         if (z.isDead) return;
         z.isDead = true;
         this.gameState.zombiesAlive--;
+
+        // If this zombie was occupying a ground spawn hole (killed mid-emergence),
+        // release it now so the next queued zombie can come through.
+        if (z.spawnHoleId) {
+            this.releaseGroundSpawnHole(z.spawnHoleId);
+            z.spawnHoleId = undefined;
+        }
 
         const baseKillPts = this.configManager.gameplay.POINTS_KILL;
         if (killer === 'HOST') {
@@ -239,12 +250,16 @@ export class ZombieManager {
                 selectedWindow = w;
                 spawnSourceType = 'window';
             } else {
-                // Ground hole spawn — copy exactly to the center
+                // Ground hole spawn — one zombie per hole at a time
                 const gs = validGroundSpawns[pick - validWindows.length];
-                spawnPos.copyFrom(gs.position);
-                validSpawnFound = true;
-                selectedWindow = null;
-                spawnSourceType = 'ground';
+                if (gs.occupyingZombieId) {
+                    // Hole is busy — queue this spawn and return
+                    if (!gs.spawnQueue) gs.spawnQueue = [];
+                    gs.spawnQueue.push({ round: currentRound });
+                } else {
+                    this._createZombieAtHole(gs, currentRound);
+                }
+                return; // ground path is fully handled (queued or created)
             }
         } else {
             // FALLBACK: If no windows or holes, use zone spawn bounds (e.g. for open test maps)
@@ -293,7 +308,7 @@ export class ZombieManager {
 
             this.createSpawnEffect(spawnPos, spawnSourceType);
 
-            // Play spawn sound with cooldown - only play if sound isn't already playing
+            // Play spawn sound with cooldown
             const now = Date.now();
             if (this.soundManager &&
                 now - this.lastSpawnSoundTime >= zc.SPAWN_SOUND_COOLDOWN_MS &&
@@ -307,17 +322,6 @@ export class ZombieManager {
 
             if (selectedWindow) {
                 zEntity.state = ZombieState.APPROACHING_WINDOW;
-            } else if (spawnSourceType === 'ground') {
-                // Check if this ground spawn has a lid covering it
-                const gs = this.cachedValidGroundSpawns.find(g => g.position.equals(spawnPos));
-                if (gs && gs.hasLid) {
-                    zEntity.state = ZombieState.BREAKING_LID;
-                    zEntity.targetLidId = gs.id;
-                    zEntity.lidBreakTimer = 0;
-                } else {
-                    zEntity.state = ZombieState.SPAWNING;
-                }
-                zEntity.mesh.position.y = -1.5; // Start underground
             } else {
                 zEntity.state = ZombieState.CHASING;
             }
@@ -325,6 +329,90 @@ export class ZombieManager {
             if (zEntity.speed > zs.SUPER_SPRINTER) zEntity.speed = zs.SUPER_SPRINTER;
 
             this.zombies.push(zEntity);
+        }
+    }
+
+    /**
+     * Creates a zombie entity at a specific ground spawn hole and marks it occupied.
+     * Also handles the spawn sound and visual effect.
+     * Called both from spawnZombieHost (initial pick) and releaseGroundSpawnHole (queue processing).
+     */
+    private _createZombieAtHole(gs: GroundSpawn, round: number) {
+        const gc = this.configManager.gameplay;
+        const rc = this.configManager.round;
+        const zs = this.configManager.zombieSpeeds;
+        const zc = this.configManager.zombieAI;
+
+        const id = "zombie_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        const spawnPos = gs.position;
+
+        const newZ = createZombieMesh(this.scene, spawnPos, this.resourceManager);
+
+        const baseSpeed = zs.WALKER + (round * rc.ZOMBIE_SPEED_INC);
+        const speedVariation = 0.9 + (Math.random() * 0.2);
+
+        const zEntity: Zombie = {
+            id: id,
+            type: 'ZOMBIE',
+            mesh: newZ.mesh,
+            headMesh: newZ.head,
+            torsoMesh: newZ.torso,
+            limbs: newZ.limbs,
+            health: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (round - 1)),
+            maxHealth: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (round - 1)),
+            speed: Math.min(baseSpeed * speedVariation, zs.SUPER_SPRINTER),
+            lastAttackTime: 0,
+            isDead: false,
+            state: ZombieState.SPAWNING,
+            targetWindowId: null,
+            barrierAttackTimer: 0,
+            isBurning: false,
+            spawnTime: Date.now(),
+            spawnHoleId: gs.id,
+            missingLimbs: { legL: false, legR: false, armL: false, armR: false }
+        };
+
+        if (gs.hasLid) {
+            zEntity.state = ZombieState.BREAKING_LID;
+            zEntity.targetLidId = gs.id;
+            zEntity.lidBreakTimer = 0;
+        } else {
+            zEntity.state = ZombieState.SPAWNING;
+        }
+        zEntity.mesh.position.y = -1.5;
+
+        gs.occupyingZombieId = id;
+
+        this.createSpawnEffect(spawnPos, 'ground');
+
+        const now = Date.now();
+        if (this.soundManager &&
+            now - this.lastSpawnSoundTime >= zc.SPAWN_SOUND_COOLDOWN_MS &&
+            !this.soundManager.isPlaying('zombie_spawn')) {
+            const distToPlayer = BABYLON.Vector3.Distance(spawnPos, this.camera.position);
+            if (distToPlayer <= zc.SPAWN_SOUND_MAX_DIST) {
+                this.soundManager.play('zombie_spawn', { volume: zc.SPAWN_SOUND_VOLUME });
+                this.lastSpawnSoundTime = now;
+            }
+        }
+
+        this.zombies.push(zEntity);
+    }
+
+    /**
+     * Called by ZombieAISystem when a zombie finishes emerging from a ground hole
+     * (SPAWNING → CHASING transition). Clears the hole's occupant and spawns the
+     * next queued zombie if one is waiting. O(1) hole lookup via groundSpawnById.
+     */
+    public releaseGroundSpawnHole(holeId: string) {
+        const gs = this.groundSpawnById.get(holeId);
+        if (!gs) return;
+
+        gs.occupyingZombieId = null;
+
+        if (gs.spawnQueue && gs.spawnQueue.length > 0) {
+            const next = gs.spawnQueue.shift()!;
+            this._createZombieAtHole(gs, next.round);
         }
     }
 }

@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
-import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox } from '../meshes';
+import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../meshes';
 import { createBuilding } from '../meshes/BuildingFactory';
 import { GAME_CONFIG, MYSTERY_BOX_CONFIG } from '../config';
 
@@ -227,6 +227,21 @@ export class LevelBuilder {
         frameMat.environmentIntensity = 0.6;
         frameMat.markDirty();
         this.materials.set('frame', frameMat);
+
+        // Lid material (weathered metal)
+        const lidMat = new BABYLON.PBRMaterial("lidMat", this.scene);
+        lidMat.albedoColor = new BABYLON.Color3(0.25, 0.22, 0.2);
+        lidMat.metallic = 0.8;
+        lidMat.roughness = 0.6;
+        lidMat.environmentIntensity = 0.6;
+        if (textures.wall) {
+            const lidTex = new BABYLON.Texture(textures.wall, this.scene);
+            lidTex.uScale = 2;
+            lidTex.vScale = 2;
+            lidMat.albedoTexture = lidTex;
+        }
+        lidMat.markDirty();
+        this.materials.set('lid', lidMat);
     }
 
     private buildGeometry(def: MapDefinition) {
@@ -512,6 +527,10 @@ export class LevelBuilder {
 
         // Metal material for the frame
         const metalMat = this.materials.get('metal') || new BABYLON.StandardMaterial("fallbackMetal", this.scene);
+        const lidMat = this.materials.get('lid') || metalMat;
+
+        // Pre-warm the lid template once
+        preWarmLidTemplate(this.scene, lidMat, metalMat);
 
         const holeMeshes: BABYLON.Mesh[] = [];
         const frameMeshes: BABYLON.Mesh[] = [];
@@ -549,13 +568,11 @@ export class LevelBuilder {
             r.position = new BABYLON.Vector3(gs.pos[0] + innerExtent + frameThickness / 2, gs.pos[1] + frameHeight / 2, gs.pos[2]);
             frameMeshes.push(r);
 
-            // ── Lid mesh (disabled until player places it) ───────────────
-            const lidMesh = BABYLON.MeshBuilder.CreateBox(`groundSpawn_${gs.id}_lid`, { width: holeWidth, height: 0.08, depth: holeWidth }, this.scene);
-            lidMesh.position = new BABYLON.Vector3(gs.pos[0], gs.pos[1] + 0.04, gs.pos[2]);
-            lidMesh.material = metalMat;
-            lidMesh.isPickable = false;
-            lidMesh.setEnabled(false); // Hidden until placed
-            lidMesh.parent = this.root;
+            // ── Lid structure (cloned from template) ───────────────
+            const lidRoot = createLidMesh(this.scene, `groundSpawn_${gs.id}_lid`);
+            lidRoot.position.set(gs.pos[0], gs.pos[1] + 0.04, gs.pos[2]);
+            lidRoot.setEnabled(false);
+            lidRoot.parent = this.root;
 
             // ── Trigger mesh (always active, invisible, for crosshair raycast) ──
             const trigger = BABYLON.MeshBuilder.CreateBox(`groundSpawn_${gs.id}_trigger`, { width: 1.6, height: 2, depth: 1.6 }, this.scene);
@@ -569,7 +586,7 @@ export class LevelBuilder {
                 id: gs.id,
                 position: new BABYLON.Vector3(gs.pos[0], gs.pos[1], gs.pos[2]),
                 zone: gs.zone,
-                lidMesh,
+                lidMesh: lidRoot,
                 triggerMesh: trigger,
                 hasLid: false,
             });

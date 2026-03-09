@@ -831,6 +831,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     if (z.mesh.position.y >= 0) {
                         z.mesh.position.y = 0;
                         z.state = ZombieState.CHASING;
+                        // Release the hole so the next queued zombie can emerge
+                        if (z.spawnHoleId) {
+                            ctx.zombieManager.releaseGroundSpawnHole(z.spawnHoleId);
+                            z.spawnHoleId = undefined;
+                        }
                         if (crowd && z.crowdAgentIndex === undefined) {
                             addZombieToCrowd(z);
                         }

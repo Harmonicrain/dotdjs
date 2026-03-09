@@ -88,6 +88,7 @@ export type Zombie = {
     // Spawn hole lid breaking
     targetLidId?: string;           // Ground spawn ID whose lid we're breaking
     lidBreakTimer?: number;         // Timer for lid bounce animation
+    spawnHoleId?: string;           // Ground spawn ID this zombie is currently emerging from
     // Door Crossing
     doorGraceTimer?: number;
     lastDoorTarget?: BABYLON.Vector3;
@@ -130,14 +131,17 @@ export type WindowBarrier = {
     attackPoint: BABYLON.Vector3;
     entryPoint: BABYLON.Vector3;
     zone: number;
+    occupyingZombieId?: string | null; // ID of the zombie currently using this window
 };
 
 export type GroundSpawn = {
     id: string;
     position: BABYLON.Vector3;
     zone: number;
-    lidMesh?: BABYLON.AbstractMesh;       // The visible lid mesh (null = open hole)
+    lidMesh?: BABYLON.TransformNode;       // The visible lid mesh (null = open hole)
     triggerMesh?: BABYLON.AbstractMesh;   // Invisible trigger for player interaction
     hasLid: boolean;                      // Runtime state: is the lid currently placed?
     lastPointsRound?: number;             // Track the last round points were given to prevent farming
+    occupyingZombieId?: string | null;    // ID of the zombie currently emerging from this hole
+    spawnQueue?: { round: number }[];     // Zombies waiting to use this hole (round number only)
 };
