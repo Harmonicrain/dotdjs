@@ -48,7 +48,7 @@ export class Game {
     public resourceManager: ResourceManager;
     public inputManager: InputManager;
     public systemManager: SystemManager;
-    
+
     public stateManager: StateManager | null = null;
 
     // Map Root for cleanup
@@ -57,8 +57,8 @@ export class Game {
     // Game Objects
     public weaponMeshes: { [key: string]: BABYLON.TransformNode } = {};
     public knifeMesh: BABYLON.AbstractMesh | null = null;
-    public remotePlayer: { root: BABYLON.TransformNode, armsContainer: BABYLON.TransformNode, weapons: BABYLON.TransformNode[], muzzleFlash: BABYLON.PointLight, updateName: (n:string)=>void } | null = null;
-    
+    public remotePlayer: { root: BABYLON.TransformNode, armsContainer: BABYLON.TransformNode, weapons: BABYLON.TransformNode[], muzzleFlash: BABYLON.PointLight, updateName: (n: string) => void } | null = null;
+
     public shadowCasters: BABYLON.AbstractMesh[] = [];
 
     // Handler for visibility change (alt-tab fix for material lighting)
@@ -69,7 +69,7 @@ export class Game {
 
     constructor(canvas: HTMLCanvasElement, private sendNetworkData: (data: GameMessage) => void, updatePlayer: (updates: Partial<PlayerFields>) => void, updateGame: (updates: Partial<GameFields>) => void) {
         this.canvas = canvas;
-        
+
         // Suppress audio context warnings during engine creation - these are expected
         // because the AudioContext starts suspended until user interaction
         const originalWarn = console.warn;
@@ -80,25 +80,25 @@ export class Game {
             originalWarn(msg, args);
         };
         console.warn = suppressedWarn;
-        
-        this.engine = new BABYLON.Engine(canvas, true, { 
-            preserveDrawingBuffer: true, 
+
+        this.engine = new BABYLON.Engine(canvas, true, {
+            preserveDrawingBuffer: true,
             stencil: true,
-            audioEngine: true 
+            audioEngine: true
         });
-        
+
         console.warn = originalWarn; // Restore
-        
+
         // Disable UBOs to prevent "VERTEX shader uniform block count exceeds GL_MAX_VERTEX_UNIFORM_BUFFERS"
         // error when using many lights/PBR materials on some drivers.
         this.engine.disableUniformBuffers = true;
-        
+
         this.scene = new BABYLON.Scene(this.engine);
         this.resourceManager = new ResourceManager(this.scene);
         this.inputManager = new InputManager();
         this.systemManager = new SystemManager();
-        
-        this.scene.gravity = new BABYLON.Vector3(0, -9.81, 0); 
+
+        this.scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
         this.scene.collisionsEnabled = true;
 
         // Subtle fill light — env texture provides the main ambient IBL
@@ -135,7 +135,7 @@ export class Game {
 
         this.camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 2, 0), this.scene);
         this.camera.inertia = 0;   // Disable Babylon's built-in inertia; movement is fully driven by PlayerMovementSystem
-        this.camera.speed = GAME_CONFIG.WALK_SPEED; 
+        this.camera.speed = GAME_CONFIG.WALK_SPEED;
         this.camera.angularSensibility = 800;
         this.camera.minZ = 0.1;
         this.camera.maxZ = 500; // Indoor maps need nowhere near Babylon's 10,000 default; tighter far plane = better depth buffer precision, less z-fighting
@@ -145,12 +145,12 @@ export class Game {
         // cameraRotation/cameraDirection, conflicting with the custom input pipeline.
         this.camera.inputs.clear();
         this.camera.keysUp = []; this.camera.keysDown = []; this.camera.keysLeft = []; this.camera.keysRight = [];
-        
+
         this.camera.ellipsoid = new BABYLON.Vector3(0.25, 0.6, 0.25);
         this.camera.ellipsoidOffset = new BABYLON.Vector3(0, -0.6, 0);
-        
-        this.camera.checkCollisions = true; 
-        this.camera.applyGravity = false; 
+
+        this.camera.checkCollisions = true;
+        this.camera.applyGravity = false;
         this.camera.fov = GAME_CONFIG.BASE_FOV;
 
         this.remotePlayer = createRemotePlayer(this.scene);
@@ -274,7 +274,7 @@ export class Game {
     public initializeSystems() {
         if (!this.stateManager) return;
         const sm = this.stateManager;
-        
+
         // Populate StateManager references needed by systems
         sm.remote.visuals = this.remotePlayer;
 
@@ -374,12 +374,12 @@ export class Game {
             setIsGameOver: (v) => sm.setIsGameOver(v)
         }));
         this.systemManager.register(createNetworkSystem(sm));
-        this.systemManager.register(createRemotePlayerSystem(sm)); 
+        this.systemManager.register(createRemotePlayerSystem(sm));
         this.systemManager.register(createDownedSystem(sm));
         this.systemManager.register(createReviveSystem(sm, this.inputManager));
-        
+
         sm.mysteryBoxSystem = createMysteryBoxSystem(sm);
-        
+
         this.systemManager.init();
 
         return { interactionSys };
@@ -512,7 +512,7 @@ export class Game {
             isPacked: false,
             mesh: sm.gameState.weaponMeshes[w.id] || null
         })) as WeaponState[];
-        
+
         sm.gameState.activeWeaponIndex = 0;
         sm.setActiveWeaponIndex(0);
         sm.setWeaponName(sm.gameState.weapons[0].name);
@@ -531,7 +531,7 @@ export class Game {
     }
 
     public async loadLevel(
-        selectedMap: string, 
+        selectedMap: string,
         externalMysteryBoxRef: Ref<MysteryBox>
     ) {
         if (!this.stateManager) throw new Error("StateManager not initialized");
@@ -560,18 +560,18 @@ export class Game {
 
         // 1. Cleanup Session & Old Map
         this.resetSession();
-        
+
         // ── CRITICAL FIX: Clean up old scene lights & shadow generators ──
         // LevelBuilder.initializeEnvironment() creates lights and shadow generators
         // that are NOT children of currentMapRoot. They accumulate on reload,
         // stacking lights and causing incorrect rendering.
         if (this.currentMapRoot) {
             // Dispose lights that were created by the previous level
-            const lightsToRemove = this.scene.lights.filter(l => 
+            const lightsToRemove = this.scene.lights.filter(l =>
                 l.name === "hemi" || l.name === "dir" || l.name.startsWith("fixture_light")
             );
             lightsToRemove.forEach(l => l.dispose());
-            
+
             // Dispose shadow generators from previous level
             this.scene.lights.forEach(l => {
                 const shadowGens = l.getShadowGenerators();
@@ -579,15 +579,15 @@ export class Game {
                     shadowGens.forEach(sg => sg?.dispose());
                 }
             });
-            
+
             this.currentMapRoot.dispose();
             this.currentMapRoot = null;
         }
-        
-        this.shadowCasters = []; 
+
+        this.shadowCasters = [];
         this.stateManager.mapVisuals.doorMeshes.clear();
         this.stateManager.windows.length = 0; // Clear array but keep reference
-        
+
         // 2. Load New Map
 
         try {
@@ -599,14 +599,14 @@ export class Game {
                     }
                 }
             };
-            
+
             const lvl = loadMap(selectedMap, this.scene, this.shadowCasters, sm.windows, sm.groundSpawns, externalMysteryBoxRef, this.navPlugin, onBuildingLoaded);
-            
+
             // Await all map models to load
             await Promise.all(lvl.loadPromises);
 
             this.currentMapRoot = lvl.root;
-            
+
             if (lvl.doors) {
                 for (const [doorId, entry] of Object.entries(lvl.doors)) {
                     const e = entry as DoorMeshEntry;
@@ -624,7 +624,7 @@ export class Game {
                         const position = e.mesh.absolutePosition.clone();
                         const extent = new BABYLON.Vector3(e.size[0] / 2, e.size[1] / 2, e.size[2] / 2);
                         const angle = e.rotation || 0;
-                        
+
                         try {
                             newEntry.obstacle = this.navPlugin.addBoxObstacle(position, extent, angle);
                         } catch (err) {
@@ -640,7 +640,7 @@ export class Game {
             this.stateManager.mapVisuals.powerSwitchActivate = lvl.powerSwitchActivate ?? null;
             this.stateManager.mapVisuals.powerDoor = lvl.powerDoor;
             this.stateManager.mapVisuals.powerDoorOpenY = lvl.powerDoorOpenY ?? 8;
-            
+
             this.stateManager.lights = lvl.lights;
             this.stateManager.spawnPoints = lvl.spawnPoints;
             this.stateManager.boxLocations = lvl.boxLocations;
@@ -648,7 +648,7 @@ export class Game {
             this.stateManager.mapGameplay = lvl.mapGameplay || {};
             this.stateManager.mysteryBox = externalMysteryBoxRef.current;
             this.stateManager.mysteryBoxRef = externalMysteryBoxRef;
-            
+
             // Populate static meshes for decals (all meshes with checkCollisions)
             this.stateManager.staticLevelMeshes.clear();
             for (const m of this.scene.meshes) {
@@ -656,10 +656,10 @@ export class Game {
                     this.stateManager.staticLevelMeshes.add(m);
                 }
             }
-            
+
             this.stateManager.updateZoneSystem(lvl.zones, lvl.doorConnections);
             this.stateManager.visualManager.setLights(this.stateManager.lights);
-            
+
             await this.scene.whenReadyAsync();
             console.log(`Level ${selectedMap} loaded successfully.`);
         } catch (e) {
@@ -709,7 +709,7 @@ export class Game {
         try {
             // Initialize Recast core first
             await RecastCore.init();
-            
+
             // Create navigation plugin with V2 API
             this.navPlugin = await CreateNavigationPluginAsync({
                 instance: {
@@ -717,7 +717,7 @@ export class Game {
                     ...RecastGenerators,
                 },
             }) as unknown as BABYLON.RecastJSPlugin;
-            
+
             if (this.navPlugin) {
                 console.log("✓ Recast NavPlugin Initialized (V2)");
             }
@@ -726,7 +726,7 @@ export class Game {
         }
 
         console.log("Loading environment texture...");
-        
+
         // Load as .envmap to avoid Vite's security block on .env files.
         // The forcedExtension ".env" tells Babylon to parse it as the .env format.
         await this.loadEnvironmentTexture();
@@ -748,31 +748,31 @@ export class Game {
         // Wait for weapons and environment
         await Promise.all(loadPromises);
 
-        this.weaponMeshes = { 
-            pistol: meshes.pistol, 
-            rifle: meshes.rifle, 
-            shotgun: meshes.shotgun, 
+        this.weaponMeshes = {
+            pistol: meshes.pistol,
+            rifle: meshes.rifle,
+            shotgun: meshes.shotgun,
             famas: meshes.famas,
             ray_gun: meshes.ray_gun,
         };
         this.knifeMesh = meshes.knife as BABYLON.AbstractMesh;
-        
+
         if (this.stateManager) {
             this.stateManager.gameState.weaponMeshes = this.weaponMeshes;
             this.stateManager.gameState.knifeMesh = this.knifeMesh;
         }
 
         const pipeline = new BABYLON.DefaultRenderingPipeline("defaultPipeline", true, this.scene, [this.camera]);
-        pipeline.samples = 4; 
-        pipeline.bloomEnabled = true; 
-        pipeline.bloomThreshold = 0.6; 
-        pipeline.bloomWeight = 0.3; 
+        pipeline.samples = 2; // 2x MSAA — half the GPU cost of 4x with acceptable quality
+        pipeline.bloomEnabled = true;
+        pipeline.bloomThreshold = 0.6;
+        pipeline.bloomWeight = 0.3;
         pipeline.bloomScale = 0.5;
-        pipeline.imageProcessingEnabled = true; 
-        pipeline.imageProcessing.toneMappingEnabled = true; 
-        pipeline.imageProcessing.contrast = 1.4; 
+        pipeline.imageProcessingEnabled = true;
+        pipeline.imageProcessing.toneMappingEnabled = true;
+        pipeline.imageProcessing.contrast = 1.4;
         pipeline.imageProcessing.exposure = 1.0;
-        
+
         await this.scene.whenReadyAsync();
     }
 
@@ -793,14 +793,14 @@ export class Game {
      */
     public beginRenderLoop(): void {
         if (!this.stateManager) return;
-        const sm   = this.stateManager;
+        const sm = this.stateManager;
 
         const gameLoop = createGameLoop({
             stateManager: sm,
             systemManager: this.systemManager,
-            cameraRef:    { get current() { return sm.camera; } },
-            gameModeRef:  sm.gameModeRef,
-            pollGamepad:  (_dt: number) => { /* gamepad polled inside InputManager.update() */ },
+            cameraRef: { get current() { return sm.camera; } },
+            gameModeRef: sm.gameModeRef,
+            pollGamepad: (_dt: number) => { /* gamepad polled inside InputManager.update() */ },
             inputManager: this.inputManager,
         });
 

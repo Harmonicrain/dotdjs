@@ -3,11 +3,22 @@ import { ResourceManager } from '../ResourceManager';
 
 export class DecalManager {
     private decalMat: BABYLON.StandardMaterial | null = null;
-    private activeDecals: BABYLON.AbstractMesh[] = [];
-    private MAX_DECALS = 40;
 
-    private activeBloodDecals: BABYLON.AbstractMesh[] = [];
+    // ── Circular-buffer pools replace shift()-based arrays ────────────────
+    // Decals are pre-allocated once and recycled via cursor index, eliminating
+    // both the costly MeshBuilder.CreateDecal() per-shot AND the O(n) shift().
+    private static readonly MAX_DECALS = 40;
+    private decalPool: (BABYLON.Mesh | null)[] = new Array(DecalManager.MAX_DECALS).fill(null);
+    private decalCursor = 0;
+
     private static readonly MAX_BLOOD_DECALS = 60;
+    private bloodDecalPool: (BABYLON.Mesh | null)[] = new Array(DecalManager.MAX_BLOOD_DECALS).fill(null);
+    private bloodDecalCursor = 0;
+
+    // Throttle decal creation — at most one bullet-hole decal per this interval
+    private static readonly DECAL_THROTTLE_MS = 50; // ~20 decals/sec max
+    private lastDecalTime = 0;
+    private lastBloodDecalTime = 0;
 
     private static readonly _floorRayDir = new BABYLON.Vector3(0, -1, 0);
     private static readonly _floorRayUp = new BABYLON.Vector3(0, 1, 0);
@@ -16,7 +27,7 @@ export class DecalManager {
         new BABYLON.Vector3(), BABYLON.Vector3.Down(), 10
     );
 
-    constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {}
+    constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) { }
 
     private initDecalMaterial() {
         if (this.decalMat) return;
@@ -34,6 +45,18 @@ export class DecalManager {
         this.initDecalMaterial();
         if (!this.decalMat || !target) return;
 
+        // Throttle: skip if too soon after last decal
+        const now = performance.now();
+        if (now - this.lastDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+        this.lastDecalTime = now;
+
+        const idx = this.decalCursor % DecalManager.MAX_DECALS;
+        this.decalCursor++;
+
+        // Dispose old decal in this slot
+        const old = this.decalPool[idx];
+        if (old && !old.isDisposed()) old.dispose();
+
         const size = new BABYLON.Vector3(0.2, 0.2, 0.2);
         const decal = BABYLON.MeshBuilder.CreateDecal("bulletHole", target, {
             position: pos,
@@ -46,19 +69,21 @@ export class DecalManager {
         decal.isPickable = false;
         decal.setParent(target);
 
-        this.activeDecals.push(decal);
-
-        if (this.activeDecals.length > this.MAX_DECALS) {
-            const oldest = this.activeDecals.shift();
-            if (oldest) oldest.dispose();
-        }
+        this.decalPool[idx] = decal;
     }
 
     public createBloodDecalOnMesh(pos: BABYLON.Vector3, normal: BABYLON.Vector3, target: BABYLON.AbstractMesh) {
-        if (this.activeBloodDecals.length >= DecalManager.MAX_BLOOD_DECALS) {
-            const oldest = this.activeBloodDecals.shift();
-            if (oldest && !oldest.isDisposed()) oldest.dispose();
-        }
+        // Throttle blood decals too
+        const now = performance.now();
+        if (now - this.lastBloodDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+        this.lastBloodDecalTime = now;
+
+        const idx = this.bloodDecalCursor % DecalManager.MAX_BLOOD_DECALS;
+        this.bloodDecalCursor++;
+
+        // Dispose old decal in this slot
+        const old = this.bloodDecalPool[idx];
+        if (old && !old.isDisposed()) old.dispose();
 
         const size = new BABYLON.Vector3(0.15, 0.15, 0.15);
         const decal = BABYLON.MeshBuilder.CreateDecal("bloodDecal", target, {
@@ -80,10 +105,14 @@ export class DecalManager {
         decal.isPickable = false;
         decal.setParent(target);
 
-        this.activeBloodDecals.push(decal);
+        this.bloodDecalPool[idx] = decal;
     }
 
     public createFloorBloodDecal(pos: BABYLON.Vector3) {
+        // Skip if blood decal was just throttled (avoid the raycast entirely)
+        const now = performance.now();
+        if (now - this.lastBloodDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+
         DecalManager._floorRayOrigin.set(pos.x, pos.y + 0.1, pos.z);
         DecalManager._floorRay.origin.copyFrom(DecalManager._floorRayOrigin);
         DecalManager._floorRay.direction.copyFrom(DecalManager._floorRayDir);
@@ -110,17 +139,30 @@ export class DecalManager {
     }
 
     public reset() {
-        this.activeDecals.forEach(d => d.dispose());
-        this.activeDecals = [];
-        this.activeBloodDecals.forEach(d => { if (!d.isDisposed()) d.dispose(); });
-        this.activeBloodDecals = [];
+        for (const d of this.decalPool) {
+            if (d && !d.isDisposed()) d.dispose();
+        }
+        this.decalPool.fill(null);
+        this.decalCursor = 0;
+
+        for (const d of this.bloodDecalPool) {
+            if (d && !d.isDisposed()) d.dispose();
+        }
+        this.bloodDecalPool.fill(null);
+        this.bloodDecalCursor = 0;
     }
 
     public dispose() {
-        this.activeDecals.forEach(d => d.dispose());
-        this.activeDecals = [];
-        this.activeBloodDecals.forEach(d => { if (!d.isDisposed()) d.dispose(); });
-        this.activeBloodDecals = [];
+        for (const d of this.decalPool) {
+            if (d && !d.isDisposed()) d.dispose();
+        }
+        this.decalPool.fill(null);
+
+        for (const d of this.bloodDecalPool) {
+            if (d && !d.isDisposed()) d.dispose();
+        }
+        this.bloodDecalPool.fill(null);
+
         if (this.decalMat) this.decalMat.dispose();
     }
 }

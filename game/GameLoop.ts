@@ -9,12 +9,12 @@ import { useGameStore } from '../store/useGameStore';
 interface Ref<T> { current: T; }
 
 export interface GameLoopDeps {
-    stateManager:  StateManager;
+    stateManager: StateManager;
     systemManager: SystemManager;
-    cameraRef:     Ref<BABYLON.UniversalCamera | null>;
-    gameModeRef:   Ref<string>;
-    pollGamepad:   (dt: number) => void;
-    inputManager:  InputManager;
+    cameraRef: Ref<BABYLON.UniversalCamera | null>;
+    gameModeRef: Ref<string>;
+    pollGamepad: (dt: number) => void;
+    inputManager: InputManager;
 }
 
 /**
@@ -132,138 +132,132 @@ export const createGameLoop = (deps: GameLoopDeps) => {
 
     return {
         loop: (dt: number) => {
-        const currentGameMode = gameModeRef.current;
-        const now = Date.now();
-        frameCount++;
+            const currentGameMode = gameModeRef.current;
+            const now = Date.now();
+            frameCount++;
 
-        // Sync settings to InputManager (throttled - settings don't change often)
-        if (frameCount % 30 === 0) { // ~2x per second at 60fps
-            inputManager.updateSettings(useGameStore.getState().settings);
-        }
-
-        inputManager.update();
-
-        // ── Debug Controls Update ────────────────────────────────────────────
-        // When debug_controls is active, update FPS counter and input debug data
-        const debugMode = sm.debugControlsMode;
-        if (debugMode.isActive) {
-            // Sync debug mode to input manager
-            inputManager.setDebugControlsActive(true);
-            
-            // FPS calculation
-            debugMode.frameCount++;
-            const elapsed = now - debugMode.lastFpsUpdate;
-            if (elapsed >= 500) { // Update FPS every 500ms for stability
-                debugMode.fps = (debugMode.frameCount / elapsed) * 1000;
-                debugMode.frameCount = 0;
-                debugMode.lastFpsUpdate = now;
+            // Sync settings to InputManager (throttled - settings don't change often)
+            if (frameCount % 30 === 0) { // ~2x per second at 60fps
+                inputManager.updateSettings(useGameStore.getState().settings);
             }
-            
-            // Get debug data from input manager
-            const debugData = inputManager.getDebugControlsData();
-            const cam = sm.camera;
-            
-            // Update UI with debug controls data
-            sm.ui.setDebugControls({
-                isActive: true,
-                fps: debugMode.fps,
-                inputSource: debugData.inputSource,
-                cameraRotation: cam ? { x: cam.rotation.x, y: cam.rotation.y } : { x: 0, y: 0 },
-                rawMouseDelta: debugData.rawMouseDelta,
-                rawControllerLook: debugData.rawControllerLook,
-            });
-            
-            // Log camera rotation when there's active input (throttled)
-            if (debugData.inputSource !== 'NONE' && frameCount % 10 === 0) {
-                console.log(
-                    `[DEBUG_CONTROLS] Camera: rotation=(${cam?.rotation.x.toFixed(3)}, ${cam?.rotation.y.toFixed(3)}), ` +
-                    `input=${debugData.inputSource}, FPS=${debugMode.fps.toFixed(1)}`
-                );
-            }
-        } else {
-            inputManager.setDebugControlsActive(false);
-        }
 
-        // Console Toggle (Works even when paused)
-        if (inputManager.justPressed(GameAction.TOGGLE_CONSOLE)) {
-            sm.isConsoleOpen = !sm.isConsoleOpen;
-            sm.ui.setIsConsoleOpen(sm.isConsoleOpen);
-            
-            if (sm.isConsoleOpen) {
-                sm.isInternalPointerRelease = true;
-                if (document.pointerLockElement) document.exitPointerLock();
-                // Clear the flag after a short delay to ensure InputManager has seen it
-                setTimeout(() => { sm.isInternalPointerRelease = false; }, 100);
-            } else {
-                if (!sm.gameState.isPaused && !sm.gameState.isGameOver) {
-                    sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
+            inputManager.update();
+
+            // ── Debug Controls Update ────────────────────────────────────────────
+            // When debug_controls is active, update FPS counter and input debug data
+            const debugMode = sm.debugControlsMode;
+            if (debugMode.isActive) {
+                // Sync debug mode to input manager
+                inputManager.setDebugControlsActive(true);
+
+                // FPS calculation
+                debugMode.frameCount++;
+                const elapsed = now - debugMode.lastFpsUpdate;
+                if (elapsed >= 500) { // Update FPS every 500ms for stability
+                    debugMode.fps = (debugMode.frameCount / elapsed) * 1000;
+                    debugMode.frameCount = 0;
+                    debugMode.lastFpsUpdate = now;
                 }
-            }
-        }
 
-        // Update Developer Stats (Zone & Position)
-        if (sm.gameState.hasStarted) {
-            const cam = sm.camera;
-            if (cam) {
-                const zone = sm.getZone(cam.position);
-                sm.ui.setPlayerStats(zone, {
-                    x: cam.position.x,
-                    y: cam.position.y,
-                    z: cam.position.z,
-                    rot: cam.rotation.y
+                // Get debug data from input manager
+                const debugData = inputManager.getDebugControlsData();
+                const cam = sm.camera;
+
+                // Update UI with debug controls data
+                sm.ui.setDebugControls({
+                    isActive: true,
+                    fps: debugMode.fps,
+                    inputSource: debugData.inputSource,
+                    cameraRotation: cam ? { x: cam.rotation.x, y: cam.rotation.y } : { x: 0, y: 0 },
+                    rawMouseDelta: debugData.rawMouseDelta,
+                    rawControllerLook: debugData.rawControllerLook,
                 });
-            }
-        }
 
-        const isLogicFrozen = sm.gameState.isPaused || sm.isConsoleOpen || sm.debugSelection.isActive;
-        sm.gameState.isDebugMode = isLogicFrozen;
-        sm.ui.setIsDebugMode(isLogicFrozen);
-        sm.ui.setIsDebugActive(sm.debugSelection.isActive);
-        sm.gameState.isConsoleOpen = sm.isConsoleOpen;
-
-        if (sm.gameState.isPaused || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
-            return;
-        }
-
-        // In multiplayer spectator mode, end the game if the remote player also dies.
-        if (sm.gameState.isSpectating && !sm.gameState.isGameOver && currentGameMode !== 'SOLO') {
-            if (sm.remote.gameState.health <= 0) {
-                sm.setIsGameOver(true);
-                sm.eventBus.emit('GAME_OVER', null);
-            }
-        }
-
-        if (sm.gameState.hasStarted) {
-            sm.update(dt);
-
-            if (sm.gameState.isSpectating && !sm.getIsSpectating()) {
-                sm.setIsSpectating(true);
+                // Debug input logging removed to prevent frame hitches
+            } else {
+                inputManager.setDebugControlsActive(false);
             }
 
-            sm.mysteryBoxSystem?.update(dt);
+            // Console Toggle (Works even when paused)
+            if (inputManager.justPressed(GameAction.TOGGLE_CONSOLE)) {
+                sm.isConsoleOpen = !sm.isConsoleOpen;
+                sm.ui.setIsConsoleOpen(sm.isConsoleOpen);
 
-            // Zombie count HUD — throttled to every 30 frames, HOST/SOLO only
-            // (CLIENT receives counts via the STATE delta from the host).
-            if (frameCount % 30 === 0 && currentGameMode !== 'CLIENT') {
-                sm.setActiveZombiesCount(sm.zombies.length);
-                sm.setTotalRoundZombies(sm.gameState.totalZombiesInRound);
-            }
-        }
-
-        systemManager.updateAll(dt, now);
-
-        // Passive health regeneration: starts 3 s after last damage, ticks at 20 Hz.
-        const maxHP = sm.gameState.maxHealth || GAME_CONFIG.PLAYER_BASE_HEALTH;
-        if (sm.gameState.health < maxHP && sm.gameState.health > 0 && !sm.gameState.isGameOver) {
-            if (now - sm.gameState.lastDamageTime > 3000) {
-                if (now - sm.gameState.lastRegenTime > 50) {
-                    sm.gameState.health = Math.min(maxHP, sm.gameState.health + 5);
-                    sm.gameState.lastRegenTime = now;
-                    sm.setHealth(sm.gameState.health);
+                if (sm.isConsoleOpen) {
+                    sm.isInternalPointerRelease = true;
+                    if (document.pointerLockElement) document.exitPointerLock();
+                    // Clear the flag after a short delay to ensure InputManager has seen it
+                    setTimeout(() => { sm.isInternalPointerRelease = false; }, 100);
+                } else {
+                    if (!sm.gameState.isPaused && !sm.gameState.isGameOver) {
+                        sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
+                    }
                 }
             }
-        }
-    },
+
+            // Update Developer Stats (Zone & Position)
+            if (sm.gameState.hasStarted) {
+                const cam = sm.camera;
+                if (cam) {
+                    const zone = sm.getZone(cam.position);
+                    sm.ui.setPlayerStats(zone, {
+                        x: cam.position.x,
+                        y: cam.position.y,
+                        z: cam.position.z,
+                        rot: cam.rotation.y
+                    });
+                }
+            }
+
+            const isLogicFrozen = sm.gameState.isPaused || sm.isConsoleOpen || sm.debugSelection.isActive;
+            sm.gameState.isDebugMode = isLogicFrozen;
+            sm.ui.setIsDebugMode(isLogicFrozen);
+            sm.ui.setIsDebugActive(sm.debugSelection.isActive);
+            sm.gameState.isConsoleOpen = sm.isConsoleOpen;
+
+            if (sm.gameState.isPaused || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
+                return;
+            }
+
+            // In multiplayer spectator mode, end the game if the remote player also dies.
+            if (sm.gameState.isSpectating && !sm.gameState.isGameOver && currentGameMode !== 'SOLO') {
+                if (sm.remote.gameState.health <= 0) {
+                    sm.setIsGameOver(true);
+                    sm.eventBus.emit('GAME_OVER', null);
+                }
+            }
+
+            if (sm.gameState.hasStarted) {
+                sm.update(dt);
+
+                if (sm.gameState.isSpectating && !sm.getIsSpectating()) {
+                    sm.setIsSpectating(true);
+                }
+
+                sm.mysteryBoxSystem?.update(dt);
+
+                // Zombie count HUD — throttled to every 30 frames, HOST/SOLO only
+                // (CLIENT receives counts via the STATE delta from the host).
+                if (frameCount % 30 === 0 && currentGameMode !== 'CLIENT') {
+                    sm.setActiveZombiesCount(sm.zombies.length);
+                    sm.setTotalRoundZombies(sm.gameState.totalZombiesInRound);
+                }
+            }
+
+            systemManager.updateAll(dt, now);
+
+            // Passive health regeneration: starts 3 s after last damage, ticks at 20 Hz.
+            const maxHP = sm.gameState.maxHealth || GAME_CONFIG.PLAYER_BASE_HEALTH;
+            if (sm.gameState.health < maxHP && sm.gameState.health > 0 && !sm.gameState.isGameOver) {
+                if (now - sm.gameState.lastDamageTime > 3000) {
+                    if (now - sm.gameState.lastRegenTime > 50) {
+                        sm.gameState.health = Math.min(maxHP, sm.gameState.health + 5);
+                        sm.gameState.lastRegenTime = now;
+                        sm.setHealth(sm.gameState.health);
+                    }
+                }
+            }
+        },
         dispose
     };
 };

@@ -38,12 +38,12 @@ export class GoreManager {
 
     private initBloodPool() {
         for (let i = 0; i < this.poolSize; i++) {
-            const plane = BABYLON.MeshBuilder.CreatePlane("blood_" + i, {size: 0.5}, this.scene);
+            const plane = BABYLON.MeshBuilder.CreatePlane("blood_" + i, { size: 0.5 }, this.scene);
             plane.setEnabled(false);
-            
+
             const mat = new BABYLON.StandardMaterial("bloodMat_" + i, this.scene);
-            mat.diffuseColor = new BABYLON.Color3(0.8, 0, 0); 
-            mat.specularColor = new BABYLON.Color3(0.1, 0, 0); 
+            mat.diffuseColor = new BABYLON.Color3(0.8, 0, 0);
+            mat.specularColor = new BABYLON.Color3(0.1, 0, 0);
             mat.emissiveColor = new BABYLON.Color3(0.2, 0, 0);
             mat.alpha = 0.9;
             mat.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
@@ -69,7 +69,7 @@ export class GoreManager {
 
         for (let i = 0; i < GoreManager.MAX_FLOOR_GORE; i++) {
             const disc = BABYLON.MeshBuilder.CreateDisc(`goreDisc_${i}`, {
-                radius: 1, 
+                radius: 1,
                 tessellation: 12
             }, this.scene);
             disc.material = mat;
@@ -84,13 +84,16 @@ export class GoreManager {
         const FADE_MS = 30000;
         this.goreFadeObserver = this.scene.onBeforeRenderObservable.add(() => {
             const now = Date.now();
-            for (let i = this.activeGoreDiscs.length - 1; i >= 0; i--) {
-                const entry = this.activeGoreDiscs[i];
+            const arr = this.activeGoreDiscs;
+            for (let i = arr.length - 1; i >= 0; i--) {
+                const entry = arr[i];
                 const elapsed = now - entry.startTime;
-                
+
                 if (elapsed >= FADE_MS) {
                     entry.mesh.setEnabled(false);
-                    this.activeGoreDiscs.splice(i, 1);
+                    // Swap-remove: O(1) instead of splice O(n)
+                    arr[i] = arr[arr.length - 1];
+                    arr.pop();
                 } else {
                     const t = elapsed / FADE_MS;
                     entry.mesh.visibility = entry.startVis * (1 - t);
@@ -111,7 +114,7 @@ export class GoreManager {
 
         this.spawnGoreDisc(pos.x, floorY, pos.z, 0.4 + Math.random() * 0.45, 0.9);
 
-        const bitsCount = 2 + Math.floor(Math.random() * 3);
+        const bitsCount = 1 + Math.floor(Math.random() * 2); // 1-2 bits instead of 2-4
         for (let i = 0; i < bitsCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const dist = 0.2 + Math.random() * 0.4;
@@ -157,10 +160,10 @@ export class GoreManager {
     public reset() {
         this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
         this.floorGorePieces = [];
-        
-        this.bloodPool.forEach(b => { 
-            b.mesh.setEnabled(false); 
-            if (b.material) b.material.alpha = 0.9; 
+
+        this.bloodPool.forEach(b => {
+            b.mesh.setEnabled(false);
+            if (b.material) b.material.alpha = 0.9;
         });
     }
 

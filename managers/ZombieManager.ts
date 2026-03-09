@@ -28,6 +28,13 @@ export class ZombieManager {
     private setKillsCallback: ((kills: number) => void) | null = null;
     private lastSpawnSoundTime: number = 0;
 
+    // ── Cached spawn-point arrays (rebuilt only when door state changes) ──
+    private cachedValidWindows: WindowBarrier[] = [];
+    private cachedValidGroundSpawns: GroundSpawn[] = [];
+    private cachedDoorStateKey: string = '\x00UNINITIALIZED';
+    private static readonly _scratchSpawnPos = new BABYLON.Vector3();
+    private static readonly _scratchAccessible = new Set<number>();
+
     constructor(
         private scene: BABYLON.Scene,
         private gameState: GameStateData,
@@ -75,7 +82,7 @@ export class ZombieManager {
 
 
     public setDependencies(
-        spawnPowerUp: (pos: BABYLON.Vector3) => void, 
+        spawnPowerUp: (pos: BABYLON.Vector3) => void,
         addPoints: (amount: number) => void,
         send: (msg: GameMessage) => void,
         setKills: (kills: number) => void
@@ -97,7 +104,7 @@ export class ZombieManager {
         const bodyMat = rm.getMaterial("zombieBodyMat", () => {
             const mat = new BABYLON.StandardMaterial("zombieBodyMat", sm);
             mat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.12);
-            mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02); 
+            mat.emissiveColor = new BABYLON.Color3(0.02, 0.03, 0.02);
             mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
             mat.specularPower = 32;
             mat.maxSimultaneousLights = 8;
@@ -133,11 +140,11 @@ export class ZombieManager {
 
 
     public onZombieDeath(z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT' = 'HOST', isHeadshot: boolean = false, headPos?: BABYLON.Vector3, hitDir?: BABYLON.Vector3) {
-         if (z.isDead) return;
-         z.isDead = true;
-         this.gameState.zombiesAlive--;
-         
-         const baseKillPts = this.configManager.gameplay.POINTS_KILL;
+        if (z.isDead) return;
+        z.isDead = true;
+        this.gameState.zombiesAlive--;
+
+        const baseKillPts = this.configManager.gameplay.POINTS_KILL;
         if (killer === 'HOST') {
             this.gameState.kills++;
             if (this.setKillsCallback) this.setKillsCallback(this.gameState.kills);
@@ -145,24 +152,80 @@ export class ZombieManager {
         } else if (this.sendNetworkMessage) {
             this.sendNetworkMessage({ type: 'HIT_CONFIRM', amount: baseKillPts });
         }
-         
-         this.gameState.lastDeathPos = pos;
-         this.eventBus.emit('ZOMBIE_DEATH', { id: z.id, position: pos });
-         
-         if (isHeadshot && headPos && z.type === 'ZOMBIE' && this.createHeadExplosion) {
-             this.createHeadExplosion(headPos, hitDir);
-         } else {
-             this.createExplosion(pos, hitDir);
-         }
+
+        this.gameState.lastDeathPos = pos;
+        this.eventBus.emit('ZOMBIE_DEATH', { id: z.id, position: pos });
+
+        if (isHeadshot && headPos && z.type === 'ZOMBIE' && this.createHeadExplosion) {
+            this.createHeadExplosion(headPos, hitDir);
+        } else {
+            this.createExplosion(pos, hitDir);
+        }
 
         if (this.spawnPowerUpCallback && Math.random() < this.configManager.powerUps.DROP_CHANCE) {
-             this.spawnPowerUpCallback(pos);
+            this.spawnPowerUpCallback(pos);
         }
+    }
+
+    /**
+     * Builds a compact key from door open/closed states so we can detect
+     * when the spawn-point cache needs rebuilding.
+     */
+    private buildDoorStateKey(): string {
+        const ds = this.gameState.doorStates;
+        let key = '';
+        for (const id in ds) {
+            if (ds[id]?.isOpen) key += id;
+        }
+        return key;
+    }
+
+    /**
+     * Rebuilds the cached valid-windows and valid-ground-spawns arrays.
+     * Called only when door-state changes (detected via key comparison).
+     */
+    private rebuildSpawnCache(): void {
+        // Ensure zone maps are initialized
+        if (this.windowsByZone.size === 0 && this.windows.length > 0) this.initWindowsByZone();
+        if (this.groundSpawnsByZone.size === 0 && this.groundSpawns.length > 0) this.initGroundSpawnsByZone();
+
+        const accessible = ZombieManager._scratchAccessible;
+        accessible.clear();
+
+        // Local player zones
+        const playerZone = this.getZone(this.camera.position);
+        const pZones = this.zoneSystem.getAccessibleZones(playerZone, this.gameState.doorStates);
+        for (let i = 0; i < pZones.length; i++) accessible.add(pZones[i]);
+
+        // Remote player zones
+        const remotePos = this.getRemotePlayerPos();
+        if (remotePos && this.isConnected()) {
+            const rZone = this.getZone(remotePos);
+            const rZones = this.zoneSystem.getAccessibleZones(rZone, this.gameState.doorStates);
+            for (let i = 0; i < rZones.length; i++) accessible.add(rZones[i]);
+        }
+
+        // Rebuild valid windows (reuse array, clear + push instead of new array + spread)
+        this.cachedValidWindows.length = 0;
+        accessible.forEach(zoneId => {
+            const zw = this.windowsByZone.get(zoneId);
+            if (zw) for (let i = 0; i < zw.length; i++) this.cachedValidWindows.push(zw[i]);
+        });
+
+        // Rebuild valid ground spawns
+        this.cachedValidGroundSpawns.length = 0;
+        accessible.forEach(zoneId => {
+            const gh = this.groundSpawnsByZone.get(zoneId);
+            if (gh) for (let i = 0; i < gh.length; i++) this.cachedValidGroundSpawns.push(gh[i]);
+        });
+
+        this.cachedDoorStateKey = this.buildDoorStateKey();
     }
 
     public spawnZombieHost(currentRound: number) {
         const scene = this.scene;
-        let spawnPos = new BABYLON.Vector3(0, 0, 0);
+        const spawnPos = ZombieManager._scratchSpawnPos;
+        spawnPos.set(0, 0, 0);
         let validSpawnFound = false;
         let selectedWindow: WindowBarrier | null = null;
 
@@ -171,63 +234,34 @@ export class ZombieManager {
         const zs = this.configManager.zombieSpeeds;
         const zc = this.configManager.zombieAI;
 
-        // Find windows in valid zones (Accessible from player location)
-        const playerZone = this.getZone(this.camera.position);
-        const accessibleZones = new Set(this.zoneSystem.getAccessibleZones(playerZone, this.gameState.doorStates));
-        
-        // Also add remote player's zones
-        const remotePos = this.getRemotePlayerPos();
-        if (remotePos && this.isConnected()) {
-            const rZone = this.getZone(remotePos);
-            const rAccessible = this.zoneSystem.getAccessibleZones(rZone, this.gameState.doorStates);
-            rAccessible.forEach(z => accessibleZones.add(z));
+        // Rebuild spawn cache only when door states have changed
+        const currentKey = this.buildDoorStateKey();
+        if (currentKey !== this.cachedDoorStateKey) {
+            this.rebuildSpawnCache();
         }
 
-        // Handle case where zone maps might not be initialized yet
-        if (this.windowsByZone.size === 0 && this.windows.length > 0) {
-            this.initWindowsByZone();
-        }
-        if (this.groundSpawnsByZone.size === 0 && this.groundSpawns.length > 0) {
-            this.initGroundSpawnsByZone();
-        }
-
-        // Collect valid windows from accessible zones
-        const validWindows: WindowBarrier[] = [];
-        accessibleZones.forEach(zoneId => {
-            const zoneWindows = this.windowsByZone.get(zoneId);
-            if (zoneWindows) {
-                validWindows.push(...zoneWindows);
-            }
-        });
+        const validWindows = this.cachedValidWindows;
+        const validGroundSpawns = this.cachedValidGroundSpawns;
 
         let spawnSourceType: 'window' | 'ground' = 'window';
-
-        // Collect valid ground spawns from accessible zones
-        const validGroundSpawns: GroundSpawn[] = [];
-        accessibleZones.forEach(zoneId => {
-            const zoneHoles = this.groundSpawnsByZone.get(zoneId);
-            if (zoneHoles) {
-                validGroundSpawns.push(...zoneHoles);
-            }
-        });
 
         // Pick randomly from all valid spawn points (windows + ground holes)
         const totalSpawnPoints = validWindows.length + validGroundSpawns.length;
         if (totalSpawnPoints > 0) {
             const pick = Math.floor(Math.random() * totalSpawnPoints);
             if (pick < validWindows.length) {
-                // Window spawn
+                // Window spawn — copy instead of clone
                 const w = validWindows[pick];
-                spawnPos = w.spawnPoint.clone();
+                spawnPos.copyFrom(w.spawnPoint);
                 spawnPos.x += (Math.random() - 0.5);
                 spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
                 selectedWindow = w;
                 spawnSourceType = 'window';
             } else {
-                // Ground hole spawn
+                // Ground hole spawn — copy instead of clone
                 const gs = validGroundSpawns[pick - validWindows.length];
-                spawnPos = gs.position.clone();
+                spawnPos.copyFrom(gs.position);
                 spawnPos.x += (Math.random() - 0.5);
                 spawnPos.z += (Math.random() - 0.5);
                 validSpawnFound = true;
@@ -235,67 +269,66 @@ export class ZombieManager {
                 spawnSourceType = 'ground';
             }
         }
-        
+
         if (validSpawnFound) {
-             const id = "zombie_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-             
-             const newZ = createZombieMesh(scene, spawnPos, this.resourceManager);
+            const id = "zombie_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
 
-             const baseSpeed = zs.WALKER + (currentRound * rc.ZOMBIE_SPEED_INC);
-             const speedVariation = 0.9 + (Math.random() * 0.2); // 90% to 110% of base speed
-             
-             const zEntity: Zombie = {
-                 id: id,
-                 type: 'ZOMBIE',
-                 mesh: newZ.mesh,
-                 headMesh: newZ.head,
-                 torsoMesh: newZ.torso, 
-                 limbs: newZ.limbs,
-                 health: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (currentRound - 1)),
-                 maxHealth: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (currentRound - 1)),
-                 speed: baseSpeed * speedVariation, 
-                 lastAttackTime: 0,
-                 isDead: false,
-                 state: ZombieState.SPAWNING, 
-                 targetWindowId: selectedWindow ? selectedWindow.id : null,
-                 barrierAttackTimer: 0,
-                 isBurning: false,
-                 spawnTime: Date.now(),
-                 missingLimbs: {
-                     legL: false,
-                     legR: false,
-                     armL: false,
-                     armR: false
-                 }
-             };
+            const newZ = createZombieMesh(scene, spawnPos, this.resourceManager);
 
-             this.createSpawnEffect(spawnPos, spawnSourceType);
-             
-             // Play spawn sound with cooldown - only play if sound isn't already playing
-             const now = Date.now();
-             if (this.soundManager && 
-                 now - this.lastSpawnSoundTime >= zc.SPAWN_SOUND_COOLDOWN_MS &&
-                 !this.soundManager.isPlaying('zombie_spawn')) {
-                 const distToPlayer = BABYLON.Vector3.Distance(spawnPos, this.camera.position);
-                 if (distToPlayer <= zc.SPAWN_SOUND_MAX_DIST) {
-                     this.soundManager.play('zombie_spawn', { volume: zc.SPAWN_SOUND_VOLUME });
-                     this.lastSpawnSoundTime = now;
-                     console.log(`[ZombieManager] Played spawn sound, cooldown set: ${zc.SPAWN_SOUND_COOLDOWN_MS}ms`);
-                 }
-             }
+            const baseSpeed = zs.WALKER + (currentRound * rc.ZOMBIE_SPEED_INC);
+            const speedVariation = 0.9 + (Math.random() * 0.2); // 90% to 110% of base speed
 
-             if (selectedWindow) {
-                 zEntity.state = ZombieState.APPROACHING_WINDOW;
-             } else if (spawnSourceType === 'ground') {
-                 zEntity.state = ZombieState.SPAWNING;
-                 zEntity.mesh.position.y = -1.5; // Start underground
-             } else {
-                 zEntity.state = ZombieState.CHASING;
-             }
+            const zEntity: Zombie = {
+                id: id,
+                type: 'ZOMBIE',
+                mesh: newZ.mesh,
+                headMesh: newZ.head,
+                torsoMesh: newZ.torso,
+                limbs: newZ.limbs,
+                health: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (currentRound - 1)),
+                maxHealth: gc.ZOMBIE_HEALTH_BASE + (gc.ZOMBIE_HEALTH_INC * (currentRound - 1)),
+                speed: baseSpeed * speedVariation,
+                lastAttackTime: 0,
+                isDead: false,
+                state: ZombieState.SPAWNING,
+                targetWindowId: selectedWindow ? selectedWindow.id : null,
+                barrierAttackTimer: 0,
+                isBurning: false,
+                spawnTime: Date.now(),
+                missingLimbs: {
+                    legL: false,
+                    legR: false,
+                    armL: false,
+                    armR: false
+                }
+            };
 
-             if (zEntity.speed > zs.SUPER_SPRINTER) zEntity.speed = zs.SUPER_SPRINTER;
+            this.createSpawnEffect(spawnPos, spawnSourceType);
 
-             this.zombies.push(zEntity);
+            // Play spawn sound with cooldown - only play if sound isn't already playing
+            const now = Date.now();
+            if (this.soundManager &&
+                now - this.lastSpawnSoundTime >= zc.SPAWN_SOUND_COOLDOWN_MS &&
+                !this.soundManager.isPlaying('zombie_spawn')) {
+                const distToPlayer = BABYLON.Vector3.Distance(spawnPos, this.camera.position);
+                if (distToPlayer <= zc.SPAWN_SOUND_MAX_DIST) {
+                    this.soundManager.play('zombie_spawn', { volume: zc.SPAWN_SOUND_VOLUME });
+                    this.lastSpawnSoundTime = now;
+                }
+            }
+
+            if (selectedWindow) {
+                zEntity.state = ZombieState.APPROACHING_WINDOW;
+            } else if (spawnSourceType === 'ground') {
+                zEntity.state = ZombieState.SPAWNING;
+                zEntity.mesh.position.y = -1.5; // Start underground
+            } else {
+                zEntity.state = ZombieState.CHASING;
+            }
+
+            if (zEntity.speed > zs.SUPER_SPRINTER) zEntity.speed = zs.SUPER_SPRINTER;
+
+            this.zombies.push(zEntity);
         }
     }
 }
