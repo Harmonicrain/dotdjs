@@ -306,13 +306,19 @@ export const createNetworkMessageHandler = (
 
                     // For BOX_START, validate CLIENT has enough points
                     if (msg.type === 'INTERACT_BOX_START') {
-                        const boxCost = sm.configManager.mysteryBox.COST;
+                        const isFireSale = !!msg.isFireSale;
+                        const boxCost = isFireSale ? 10 : sm.configManager.mysteryBox.COST;
                         const clientPoints = cachedClient.clientPoints;
                         if (clientPoints >= boxCost) {
                             const newPoints = clientPoints - boxCost;
                             cachedClient.clientPoints = newPoints;
+                            const prevLocIdx = sm.mysteryBox.activeLocationIndex;
+                            if (isFireSale && msg.locIndex !== undefined) {
+                                sm.mysteryBox.activeLocationIndex = msg.locIndex;
+                            }
                             sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                            sm.mysteryBoxSystem.interact(playerName);
+                            const interactResult = sm.mysteryBoxSystem.interact(playerName, boxCost);
+                            if (!interactResult) sm.mysteryBox.activeLocationIndex = prevLocIdx;
                         } else {
                             sm.send({ type: 'INTERACT_REJECT', interactionType: 'BOX', points: clientPoints });
                         }

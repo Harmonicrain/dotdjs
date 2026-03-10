@@ -23,19 +23,50 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         return box.instances[box.activeLocationIndex] || null;
     };
 
-    const updateBoxVisibility = (force: boolean = false) => {
+    // Cache to skip redundant setEnabled calls when nothing relevant has changed
+    let _visCache = { isFireSale: false, activeIdx: -1, boxState: '' as MysteryBoxState | '' };
+
+    const updateBoxVisibility = (isFireSale: boolean) => {
         const box = stateManager.mysteryBox;
 
         const len = box.instances.length;
         if (len === 0) return;
 
-        // Only show the active box
+        // Skip if the three inputs that drive visibility haven't changed
+        if (
+            _visCache.isFireSale === isFireSale &&
+            _visCache.activeIdx === box.activeLocationIndex &&
+            _visCache.boxState === box.state
+        ) return;
+        _visCache.isFireSale = isFireSale;
+        _visCache.activeIdx = box.activeLocationIndex;
+        _visCache.boxState = box.state;
+
+        // Only show the active box, OR all boxes if fire sale is active
         const activeIdx = box.activeLocationIndex;
         for (let i = 0; i < len; i++) {
             const inst = box.instances[i];
-            const show = i === activeIdx;
-            if (inst.mesh) inst.mesh.setEnabled(show);
-            if (inst.trigger) inst.trigger.setEnabled(show);
+            const show = i === activeIdx || isFireSale;
+
+            if (inst.mesh && inst.mesh.isEnabled() !== show) {
+                inst.mesh.setEnabled(show);
+            }
+
+            // During fire sale, non-active boxes can be interacted with as long as the global state is IDLE
+            // (meaning no box is currently rolling/opening). The active box should always be interactable.
+            const triggerShow = show && (box.state === MysteryBoxState.BOX_IDLE || i === activeIdx);
+            if (inst.trigger && inst.trigger.isEnabled() !== triggerShow) {
+                inst.trigger.setEnabled(triggerShow);
+            }
+
+            // Prevent EXTREME LAG: Ensure we don't enable multiple PointLights at once during Fire Sale
+            // Enabling multiple lights suddenly forces BabylonJS to recompile all PBR materials
+            if (inst.glowLight) {
+                const lightShow = i === activeIdx && box.state !== MysteryBoxState.BOX_IDLE;
+                if (inst.glowLight.isEnabled() !== lightShow) {
+                    inst.glowLight.setEnabled(lightShow);
+                }
+            }
         }
     };
 
@@ -67,13 +98,18 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         const children = anchor.getChildren();
         children.forEach((node, i) => {
             const c = node as BABYLON.TransformNode;
-            if (c.name === "box_teddy") { c.setEnabled(false); return; }
+            if (c.name === "box_teddy") {
+                if (c.isEnabled()) c.setEnabled(false);
+                return;
+            }
 
             const isVisible = resultWeaponId
                 ? (resultWeaponId === weapons[i]?.id && c.name !== "box_teddy")
                 : (i === showIndex);
 
-            c.setEnabled(isVisible);
+            if (c.isEnabled() !== isVisible) {
+                c.setEnabled(isVisible);
+            }
 
             if (isVisible && animateOptions) {
                 c.rotation.y += animateOptions.rotSpeed;
@@ -88,8 +124,23 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const handleBoxIdle = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>) => {
         box.lidAngle = BABYLON.Scalar.Lerp(box.lidAngle, 0, 0.1);
         updateGlow(activeInstance, 0);
-        if (activeInstance?.weaponAnchor) {
-            activeInstance.weaponAnchor.getChildren().forEach(c => c.setEnabled(false));
+
+        // Ensure all instances are fully reset to idle state
+        // This acts as a fallback for clients who might miss the instantaneous BOX_RELOCATING state sync
+        for (let i = 0; i < box.instances.length; i++) {
+            const inst = box.instances[i];
+            if (inst.weaponAnchor) {
+                inst.weaponAnchor.getChildren().forEach(c => {
+                    const child = c as BABYLON.TransformNode;
+                    if (child.isEnabled()) {
+                        child.setEnabled(false);
+                    }
+                });
+            }
+            if (i !== box.activeLocationIndex) {
+                if (inst.lidMesh && inst.lidMesh.rotation.x !== 0) inst.lidMesh.rotation.x = 0;
+                if (inst.glowLight && inst.glowLight.intensity > 0) inst.glowLight.intensity = 0;
+            }
         }
     };
 
@@ -165,7 +216,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 children.forEach(node => {
                     const t = node as BABYLON.TransformNode;
                     t.scaling.copyFromFloats(2, 2, 2);
-                    t.setEnabled(false);
+                    if (t.isEnabled()) t.setEnabled(false);
                 });
             }
             transition(MysteryBoxState.BOX_IDLE);
@@ -178,13 +229,13 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
             activeInstance.weaponAnchor.getChildren().forEach((node) => {
                 const c = node as BABYLON.TransformNode;
                 if (c.name === "box_teddy") {
-                    c.setEnabled(true);
+                    if (!c.isEnabled()) c.setEnabled(true);
                     const progress = 1 - (box.stateTimer / mbc.TIMING.TEDDY_REVEAL);
                     c.position.y = BABYLON.Scalar.Lerp(0, 1.2, progress);
                     c.rotation.y += 0.05;
                     c.scaling.copyFromFloats(1.5, 1.5, 1.5);
                 } else {
-                    c.setEnabled(false);
+                    if (c.isEnabled()) c.setEnabled(false);
                 }
             });
         }
@@ -193,12 +244,21 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         }
     };
 
-    const handleBoxTeddyWait = (box: typeof stateManager.mysteryBox, isAuthority: boolean) => {
-        if (box.weaponAnchor && box.teddyMesh) {
-            box.teddyMesh.rotation.y += 0.02;
+    const handleBoxTeddyWait = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>, isAuthority: boolean, isFireSale: boolean) => {
+        if (activeInstance?.weaponAnchor) {
+            activeInstance.weaponAnchor.getChildren().forEach((node) => {
+                const c = node as BABYLON.TransformNode;
+                if (c.name === "box_teddy") {
+                    c.rotation.y += 0.02;
+                }
+            });
         }
         if (isAuthority && box.stateTimer <= 0) {
-            transition(MysteryBoxState.BOX_TELEPORT_OUT, stateManager.configManager.mysteryBox.TIMING.TELEPORT);
+            if (isFireSale) {
+                transition(MysteryBoxState.BOX_CLOSING_SUCCESS, stateManager.configManager.mysteryBox.TIMING.CLOSING);
+            } else {
+                transition(MysteryBoxState.BOX_TELEPORT_OUT, stateManager.configManager.mysteryBox.TIMING.TELEPORT);
+            }
         }
     };
 
@@ -211,7 +271,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         }
     };
 
-    const handleBoxRelocating = (box: typeof stateManager.mysteryBox, isAuthority: boolean) => {
+    const handleBoxRelocating = (box: typeof stateManager.mysteryBox, isAuthority: boolean, isFireSale: boolean) => {
         if (isAuthority) {
             let newIndex = Math.floor(Math.random() * stateManager.boxLocations.length);
             if (newIndex === box.activeLocationIndex && stateManager.boxLocations.length > 1) {
@@ -219,24 +279,36 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
             }
             box.activeLocationIndex = newIndex;
 
-            updateBoxVisibility(true);
-
-            // Get the NEW active instance after index change
-            const newActiveInstance = box.instances[box.activeLocationIndex];
-            if (newActiveInstance?.mesh) {
-                newActiveInstance.mesh.position = stateManager.boxLocations[newIndex];
-                newActiveInstance.mesh.rotation.y = stateManager.boxRotations[newIndex];
-                newActiveInstance.mesh.scaling.copyFromFloats(1, 1, 1);
-                box.lidAngle = 0;
-            }
+            updateBoxVisibility(isFireSale);
             transition(MysteryBoxState.BOX_IDLE);
-        } else {
-            // Client: get the current active instance (index was updated from host state)
-            const currentActiveInstance = box.instances[box.activeLocationIndex];
-            if (currentActiveInstance?.mesh) {
-                currentActiveInstance.mesh.position = stateManager.boxLocations[box.activeLocationIndex];
-                currentActiveInstance.mesh.rotation.y = stateManager.boxRotations[box.activeLocationIndex];
-                currentActiveInstance.mesh.scaling.copyFromFloats(1, 1, 1);
+        }
+
+        // Host & Client: Cleanly reset ALL boxes to their stable state so the
+        // old box has no leftover teddy bears or tiny scales during fire sales.
+        box.lidAngle = 0;
+        for (let i = 0; i < box.instances.length; i++) {
+            const inst = box.instances[i];
+            if (inst.mesh) {
+                inst.mesh.position = stateManager.boxLocations[i];
+                inst.mesh.rotation.y = stateManager.boxRotations[i];
+                inst.mesh.scaling.copyFromFloats(1, 1, 1);
+            }
+            if (inst.lidMesh) {
+                inst.lidMesh.rotation.x = 0;
+            }
+            if (inst.weaponAnchor) {
+                inst.weaponAnchor.getChildren().forEach(c => {
+                    const child = c as BABYLON.TransformNode;
+                    if (child.isEnabled()) child.setEnabled(false);
+                });
+            }
+            if (inst.glowLight) inst.glowLight.intensity = 0;
+            if (inst.beamMesh && inst.beamMesh.material) {
+                inst.beamMesh.visibility = 0;
+                (inst.beamMesh.material as BABYLON.StandardMaterial).alpha = 0;
+            }
+            if (inst.glowPlaneMesh && inst.glowPlaneMesh.material) {
+                (inst.glowPlaneMesh.material as BABYLON.StandardMaterial).alpha = 0;
             }
         }
     };
@@ -248,7 +320,18 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
         if (box.instances.length === 0) return;
 
-        updateBoxVisibility();
+        const isFireSale = stateManager.isFireSaleActive();
+
+        if (isFireSale && box.originalLocationIndex === -1) {
+            box.originalLocationIndex = box.activeLocationIndex;
+        } else if (!isFireSale && box.originalLocationIndex !== -1) {
+            if (box.state === MysteryBoxState.BOX_IDLE) {
+                box.activeLocationIndex = box.originalLocationIndex;
+                box.originalLocationIndex = -1;
+            }
+        }
+
+        updateBoxVisibility(isFireSale);
 
         if (box.stateTimer > 0) {
             box.stateTimer -= dt * 1000;
@@ -280,13 +363,13 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 handleBoxTeddyReveal(box, activeInstance, isAuthority);
                 break;
             case MysteryBoxState.BOX_TEDDY_WAIT:
-                handleBoxTeddyWait(box, isAuthority);
+                handleBoxTeddyWait(box, activeInstance, isAuthority, isFireSale);
                 break;
             case MysteryBoxState.BOX_TELEPORT_OUT:
                 handleBoxTeleportOut(box, activeInstance, isAuthority);
                 break;
             case MysteryBoxState.BOX_RELOCATING:
-                handleBoxRelocating(box, isAuthority);
+                handleBoxRelocating(box, isAuthority, isFireSale);
                 break;
         }
 

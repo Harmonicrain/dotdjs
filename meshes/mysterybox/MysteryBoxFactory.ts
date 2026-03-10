@@ -99,6 +99,7 @@ export const createMysteryBox = (scene: BABYLON.Scene) => {
 
     const light = new BABYLON.PointLight("boxLight", new BABYLON.Vector3(0, 1.5, 0), scene);
     light.parent = root; light.diffuse = new BABYLON.Color3(1.0, 0.8, 0.2); light.intensity = 0; light.range = 5;
+    light.setEnabled(false); // Initially disabled to prevent shader compilation lag
 
     const beam = BABYLON.MeshBuilder.CreateCylinder("boxBeam", {height: 20, diameterTop: 0.5, diameterBottom: 0.5}, scene);
     beam.parent = root; beam.position.y = 10; 

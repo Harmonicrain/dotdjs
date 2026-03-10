@@ -23,20 +23,22 @@ export interface InteractableMetadata {
     type: InteractableType;
     id?: string;
     cost?: number;
-    data?: any; 
+    data?: any;
     perkType?: string; // For perks
     weapon?: string; // For wallbuys
     connects?: [number, number]; // For doors
+    locIndex?: number; // For mystery boxes
 }
 
 export type MysteryBox = {
     state: MysteryBoxState;
     activeLocationIndex: number;
+    originalLocationIndex: number;
     mesh: BABYLON.TransformNode | null;
     lidMesh: BABYLON.TransformNode | null;
     weaponAnchor: BABYLON.TransformNode | null;
     glowLight: BABYLON.PointLight | null;
-    currentWeaponIndex: number; 
+    currentWeaponIndex: number;
     resultWeaponId: string | null;
     ownerName: string | null;
     stateTimer: number;
@@ -62,6 +64,7 @@ export function createDefaultMysteryBox(): MysteryBox {
     return {
         state: MysteryBoxState.BOX_IDLE,
         activeLocationIndex: 0,
+        originalLocationIndex: -1,
         mesh: null,
         lidMesh: null,
         weaponAnchor: null,
@@ -90,8 +93,8 @@ export interface ZoneDefinition {
     id: number;
     name?: string;
     bounds: {
-        min: [number, number, number] | number; 
-        max: [number, number, number] | number; 
+        min: [number, number, number] | number;
+        max: [number, number, number] | number;
     } | ZoneBounds;
     spawnBounds?: {
         min: [number, number, number];
@@ -298,7 +301,7 @@ export interface MapDefinition {
     interactables: InteractablesDefinition;
     fixtures?: FixtureDefinition[];
     environment?: EnvironmentDefinition;
-    zones: ZoneDefinition[]; 
+    zones: ZoneDefinition[];
     spawns: {
         host: { pos: [number, number, number]; rot: number };
         client: { pos: [number, number, number]; rot: number };

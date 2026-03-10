@@ -5,14 +5,16 @@ import { getInputPrompt, GameAction } from '../../../engine/InputManager';
 export const MysteryBoxHandler: InteractionHandler = {
     getHoverLabel: ({ stateManager, inputDevice }) => {
         const box = stateManager.mysteryBox;
-        const boxHoverCost = stateManager.configManager.mysteryBox.COST;
+        const isFireSale = stateManager.isFireSaleActive();
+        const boxHoverCost = isFireSale ? 10 : stateManager.configManager.mysteryBox.COST;
         const prompt = getInputPrompt(GameAction.INTERACT, inputDevice);
         if (box.state === MysteryBoxState.BOX_WEAPON_PRESENT) return `Hold [${prompt}] to Take Weapon`;
         return `Hold [${prompt}] for Mystery Box [${boxHoverCost}]`;
     },
-    interact: ({ stateManager }) => {
+    interact: ({ stateManager, metadata }) => {
         const gameMode = stateManager.gameModeRef.current;
-        const boxCost = stateManager.configManager.mysteryBox.COST;
+        const isFireSale = stateManager.isFireSaleActive();
+        const boxCost = isFireSale ? 10 : stateManager.configManager.mysteryBox.COST;
         const vc = stateManager.configManager.visuals;
         
         if (gameMode === 'CLIENT') {
@@ -20,7 +22,12 @@ export const MysteryBoxHandler: InteractionHandler = {
              if (box.state === MysteryBoxState.BOX_IDLE) {
                  if (stateManager.gameState.points >= boxCost) {
                      // CLIENT: send request only, do not deduct points — wait for HOST confirmation
-                     stateManager.send({ type: 'INTERACT_BOX_START', playerName: stateManager.remote.gameState.isDowned ? "Survivor" : stateManager.gameState.playerName });
+                     stateManager.send({ 
+                         type: 'INTERACT_BOX_START', 
+                         playerName: stateManager.remote.gameState.isDowned ? "Survivor" : stateManager.gameState.playerName,
+                         locIndex: metadata?.locIndex,
+                         isFireSale
+                     });
                      return true;
                  } else {
                      stateManager.setInteractionMsg("NEED " + boxCost + " POINTS");
@@ -31,7 +38,13 @@ export const MysteryBoxHandler: InteractionHandler = {
                  return true;
              }
         } else {
+             const prevLocIdx = stateManager.mysteryBox.activeLocationIndex;
+             if (isFireSale && metadata?.locIndex !== undefined) {
+                 stateManager.mysteryBox.activeLocationIndex = metadata.locIndex;
+             }
              const res = stateManager.mysteryBoxSystem?.interact(undefined, boxCost);
+             // Restore on any failure (false = box busy, "NO_POINTS" = can't afford)
+             if (!res || res === 'NO_POINTS') stateManager.mysteryBox.activeLocationIndex = prevLocIdx;
              if (res === true) return true;
              else if (typeof res === 'string') {
                  if (res === "NO_POINTS") {

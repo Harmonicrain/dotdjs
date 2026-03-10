@@ -798,7 +798,7 @@ export class LevelBuilder {
                 });
             }
 
-            box.trigger.metadata = { type: 'MYSTERY_BOX' } as InteractableMetadata;
+            box.trigger.metadata = { type: 'MYSTERY_BOX', locIndex: index } as InteractableMetadata;
 
             if (index > 0) {
                 box.root.setEnabled(false);

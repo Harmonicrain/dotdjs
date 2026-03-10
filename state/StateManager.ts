@@ -295,6 +295,9 @@ export class StateManager {
     public hasDoublePoints(): boolean {
         return !!(this.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS] && this.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS]! > Date.now());
     }
+    public isFireSaleActive(): boolean {
+        return !!(this.gameState.activePowerUps[PowerUpType.FIRE_SALE] && this.gameState.activePowerUps[PowerUpType.FIRE_SALE]! > Date.now());
+    }
     public addPoints(amount: number) {
         this.gameState.points += amount;
         this.gameState.totalEarnedPoints += amount;

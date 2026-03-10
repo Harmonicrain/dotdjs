@@ -21,6 +21,7 @@ export const createPowerUpMesh = (scene: BABYLON.Scene, type: PowerUpType, posit
     else if (type === PowerUpType.DOUBLE_POINTS) mat.emissiveColor = new BABYLON.Color3(1, 0.8, 0.2);
     else if (type === PowerUpType.NUKE) mat.emissiveColor = new BABYLON.Color3(1, 1, 0.2);
     else if (type === PowerUpType.CARPENTER) mat.emissiveColor = new BABYLON.Color3(0.8, 0.6, 0.2);
+    else if (type === PowerUpType.FIRE_SALE) mat.emissiveColor = new BABYLON.Color3(1, 0.5, 0); // Orange
 
     box.material = mat;
 

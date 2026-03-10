@@ -13,7 +13,8 @@ export enum PowerUpType {
     INSTA_KILL = 'INSTA_KILL',
     DOUBLE_POINTS = 'DOUBLE_POINTS',
     NUKE = 'NUKE',
-    CARPENTER = 'CARPENTER'
+    CARPENTER = 'CARPENTER',
+    FIRE_SALE = 'FIRE_SALE'
 }
 
 export type PowerUp = {
@@ -260,7 +261,7 @@ export type GameMessage =
     | { type: 'SPAWN_POWERUP'; id: string; pType: PowerUpType; x: number; y: number; z: number }
     | { type: 'ACTIVATE_POWERUP_EFFECT'; pType: PowerUpType }
     | { type: 'INTERACT_BOX' }
-    | { type: 'INTERACT_BOX_START'; playerName: string }
+    | { type: 'INTERACT_BOX_START'; playerName: string; locIndex?: number; isFireSale?: boolean }
     | { type: 'INTERACT_BOX_TAKE'; playerName: string }
     | { type: 'HIT_CONFIRM'; amount: number }
     | { type: 'RESPAWN'; round: number; points: number }
