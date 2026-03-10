@@ -279,28 +279,12 @@ export class StateManager {
     public isDoorOpen(doorId: string): boolean { return this.gameState.doorStates[doorId]?.isOpen ?? false; }
     public getPerkState(perkId: string): boolean { return this.gameState.perkStates[perkId] ?? false; }
     public updateZoneSystem(zones: ZoneDefinition[], doors: DoorConnection[]) { this.zoneSystem.load(zones, doors); }
-    private pauseStartTimestamp: number = 0;
-
     public setPaused(paused: boolean) {
         this.gameState.isPaused = paused;
         if (paused) {
-            this.pauseStartTimestamp = Date.now();
             this.timerManager.pauseAll();
             this.soundManager?.pauseAll();
         } else {
-            if (this.pauseStartTimestamp > 0) {
-                const pauseDuration = Date.now() - this.pauseStartTimestamp;
-                for (const key in this.gameState.activePowerUps) {
-                    const type = key as PowerUpType;
-                    if (this.gameState.activePowerUps[type] !== undefined) {
-                        this.gameState.activePowerUps[type]! += pauseDuration;
-                    }
-                }
-                for (const p of this.gameState.powerUps) {
-                    p.spawnTime += pauseDuration;
-                }
-                this.pauseStartTimestamp = 0;
-            }
             this.timerManager.resumeAll();
             this.soundManager?.resumeAll();
         }
