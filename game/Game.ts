@@ -5,6 +5,7 @@ import * as RecastCore from "@recast-navigation/core";
 import * as RecastGenerators from "@recast-navigation/generators";
 import { GameEngine } from './GameEngine';
 import { createWeapons } from '../meshes/WeaponMeshFactory';
+import { releaseZombieMesh, releaseHellhoundMesh, disposeZombiePools } from '../meshes/ZombieMeshFactory';
 import { createRemotePlayer } from '../meshes/RemotePlayerFactory';
 import { loadMap } from '../managers/MapRegistry';
 import { GAME_CONFIG, WEAPON_CONFIGS } from '../config';
@@ -447,12 +448,10 @@ export class Game {
     /** Clear all zombies and hellhounds */
     private _clearZombies(sm: StateManager): void {
         sm.zombies.forEach(z => {
-            if (z.mesh) z.mesh.dispose();
-            if (z.headMesh) z.headMesh.dispose();
-            if (z.limbs) {
-                Object.values(z.limbs).forEach(l => {
-                    if (l instanceof BABYLON.AbstractMesh) l.dispose();
-                });
+            if (z.type === 'HELLHOUND') {
+                releaseHellhoundMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, limbs: z.limbs! });
+            } else {
+                releaseZombieMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
             }
         });
         sm.zombies.length = 0;
@@ -916,6 +915,7 @@ export class Game {
         if (this.systemManager) this.systemManager.dispose();
         if (this.gameEngine) this.gameEngine.dispose();
         if (this.resourceManager) this.resourceManager.dispose();
+        disposeZombiePools();
         if (this.engine) this.engine.dispose();
     }
 }

@@ -1,5 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { ResourceManager } from '../managers/ResourceManager';
+import { ObjectPool } from '../engine/ObjectPool';
+
 export interface ZombieMeshResult {
     mesh: BABYLON.Mesh;
     head: BABYLON.AbstractMesh;
@@ -11,11 +13,15 @@ export interface ZombieMeshResult {
         legR: BABYLON.AbstractMesh;
     };
 }
-// ── MESH TEMPLATES ─────────────────────────────────────────────────────────
+
+// ── MESH TEMPLATES & POOLS ─────────────────────────────────────────────────
 // We create "master" versions of the meshes once. Subsequent spawns use 
-// instantiateHierarchy() to clone them, which shares geometry/buffers.
+// the object pools which internally clone from the master template.
 let masterZombie: ZombieMeshResult | null = null;
 let masterHellhound: ZombieMeshResult | null = null;
+
+let zombiePool: ObjectPool<ZombieMeshResult> | null = null;
+let hellhoundPool: ObjectPool<ZombieMeshResult> | null = null;
 
 /**
  * Builds the master templates used for cloning.
@@ -26,11 +32,97 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
         masterZombie = buildZombieTemplate(scene, resourceManager);
         masterZombie.mesh.setEnabled(false); // Hide the template
         masterZombie.mesh.name = "MASTER_ZOMBIE_TEMPLATE";
+        
+        zombiePool = new ObjectPool<ZombieMeshResult>(
+            () => {
+                let head: BABYLON.AbstractMesh | undefined;
+                let torso: BABYLON.AbstractMesh | undefined;
+                let armL: BABYLON.AbstractMesh | undefined;
+                let armR: BABYLON.AbstractMesh | undefined;
+                let legL: BABYLON.AbstractMesh | undefined;
+                let legR: BABYLON.AbstractMesh | undefined;
+                const instance = masterZombie!.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
+                    if (source === masterZombie!.head) head = clone as BABYLON.AbstractMesh;
+                    else if (source === masterZombie!.torso) torso = clone as BABYLON.AbstractMesh;
+                    else if (source === masterZombie!.limbs.armL) armL = clone as BABYLON.AbstractMesh;
+                    else if (source === masterZombie!.limbs.armR) armR = clone as BABYLON.AbstractMesh;
+                    else if (source === masterZombie!.limbs.legL) legL = clone as BABYLON.AbstractMesh;
+                    else if (source === masterZombie!.limbs.legR) legR = clone as BABYLON.AbstractMesh;
+                }) as BABYLON.Mesh;
+                
+                instance.name = "zombie_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+                instance.setEnabled(false);
+                
+                return {
+                    mesh: instance,
+                    head: head!,
+                    torso,
+                    limbs: { armL: armL!, armR: armR!, legL: legL!, legR: legR! }
+                };
+            },
+            (zmr) => {
+                zmr.mesh.setEnabled(true);
+                zmr.head.setEnabled(true);
+                if (zmr.torso) zmr.torso.setEnabled(true);
+                zmr.limbs.armL.setEnabled(true);
+                zmr.limbs.armR.setEnabled(true);
+                zmr.limbs.legL.setEnabled(true);
+                zmr.limbs.legR.setEnabled(true);
+            },
+            (zmr) => {
+                zmr.mesh.dispose();
+            },
+            50 // Pre-warm 50 zombies
+        );
     }
+    
     if (!masterHellhound) {
         masterHellhound = buildHellhoundTemplate(scene, resourceManager);
         masterHellhound.mesh.setEnabled(false); // Hide the template
         masterHellhound.mesh.name = "MASTER_HELLHOUND_TEMPLATE";
+        
+        hellhoundPool = new ObjectPool<ZombieMeshResult>(
+            () => {
+                let head: BABYLON.AbstractMesh | undefined;
+                let legFL: BABYLON.AbstractMesh | undefined;
+                let legFR: BABYLON.AbstractMesh | undefined;
+                let legBL: BABYLON.AbstractMesh | undefined;
+                let legBR: BABYLON.AbstractMesh | undefined;
+                const instance = masterHellhound!.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
+                    if (source === masterHellhound!.head) head = clone as BABYLON.AbstractMesh;
+                    else if (source === masterHellhound!.limbs.armL) legFL = clone as BABYLON.AbstractMesh;
+                    else if (source === masterHellhound!.limbs.armR) legFR = clone as BABYLON.AbstractMesh;
+                    else if (source === masterHellhound!.limbs.legL) legBL = clone as BABYLON.AbstractMesh;
+                    else if (source === masterHellhound!.limbs.legR) legBR = clone as BABYLON.AbstractMesh;
+                }) as BABYLON.Mesh;
+                
+                instance.name = "hellhound_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+                instance.setEnabled(false);
+                
+                return {
+                    mesh: instance,
+                    head: head!,
+                    limbs: {
+                        armL: legFL!,
+                        armR: legFR!,
+                        legL: legBL!,
+                        legR: legBR!
+                    }
+                };
+            },
+            (zmr) => {
+                zmr.mesh.setEnabled(true);
+                zmr.head.setEnabled(true);
+                zmr.limbs.armL.setEnabled(true);
+                zmr.limbs.armR.setEnabled(true);
+                zmr.limbs.legL.setEnabled(true);
+                zmr.limbs.legR.setEnabled(true);
+            },
+            (zmr) => {
+                zmr.mesh.dispose();
+            },
+            10 // Pre-warm 10 hounds
+        );
     }
 };
 
@@ -385,58 +477,47 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
 };
 export const createZombieMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterZombie) preWarmTemplates(scene, resourceManager);
-    const master = masterZombie!;
-    let head: BABYLON.AbstractMesh | undefined;
-    let torso: BABYLON.AbstractMesh | undefined;
-    let armL: BABYLON.AbstractMesh | undefined;
-    let armR: BABYLON.AbstractMesh | undefined;
-    let legL: BABYLON.AbstractMesh | undefined;
-    let legR: BABYLON.AbstractMesh | undefined;
-    const instance = master.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
-        if (source === master.head) head = clone as BABYLON.AbstractMesh;
-        else if (source === master.torso) torso = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.armL) armL = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.armR) armR = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.legL) legL = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.legR) legR = clone as BABYLON.AbstractMesh;
-    }) as BABYLON.Mesh;
-    instance.name = "zombie_" + Date.now();
-    instance.position.copyFrom(position);
-    instance.setEnabled(true);
-
-    return {
-        mesh: instance,
-        head: head!,
-        torso,
-        limbs: { armL: armL!, armR: armR!, legL: legL!, legR: legR! }
-    };
+    
+    const instance = zombiePool!.acquire();
+    instance.mesh.position.copyFrom(position);
+    
+    return instance;
 };
 export const createHellhoundMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterHellhound) preWarmTemplates(scene, resourceManager);
-    const master = masterHellhound!;
-    let head: BABYLON.AbstractMesh | undefined;
-    let legFL: BABYLON.AbstractMesh | undefined;
-    let legFR: BABYLON.AbstractMesh | undefined;
-    let legBL: BABYLON.AbstractMesh | undefined;
-    let legBR: BABYLON.AbstractMesh | undefined;
-    const instance = master.mesh.instantiateHierarchy(undefined, undefined, (source, clone) => {
-        if (source === master.head) head = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.armL) legFL = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.armR) legFR = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.legL) legBL = clone as BABYLON.AbstractMesh;
-        else if (source === master.limbs.legR) legBR = clone as BABYLON.AbstractMesh;
-    }) as BABYLON.Mesh;
-    instance.name = "hellhound_" + Date.now();
-    instance.position.copyFrom(position);
-    instance.setEnabled(true);
-    return {
-        mesh: instance,
-        head: head!,
-        limbs: {
-            armL: legFL!,
-            armR: legFR!,
-            legL: legBL!,
-            legR: legBR!
-        }
-    };
+    
+    const instance = hellhoundPool!.acquire();
+    instance.mesh.position.copyFrom(position);
+    
+    return instance;
 };
+
+export const releaseZombieMesh = (zmr: ZombieMeshResult) => {
+    zmr.mesh.setEnabled(false);
+    if (zombiePool) zombiePool.release(zmr);
+};
+
+export const releaseHellhoundMesh = (zmr: ZombieMeshResult) => {
+    zmr.mesh.setEnabled(false);
+    if (hellhoundPool) hellhoundPool.release(zmr);
+};
+
+export const disposeZombiePools = () => {
+    if (zombiePool) {
+        zombiePool.dispose();
+        zombiePool = null;
+    }
+    if (hellhoundPool) {
+        hellhoundPool.dispose();
+        hellhoundPool = null;
+    }
+    
+    if (masterZombie) {
+        masterZombie.mesh.dispose();
+        masterZombie = null;
+    }
+    if (masterHellhound) {
+        masterHellhound.mesh.dispose();
+        masterHellhound = null;
+    }
+}

@@ -4,7 +4,7 @@ import { System } from '../../types/systems';
 import { Zombie, ZombieState } from '../../types/index';
 import { EventBus } from '../../engine/EventBus';
 import { CachedHostState } from '../../network/NetworkMessageHandler';
-import { createZombieMesh, createHellhoundMesh } from '../../meshes/ZombieMeshFactory';
+import { createZombieMesh, createHellhoundMesh, releaseHellhoundMesh, releaseZombieMesh } from '../../meshes/ZombieMeshFactory';
 import { ResourceManager } from '../../managers/ResourceManager';
 
 export interface IZombieSyncContext {
@@ -42,8 +42,11 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
         for (const [id, z] of knownZombies) {
             if (!syncedIds.has(id)) {
                 z.isDead = true;
-                z.mesh.dispose();
-                if (z.headMesh) z.headMesh.dispose();
+                if (z.type === 'HELLHOUND') {
+                    releaseHellhoundMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, limbs: z.limbs! });
+                } else {
+                    releaseZombieMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
+                }
                 if (z.fireSystem) { z.fireSystem.stop(); z.fireSystem.dispose(); }
                 knownZombies.delete(id);
                 const idx = ctx.zombies.indexOf(z);
