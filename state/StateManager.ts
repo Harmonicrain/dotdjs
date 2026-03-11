@@ -281,6 +281,11 @@ export class StateManager {
     public updateZoneSystem(zones: ZoneDefinition[], doors: DoorConnection[]) { this.zoneSystem.load(zones, doors); }
     public setPaused(paused: boolean) {
         this.gameState.isPaused = paused;
+        
+        // Pause/Resume Babylon engine systems
+        this.scene.animationsEnabled = !paused;
+        this.scene.particlesEnabled = !paused;
+
         if (paused) {
             this.timerManager.pauseAll();
             this.soundManager?.pauseAll();

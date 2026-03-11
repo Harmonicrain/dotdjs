@@ -1,427 +1,87 @@
 import * as BABYLON from '@babylonjs/core';
-import { ZombieState, HellhoundState, GameStateData, WindowBarrier, RemoteGameState, GameMessage } from '../../types/index';
+import { ZombieState, GameStateData, RemoteGameState } from '../../types/index';
 import { System } from '../../types/systems';
-import { Zombie, GroundSpawn } from '../../types/entities';
-import { EventBus } from '../../engine/EventBus';
-import { TimerManager } from '../../engine/TimerManager';
+import { Zombie } from '../../types/entities';
 import { ZombieManager } from '../../managers/ZombieManager';
 import { HellhoundManager } from '../../managers/HellhoundManager';
-import { VisualManager } from '../../managers/VisualManager';
 import { MapConfigManager } from '../../managers/MapConfigManager';
-import { getHorizontalDist, getHorizontalDistSq } from '../../engine/GeometryUtils';
+import { getHorizontalDistSq } from '../../engine/GeometryUtils';
+import {
+    _tempMoveResult, _tempDirectDir,
+    updateBurningDamage, computeNavPath, applyRotationSmoothing,
+} from './zombieAIUtils';
 
 export interface IZombieAIContext {
     gameState: GameStateData;
     scene: BABYLON.Scene;
     camera: BABYLON.UniversalCamera;
     gameModeRef: { current: string };
-    eventBus: EventBus;
-    timerManager: TimerManager;
-    zombieManager: ZombieManager;
-    hellhoundManager: HellhoundManager;
-    visualManager: VisualManager;
     configManager: MapConfigManager;
     zombies: Zombie[];
-
-    windows: WindowBarrier[];
-    groundSpawns: GroundSpawn[];
     navPlugin?: BABYLON.RecastJSPlugin;
     remote: {
         pos: BABYLON.Vector3;
         gameState: RemoteGameState;
     };
     connectionStatusRef: { current: string };
-    isDoorOpen(doorId: string): boolean;
-    send(data: GameMessage): void;
-    setHealth(v: number): void;
-    setIsDowned(v: boolean): void;
-    setIsGameOver(v: boolean): void;
-    setFlashColor(v: string | null): void;
+    zombieManager: ZombieManager;
+    hellhoundManager: HellhoundManager;
 }
 
-// Pre-allocated scratch vectors to avoid per-frame allocations
-const _tempNavEndVec = new BABYLON.Vector3();
-const _tempDirectDir = new BABYLON.Vector3();
-const _tempMoveResult = new BABYLON.Vector3();
-const _tempLookAt = new BABYLON.Vector3();
-const _tempLungeDir = new BABYLON.Vector3();
-const _tempRetreatDir = new BABYLON.Vector3();
-// Scratch Quaternions — avoids two Quaternion allocations per moving zombie per frame
-const _tempTargetQuat = new BABYLON.Quaternion();
-
-// Constants
-const PATH_UPDATE_INTERVAL = 0.5;   // Hellhounds / non-crowd fallback path recompute interval
-const TARGET_UPDATE_INTERVAL = 0.25; // How often crowd agents receive a new goto target (cheap)
-const PATH_REACH_THRESHOLD = 0.8;
-const ROTATION_SPEED = 0.15;
-
-// ── Recast Crowd configuration ────────────────────────────────────────────
-// Max simultaneous crowd-managed zombies. Must be >= peak zombie count (late
-// rounds can reach ~40). A small buffer is fine; excess agents are ignored.
+// ── Recast Crowd configuration ────────────────────────────────────────────────
+// One crowd manages all chasing zombies. A single crowd.update(dt) call per
+// frame replaces N individual computePath + moveWithCollisions calls, batching
+// agent movement inside the Recast WASM module.
 const MAX_CROWD_AGENTS = 64;
 const CROWD_AGENT_RADIUS = 0.4;
-// Base agent parameters — maxSpeed is overridden per-agent at addAgent() time.
+const TARGET_UPDATE_INTERVAL = 0.25; // How often crowd agents receive a new goto target
+
 const _BASE_AGENT_PARAMS: BABYLON.IAgentParameters = {
     radius: CROWD_AGENT_RADIUS,
     height: 1.8,
     maxAcceleration: 8.0,
-    maxSpeed: 2.1,            // overridden per-agent below
+    maxSpeed: 2.1,
     collisionQueryRange: 0.5,
     pathOptimizationRange: 0.0,
-    separationWeight: 1.0,    // crowd handles separation natively
-};
-
-
-/**
- * Updates burning damage for a zombie.
- * Returns true if zombie died.
- */
-const updateBurningDamage = (
-    z: Zombie,
-    now: number,
-    ctx: IZombieAIContext
-): boolean => {
-    if (!z.isBurning) return false;
-
-    const zc = ctx.configManager.zombieAI;
-    if (!z.lastBurnTime || now - z.lastBurnTime > zc.BURN_INTERVAL) {
-        z.health -= zc.BURN_DAMAGE;
-        z.lastBurnTime = now;
-        if (z.health <= 0) {
-            if (z.type === 'HELLHOUND') {
-                ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, 'HOST');
-            } else {
-                ctx.zombieManager.onZombieDeath(z, z.mesh.position, 'HOST');
-            }
-            return true;
-        }
-    }
-    return false;
-};
-
-
-/**
- * Computes navmesh path for a zombie.
- * Uses a pathCursor index instead of Array.shift() so node advancement is O(1)
- * rather than O(n) (shift re-indexes the entire array on every consumed node).
- */
-const computeNavPath = (
-    z: Zombie,
-    targetPos: BABYLON.Vector3,
-    dt: number,
-    ctx: IZombieAIContext
-): BABYLON.Vector3 | null => {
-    if (!ctx.navPlugin) {
-        _tempDirectDir.set(targetPos.x - z.mesh.position.x, 0, targetPos.z - z.mesh.position.z);
-        if (_tempDirectDir.lengthSquared() > 0.001) {
-            _tempDirectDir.normalize();
-            return _tempDirectDir;
-        }
-        return null;
-    }
-
-    if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = Math.random() * PATH_UPDATE_INTERVAL;
-    z.pathUpdateTimer -= dt;
-
-    const cursor = z.pathCursor ?? 0;
-    const pathExhausted = !z.path || cursor >= z.path.length;
-
-    if (pathExhausted || z.pathUpdateTimer <= 0) {
-        const navStart = ctx.navPlugin.getClosestPoint(z.mesh.position);
-        _tempNavEndVec.set(targetPos.x, 0, targetPos.z);
-        const navEnd = ctx.navPlugin.getClosestPoint(_tempNavEndVec);
-
-        const distToNavStart = BABYLON.Vector3.Distance(z.mesh.position, navStart);
-        const distToNavEnd = BABYLON.Vector3.Distance(targetPos, navEnd);
-
-        if (distToNavStart > 5 && !z.warnedNavStart) {
-            console.warn(`[ZombieAI] ${z.type} ${z.id}: Start far from navmesh (${distToNavStart.toFixed(2)}m)`);
-            z.warnedNavStart = true;
-        }
-        if (distToNavEnd > 5 && !z.warnedNavEnd) {
-            console.warn(`[ZombieAI] ${z.type} ${z.id}: Target far from navmesh (${distToNavEnd.toFixed(2)}m)`);
-            z.warnedNavEnd = true;
-        }
-
-        const newPath = ctx.navPlugin.computePath(navStart, navEnd);
-        z.pathUpdateTimer = PATH_UPDATE_INTERVAL + (Math.random() * 0.1);
-
-        if (newPath && newPath.length > 0) {
-            z.path = newPath;
-            z.pathfindingFailed = false;
-            // Skip first node if zombie is already standing on it
-            z.pathCursor = (BABYLON.Vector3.DistanceSquared(z.mesh.position, newPath[0]) < 0.25) ? 1 : 0;
-        } else {
-            if (!z.pathfindingFailed) {
-                console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
-                z.pathfindingFailed = true;
-            }
-        }
-    }
-
-    if (z.path && z.pathCursor !== undefined && z.pathCursor < z.path.length) {
-        const distToNodeSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.path[z.pathCursor]);
-        if (distToNodeSq < PATH_REACH_THRESHOLD * PATH_REACH_THRESHOLD) {
-            z.pathCursor++;
-        }
-
-        if (z.pathCursor < z.path.length) {
-            z.path[z.pathCursor].subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalize();
-            return _tempDirectDir;
-        }
-    }
-
-    _tempDirectDir.set(targetPos.x - z.mesh.position.x, 0, targetPos.z - z.mesh.position.z);
-    if (_tempDirectDir.lengthSquared() > 0.001) {
-        _tempDirectDir.normalize();
-        return _tempDirectDir;
-    }
-    return null;
-};
-
-/**
- * Applies rotation smoothing toward movement direction.
- * Uses pre-allocated scratch Quaternion to avoid two allocations per call.
- */
-const applyRotationSmoothing = (
-    z: Zombie,
-    moveDir: BABYLON.Vector3,
-    frameFactor: number
-): void => {
-    if (moveDir.lengthSquared() > 0.001) {
-        const yaw = Math.atan2(moveDir.x, moveDir.z);
-        BABYLON.Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, _tempTargetQuat);
-        if (!z.mesh.rotationQuaternion) {
-            z.mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(z.mesh.rotation);
-        }
-        BABYLON.Quaternion.SlerpToRef(
-            z.mesh.rotationQuaternion,
-            _tempTargetQuat,
-            ROTATION_SPEED * frameFactor,
-            z.mesh.rotationQuaternion
-        );
-    }
-};
-
-/**
- * Gets the best target position (host or client player).
- */
-const getTargetPosition = (
-    z: Zombie,
-    ctx: IZombieAIContext,
-    targetPosOut: BABYLON.Vector3
-): 'HOST' | 'CLIENT' => {
-    targetPosOut.copyFrom(ctx.camera.position);
-    let targetId: 'HOST' | 'CLIENT' = 'HOST';
-
-    const isLocalActive = !ctx.gameState.isDowned && !ctx.gameState.isGameOver;
-    const isRemoteActive = ctx.gameModeRef.current === 'HOST' &&
-        ctx.connectionStatusRef.current === 'CONNECTED' &&
-        !ctx.remote.gameState.isDowned;
-
-    if (isLocalActive && isRemoteActive) {
-        const distToLocal = BABYLON.Vector3.Distance(z.mesh.position, ctx.camera.position);
-        const distToRemote = BABYLON.Vector3.Distance(z.mesh.position, ctx.remote.pos);
-        if (distToRemote < distToLocal) {
-            targetPosOut.copyFrom(ctx.remote.pos);
-            targetId = 'CLIENT';
-        }
-    } else if (isRemoteActive) {
-        targetPosOut.copyFrom(ctx.remote.pos);
-        targetId = 'CLIENT';
-    }
-
-    return targetId;
+    separationWeight: 1.0,
 };
 
 /**
  * ZombieAISystem
  *
  * Authority only (HOST or SOLO).
- * Responsibility: Handles zombie movement, pathfinding (zones/doors), 
- * wandering when player is downed (SOLO), and barrier interactions.
- * Uses MapConfigManager for map-specific tuning.
+ * Responsibility: Recast Crowd lifecycle, CHASING zombie movement (crowd path
+ * or navmesh fallback), and solo-downed wander. Hellhounds, window-state
+ * zombies, and spawn-state zombies are handled by their dedicated systems.
  */
 export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const _targetPos = new BABYLON.Vector3();
+    const _crowdVelocity = new BABYLON.Vector3();
 
-    // ── O(1) window lookup ────────────────────────────────────────────────────
-    // windows.find() was called every frame per zombie in window interaction states.
-    // A Map keyed by window ID reduces that from O(n*windows) to O(n) per frame.
-    // The map is rebuilt lazily whenever ctx.windows grows (windows are registered
-    // after the system is created, so we can't build it once at factory time).
-    const windowMap = new Map<string, (typeof ctx.windows)[0]>();
-    let windowMapSnapshot: WindowBarrier | null = null;
-
-    const rebuildWindowMap = () => {
-        windowMap.clear();
-        for (const w of ctx.windows) {
-            windowMap.set(w.id, w);
-        }
-        windowMapSnapshot = ctx.windows.length > 0 ? ctx.windows[0] : null;
-    };
-
-    const ensureWindowMap = () => {
-        // Rebuild when count changes (windows registered after system creation)
-        if (windowMap.size !== ctx.windows.length) { rebuildWindowMap(); return; }
-        // Handle same-map reloads by checking reference of first window
-        if (ctx.windows.length > 0 && windowMapSnapshot !== ctx.windows[0]) { rebuildWindowMap(); return; }
-    };
-
-    // ── Recast Crowd ──────────────────────────────────────────────────────────
-    // One crowd instance manages ALL chasing zombies. A single crowd.update(dt)
-    // call per frame replaces N individual computePath() + moveWithCollisions()
-    // calls, batching all agent movement inside the Recast WASM module.
-    //
-    // Only CHASING regular zombies use the crowd.
-    // Window-state zombies and hellhounds retain their existing manual movement.
     let crowd: BABYLON.ICrowd | undefined;
     let lastCrowdLogTime = 0;
 
-    // Per-frame scratch vector for crowd agent velocity reads
-    const _crowdVelocity = new BABYLON.Vector3();
-
-
-    /**
-     * Adds a zombie to the Recast Crowd as an agent.
-     * The crowd will automatically update z.mesh.position each frame via
-     * the TransformNode binding passed to addAgent().
-     */
     const addZombieToCrowd = (z: Zombie): void => {
         if (!crowd || z.crowdAgentIndex !== undefined) return;
         const params: BABYLON.IAgentParameters = {
             ..._BASE_AGENT_PARAMS,
-            // Convert per-frame speed (at 60fps) to per-second for the crowd
             maxSpeed: z.speed * 60,
         };
-        
-        // --- DEBUG: Log the input position ---
         console.log(`[ZombieAI] Adding ${z.id} to crowd. Pos:`, z.mesh.position.asArray());
-        
-        // Ensure the agent is added at the mesh's current position to avoid snapping
         z.crowdAgentIndex = crowd.addAgent(z.mesh.position, params, z.mesh as BABYLON.TransformNode);
-        
-        // --- FIX: Force sync agent position to mesh position ---
         crowd.agentGoto(z.crowdAgentIndex, z.mesh.position);
-        
         console.log(`[ZombieAI] Added ${z.id} to crowd as agent ${z.crowdAgentIndex} at ${z.mesh.position.y.toFixed(2)}m`);
     };
 
-
-    /**
-     * Removes a zombie's crowd agent and clears its index.
-     */
     const removeZombieFromCrowd = (z: Zombie): void => {
         if (!crowd || z.crowdAgentIndex === undefined) return;
         crowd.removeAgent(z.crowdAgentIndex);
         z.crowdAgentIndex = undefined;
     };
 
-
-    const updateHellhoundAI = (
-        z: Zombie,
-        dt: number,
-        frameFactor: number
-    ): void => {
-        const hc = ctx.configManager.hellhound;
-        const gc = ctx.configManager.gameplay;
-
-        if (z.stateTimer !== undefined) {
-            z.stateTimer -= dt * 1000;
-        }
-
-        const targetId = getTargetPosition(z, ctx, _targetPos);
-        z.targetPlayerId = targetId;
-
-        if (z.hellhoundState === HellhoundState.SPAWNING) {
-            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
-                z.hellhoundState = HellhoundState.CHASING;
-            }
-            _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-            z.mesh.moveWithCollisions(_tempMoveResult);
-            return;
-        }
-
-        const distToTargetSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
-        const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
-
-        if (z.hellhoundState === HellhoundState.CHASING) {
-            if (distToTargetSq <= hc.ATTACK_INITIATE_RANGE * hc.ATTACK_INITIATE_RANGE && heightDiff < ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
-
-                z.hellhoundState = HellhoundState.ATTACK_WINDUP;
-                z.stateTimer = hc.ATTACK_WINDUP_MIN + Math.random() * (hc.ATTACK_WINDUP_MAX - hc.ATTACK_WINDUP_MIN);
-            } else {
-                const moveDir = computeNavPath(z, _targetPos, dt, ctx);
-                if (moveDir) {
-                    moveDir.y = 0;
-                    applyRotationSmoothing(z, moveDir, frameFactor);
-                    _tempMoveResult.copyFrom(moveDir);
-                    _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-                }
-            }
-        } else if (z.hellhoundState === HellhoundState.ATTACK_WINDUP) {
-            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
-                z.hellhoundState = HellhoundState.ATTACKING;
-                z.stateTimer = hc.ATTACK_DURATION_MIN + Math.random() * (hc.ATTACK_DURATION_MAX - hc.ATTACK_DURATION_MIN);
-                z.lungeStartPos = z.mesh.position.clone();
-                z.lungeTargetPos = _targetPos.clone();
-                z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
-                _tempLungeDir.normalize();
-                _tempLungeDir.y = 0;
-                const yaw = Math.atan2(_tempLungeDir.x, _tempLungeDir.z);
-                if (!z.mesh.rotationQuaternion) {
-                    z.mesh.rotationQuaternion = new BABYLON.Quaternion();
-                }
-                BABYLON.Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, z.mesh.rotationQuaternion);
-            }
-        } else if (z.hellhoundState === HellhoundState.ATTACKING) {
-            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
-                z.hellhoundState = HellhoundState.RECOVERY;
-                z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
-            } else if (z.lungeTargetPos && z.lungeStartPos) {
-                z.lungeTargetPos.subtractToRef(z.lungeStartPos, _tempLungeDir);
-                _tempLungeDir.normalize();
-                _tempLungeDir.y = 0;
-                _tempMoveResult.copyFrom(_tempLungeDir);
-                _tempMoveResult.scaleInPlace(z.speed * hc.LUNGE_SPEED_MULTIPLIER * frameFactor);
-
-                const distFromStartSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lungeStartPos);
-                const distToPlayerSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
-                if (distFromStartSq >= hc.LUNGE_DISTANCE * hc.LUNGE_DISTANCE || distToPlayerSq <= 2.25) {
-
-                    z.hellhoundState = HellhoundState.RECOVERY;
-                    z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
-                }
-            }
-        } else if (z.hellhoundState === HellhoundState.RECOVERY) {
-            if (z.lungeStartPos) {
-                z.lungeStartPos.subtractToRef(z.mesh.position, _tempRetreatDir);
-                _tempRetreatDir.y = 0;
-                const distBack = _tempRetreatDir.length();
-                if (distBack > 0.5) {
-                    _tempRetreatDir.normalize();
-                    _tempMoveResult.copyFrom(_tempRetreatDir);
-                    _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-                } else {
-                    z.hellhoundState = HellhoundState.CHASING;
-                    z.lungeStartPos = undefined;
-                    z.lungeTargetPos = undefined;
-                }
-            }
-            if (z.stateTimer !== undefined && z.stateTimer <= 0) {
-                z.hellhoundState = HellhoundState.CHASING;
-                z.lungeStartPos = undefined;
-                z.lungeTargetPos = undefined;
-            }
-        }
-
-        _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-        z.mesh.moveWithCollisions(_tempMoveResult);
-    };
-
     /**
-     * Updates zombie wander behavior when player is downed in solo.
+     * SOLO downed wander — zombies wander away from the player when they are
+     * downed in solo mode. Handles its own gravity + moveWithCollisions.
      */
     const updateSoloDownedWander = (
         z: Zombie,
@@ -449,7 +109,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const wz = z.mesh.position.z + Math.sin(newAngle) * dist;
 
             if (z.wander) {
-                // Reuse existing object and Vector3 — avoid allocation on wander refresh
                 z.wander.angle = newAngle;
                 z.wander.nextUpdateTime = nextTime;
                 z.wander.wanderTarget.set(wx, wy, wz);
@@ -464,7 +123,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
         const distToTargetSq = getHorizontalDistSq(z.mesh.position, z.wander.wanderTarget);
         if (distToTargetSq < zc.WANDER_TARGET_THRESHOLD * zc.WANDER_TARGET_THRESHOLD) {
-
             z.wander = undefined;
             return;
         }
@@ -487,16 +145,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     };
 
     /**
-     * Updates zombie chase behavior.
+     * Zombie chase — crowd path (fast) or navmesh fallback.
      *
-     * When a Recast Crowd is available (crowd != undefined), movement is driven
-     * entirely by the crowd agent — crowd.update(dt) has already been called this
-     * frame and has written the new position into z.mesh directly.  We only need
-     * to (a) refresh the goto target periodically, and (b) apply rotation from the
-     * agent's velocity.
+     * Crowd path: crowd.update(dt) already ran this frame (via scene observable)
+     * and wrote the new mesh position. We only refresh the goto target and
+     * derive rotation from agent velocity.
      *
-     * When no crowd is available (navPlugin not ready / fallback), we fall back to
-     * the original computeNavPath + moveWithCollisions path.
+     * Fallback: computeNavPath + moveWithCollisions (called from the main loop
+     * after this function returns, together with gravity).
      */
     const updateZombieChase = (
         z: Zombie,
@@ -506,7 +162,6 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     ): void => {
         const zc = ctx.configManager.zombieAI;
 
-        // Resolve target position
         _targetPos.copyFrom(ctx.camera.position);
         if (ctx.gameModeRef.current === 'HOST' && ctx.connectionStatusRef.current === 'CONNECTED') {
             const isLocalDown = ctx.gameState.health <= 0 || ctx.gameState.isDowned;
@@ -526,31 +181,23 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 console.log(`[ZombieAI] ${z.type} ${z.id}: Using Recast Crowd`);
                 z.lastPathLogTime = now;
             }
-            // Refresh the goto target periodically — much cheaper than computePath
             if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
             z.pathUpdateTimer -= dt;
             if (z.pathUpdateTimer <= 0) {
-                // Snap target Y to navmesh surface. The crowd's default query extent
-                // is ±1 unit; camera Y (~1.6) puts the navmesh (Y≈0) out of range.
                 _targetPos.y = 0;
                 crowd.agentGoto(z.crowdAgentIndex, _targetPos);
                 z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * 0.05);
             }
 
-            // Rotation: derive direction from agent velocity (crowd already moved the mesh)
             crowd.getAgentVelocityToRef(z.crowdAgentIndex, _crowdVelocity);
             _crowdVelocity.y = 0;
             if (_crowdVelocity.lengthSquared() > 0.01) {
                 applyRotationSmoothing(z, _crowdVelocity, frameFactor);
             }
-
-            // --- REMOVED Y-CLAMPING: Crowd agents should follow the navmesh's Y surface ---
-            // Keep zombie flush with ground (crowd uses navmesh Y; clamp to 0 on flat maps)
-            // if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
             return;
         }
 
-        // ── Fallback: legacy computeNavPath + moveWithCollisions ─────────────
+        // ── Fallback: computeNavPath + moveWithCollisions (applied by caller) ─
         if (z.lastPathLogTime === undefined || now - z.lastPathLogTime > 10000) {
             console.log(`[ZombieAI] ${z.type} ${z.id}: Using computeNavPath (Fallback)`);
             z.lastPathLogTime = now;
@@ -570,82 +217,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         }
     };
 
-    /**
-     * Updates zombie window/barrier interaction states.
-     */
-    const updateWindowInteraction = (
-        z: Zombie,
-        dt: number,
-        now: number,
-        frameFactor: number
-    ): void => {
-        const zc = ctx.configManager.zombieAI;
-
-        const targetWindow = z.targetWindowId ? windowMap.get(z.targetWindowId) ?? null : null;
-        if (!targetWindow) {
-            z.state = ZombieState.CHASING;
-            return;
-        }
-
-        if (z.state === ZombieState.APPROACHING_WINDOW) {
-            _tempLookAt.set(targetWindow.attackPoint.x, z.mesh.position.y, targetWindow.attackPoint.z);
-            z.mesh.lookAt(_tempLookAt);
-
-            targetWindow.attackPoint.subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalize();
-            _tempDirectDir.y = 0;
-            const distSq = getHorizontalDistSq(z.mesh.position, targetWindow.attackPoint);
-            _tempMoveResult.copyFrom(_tempDirectDir);
-            _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-
-            if (distSq < 4.0) {
-                z.state = ZombieState.ATTACKING_BARRIER;
-            } else if (distSq < 25.0) {
-                if (!z.lastPosition) { z.lastPosition = new BABYLON.Vector3(); z.lastPosition.copyFrom(z.mesh.position); }
-                if (!z.stuckTimer) z.stuckTimer = 0;
-                z.stuckTimer += dt;
-                if (z.stuckTimer > 0.5) {
-                    const moveDistSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lastPosition);
-                    if (moveDistSq < 0.01) z.state = ZombieState.ATTACKING_BARRIER;
-                    z.lastPosition.copyFrom(z.mesh.position);
-                    z.stuckTimer = 0;
-                }
-            }
-        } else if (z.state === ZombieState.ATTACKING_BARRIER) {
-            const activeBoards = targetWindow.boards.filter(b => b.isEnabled());
-            if (activeBoards.length > 0) {
-                z.barrierAttackTimer += dt;
-                if (z.barrierAttackTimer > zc.BARRIER_ATTACK_INTERVAL) {
-                    z.barrierAttackTimer = 0;
-                    const b = activeBoards[Math.floor(Math.random() * activeBoards.length)];
-                    b.setEnabled(false);
-                    ctx.eventBus.emit('BOARD_STATE_CHANGE', { windowId: targetWindow.id });
-                    ctx.visualManager.createWoodDebris(b.position);
-                }
-                z.mesh.rotation.z = Math.sin(now * 0.01) * 0.15;
-            } else {
-                z.state = ZombieState.ENTERING;
-            }
-        } else if (z.state === ZombieState.ENTERING) {
-
-            _tempLookAt.set(targetWindow.entryPoint.x, z.mesh.position.y, targetWindow.entryPoint.z);
-            z.mesh.lookAt(_tempLookAt);
-            targetWindow.entryPoint.subtractToRef(z.mesh.position, _tempDirectDir);
-            _tempDirectDir.normalize();
-            _tempMoveResult.copyFrom(_tempDirectDir);
-            _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-            z.mesh.position.addInPlace(_tempMoveResult);
-            if (getHorizontalDistSq(z.mesh.position, targetWindow.entryPoint) < 0.25) {
-                z.state = ZombieState.CHASING;
-            }
-
-        }
-    };
-
     return {
         name: 'zombieAI',
         dispose: () => {
-            // Remove all crowd agents and destroy the crowd instance
             if (crowd) {
                 for (const z of ctx.zombies) {
                     if (z.crowdAgentIndex !== undefined) {
@@ -658,8 +232,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         },
         update: (dt: number, now: number) => {
-
-            if (ctx.gameState.isDebugMode) return;
+            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;
 
@@ -672,38 +245,36 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const frameFactor = dt * 60;
             const gc = ctx.configManager.gameplay;
 
-            // ── Single crowd update (replaces N computePath + moveWithCollisions) ──
-            // Must run BEFORE the zombie loop so positions are already updated when
-            // we read velocity for rotation smoothing below.
+            // ── Crowd init ────────────────────────────────────────────────────
+            // Must run before the zombie loop so crowd positions are ready when
+            // we read velocity for rotation smoothing.
             if (!crowd && ctx.navPlugin) {
                 try {
                     crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
                     console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
                 } catch (e) {
-                    // Ignore failure until navmesh is ready
+                    // Navmesh not ready yet — will retry next frame
                 }
             }
 
-            // crowd.update() is called automatically by the scene's
-            // onBeforeAnimationsObservable (set in the RecastJSCrowd constructor).
-            // Calling it manually here would double-advance the simulation.
-            if (crowd) {
-                if (now - lastCrowdLogTime > 5000) {
-                    const activeAgents = zombies.filter(z => z.crowdAgentIndex !== undefined).length;
-                    console.log(`[ZombieAI] Recast Crowd active: ${activeAgents} agents updating.`);
-                    lastCrowdLogTime = now;
-                }
+            if (crowd && now - lastCrowdLogTime > 5000) {
+                const activeAgents = zombies.filter(z => z.crowdAgentIndex !== undefined).length;
+                console.log(`[ZombieAI] Recast Crowd active: ${activeAgents} agents updating.`);
+                lastCrowdLogTime = now;
             }
-
-            // Sync window map if new windows were registered since last frame
-            ensureWindowMap();
 
             for (const z of zombies) {
-                // ── Dead zombie: remove from crowd and skip ───────────────────
+                // Dead: remove from crowd and skip
                 if (z.isDead) {
                     if (z.crowdAgentIndex !== undefined) removeZombieFromCrowd(z);
                     continue;
                 }
+
+                // Hellhounds handled by ZombieHellhoundAISystem
+                if (z.type === 'HELLHOUND') continue;
+
+                // Spawn states handled by ZombieSpawnSystem (runs before this system)
+                if (z.state === ZombieState.SPAWNING || z.state === ZombieState.BREAKING_LID) continue;
 
                 _tempMoveResult.set(0, 0, 0);
 
@@ -713,13 +284,15 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     continue;
                 }
 
-                // Hellhound AI (never crowd-managed)
-                if (z.type === 'HELLHOUND') {
-                    updateHellhoundAI(z, dt, frameFactor);
+                // Window states handled by ZombieWindowAISystem; keep them out of the crowd
+                if (z.state === ZombieState.APPROACHING_WINDOW ||
+                    z.state === ZombieState.ATTACKING_BARRIER ||
+                    z.state === ZombieState.ENTERING) {
+                    if (z.crowdAgentIndex !== undefined) removeZombieFromCrowd(z);
                     continue;
                 }
 
-                // Solo downed wander (remove from crowd while wandering)
+                // Solo downed wander (handles own movement + gravity)
                 if (currentGameMode === 'SOLO' && ctx.gameState.isDowned) {
                     if (z.crowdAgentIndex !== undefined) removeZombieFromCrowd(z);
                     updateSoloDownedWander(z, dt, now, frameFactor);
@@ -728,87 +301,19 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 if (z.wander) z.wander = undefined;
 
-                // ── Ensure CHASING zombies have a crowd agent ─────────────────
-                // Covers: zombies spawned directly as CHASING, and window zombies
-                // that just transitioned to CHASING via the ENTERING → CHASING path.
+                // Ensure CHASING zombies have a crowd agent.
+                // Covers: fresh spawns (ZombieSpawnSystem just set CHASING) and
+                // zombies that entered via ENTERING → CHASING.
                 if (z.state === ZombieState.CHASING && crowd && z.crowdAgentIndex === undefined) {
                     addZombieToCrowd(z);
                 }
 
-                // ── Zombie chase or window interaction ────────────────────────
-                if (z.state === ZombieState.SPAWNING) {
-                    // Ground spawn emergence
-                    const emergeSpeed = 0.5; // Very slow emergence speed
-                    z.mesh.position.y += emergeSpeed * dt;
-
-                    if (z.mesh.position.y >= 0) {
-                        z.mesh.position.y = 0;
-                        z.state = ZombieState.CHASING;
-                        // Release the hole so the next queued zombie can emerge
-                        if (z.spawnHoleId) {
-                            ctx.zombieManager.releaseGroundSpawnHole(z.spawnHoleId);
-                            z.spawnHoleId = undefined;
-                        }
-                        if (crowd && z.crowdAgentIndex === undefined) {
-                            addZombieToCrowd(z);
-                        }
-                    }
-                } else if (z.state === ZombieState.BREAKING_LID) {
-                    // Keep the zombie underground while breaking the lid
-                    z.mesh.position.y = -3.5;
-
-                    if (z.targetLidId) {
-                        const gs = ctx.groundSpawns.find(g => g.id === z.targetLidId);
-                        if (gs && gs.lidMesh && gs.hasLid) {
-                            if (z.lidBreakTimer === undefined) {
-                                z.lidBreakTimer = 0;
-                            }
-                            z.lidBreakTimer += dt;
-
-                            // Bouncing animation: 5 slow bounces over 4 seconds
-                            const breakDuration = 4.0;
-                            const totalBounces = 5;
-                            const progress = z.lidBreakTimer / breakDuration;
-
-                            // Math.abs(Math.sin()) creates a bounce shape where each PI is one bounce
-                            const bounceHeight = 0.15 * Math.abs(Math.sin(progress * Math.PI * totalBounces));
-                            gs.lidMesh.position.y = gs.position.y + 0.04 + bounceHeight;
-
-                            if (z.lidBreakTimer >= breakDuration) {
-                                // Destroy the lid
-                                gs.hasLid = false;
-                                gs.lidMesh.position.y = gs.position.y + 0.04;
-                                gs.lidMesh.setEnabled(false);
-                                z.targetLidId = undefined;
-                                z.lidBreakTimer = undefined;
-
-                                // Create dirt burst effect and re-enable ambient hole smoke
-                                ctx.visualManager.createGroundSpawnEruption(gs.position);
-                                ctx.visualManager.setHoleSmokeEnabled(gs.position, true);
-                            }
-                        } else {
-                            // Lid was already removed by another zombie or reset
-                            z.targetLidId = undefined;
-                            z.lidBreakTimer = undefined;
-                        }
-                    }
-
-                    // Once the lid is removed (by this zombie or another), emerge normally
-                    if (!z.targetLidId) {
-                        z.mesh.position.y = -1.5; // Reset to expected spawning depth
-                        z.state = ZombieState.SPAWNING;
-                    }
-                } else if (z.state === ZombieState.CHASING) {
+                if (z.state === ZombieState.CHASING) {
                     updateZombieChase(z, dt, now, frameFactor);
-                } else if (z.type === 'ZOMBIE') {
-                    // Window-state: not in crowd — ensure agent is removed if it somehow exists
-                    if (z.crowdAgentIndex !== undefined) removeZombieFromCrowd(z);
-                    updateWindowInteraction(z, dt, now, frameFactor);
                 }
 
-                // Apply gravity (except when entering window, spawning, or crowd-managed)
-                // Crowd agents have their Y set from navmesh; skip moveWithCollisions for them.
-                if (z.state !== ZombieState.ENTERING && z.state !== ZombieState.SPAWNING && z.state !== ZombieState.BREAKING_LID && z.crowdAgentIndex === undefined) {
+                // Apply gravity for fallback-path zombies (crowd agents skip this)
+                if (z.crowdAgentIndex === undefined) {
                     _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
                     z.mesh.moveWithCollisions(_tempMoveResult);
                     if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;

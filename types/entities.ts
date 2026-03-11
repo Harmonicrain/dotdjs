@@ -81,6 +81,7 @@ export type Zombie = {
     pathCursor?: number;
     pathUpdateTimer?: number;
     pathfindingFailed?: boolean;  // Track if pathfinding has failed (to avoid console spam)
+    lastPathLogTime?: number;     // Throttling for pathfinding logs
     warnedNavStart?: boolean;     // Track if we've warned about start position
     warnedNavEnd?: boolean;       // Track if we've warned about end position
     // Recast Crowd — index into the ICrowd agent array; undefined = not in crowd

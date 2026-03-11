@@ -1,5 +1,5 @@
 
-import React from 'react';
+import * as React from 'react';
 import * as BABYLON from '@babylonjs/core';
 import type { GameEngine } from '../game/GameEngine';
 import type { InputManager } from '../engine/InputManager';
@@ -48,6 +48,8 @@ export interface GameFlowState {
     isGameOver: boolean;
     currentMapId: string;
     isHostLoaded?: boolean;
+    interactionMsg: string | null;
+    hoverMsg: string | null;
 }
 
 export interface RoundState {
