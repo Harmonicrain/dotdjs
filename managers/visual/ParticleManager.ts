@@ -680,6 +680,13 @@ export class ParticleManager {
         this.trailPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
         this.impactPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
         this.bloodPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
+        this.debrisPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.dirtBurstPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.burstPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.mistPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.chunksPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.brainPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.houndExplosionPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.spawnEffectPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.spawnSmokePSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.stopHoleSmoke();
@@ -708,6 +715,16 @@ export class ParticleManager {
         this.debrisPSPool = [];
         for (const ps of this.dirtBurstPSPool) { ps.dispose(false); }
         this.dirtBurstPSPool = [];
+        for (const ps of this.burstPSPool) { ps.dispose(false); }
+        this.burstPSPool = [];
+        for (const ps of this.mistPSPool) { ps.dispose(false); }
+        this.mistPSPool = [];
+        for (const ps of this.chunksPSPool) { ps.dispose(false); }
+        this.chunksPSPool = [];
+        for (const ps of this.brainPSPool) { ps.dispose(false); }
+        this.brainPSPool = [];
+        for (const ps of this.houndExplosionPSPool) { ps.dispose(false); }
+        this.houndExplosionPSPool = [];
         for (const ps of this.spawnEffectPSPool) { ps.dispose(false); }
         this.spawnEffectPSPool = [];
         for (const ps of this.spawnSmokePSPool) { ps.dispose(false); }
