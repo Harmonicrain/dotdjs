@@ -517,8 +517,8 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         ctx.setHoverMsg(cachedHoverMsg);
     };
 
-    const init = () => {
-        ctx.eventBus.on('DOOR_OPEN_REQUEST', (doorId: string) => {
+    const handlers = {
+        doorOpen: (doorId: string) => {
             if (ctx.gameState.doorStates[doorId]) {
                 ctx.gameState.doorStates[doorId].isOpen = true;
             }
@@ -535,19 +535,30 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
             }
 
             actionOpenDoor(doorId);
-        });
-
-        ctx.eventBus.on('POWER_ON_REQUEST', () => {
+        },
+        powerOn: () => {
             actionTurnOnPower();
-        });
-
-        ctx.eventBus.on('WEAPON_PICKUP_REQUEST', (weaponId: string) => {
+        },
+        weaponPickup: (weaponId: string) => {
             handleWeaponPickup(weaponId);
-        });
-
-        ctx.eventBus.on('PACK_A_PUNCH_REQUEST', (mesh: BABYLON.AbstractMesh) => {
+        },
+        packAPunch: (mesh: BABYLON.AbstractMesh) => {
             performPackAPunch(mesh);
-        });
+        }
+    };
+
+    const init = () => {
+        ctx.eventBus.on('DOOR_OPEN_REQUEST', handlers.doorOpen);
+        ctx.eventBus.on('POWER_ON_REQUEST', handlers.powerOn);
+        ctx.eventBus.on('WEAPON_PICKUP_REQUEST', handlers.weaponPickup);
+        ctx.eventBus.on('PACK_A_PUNCH_REQUEST', handlers.packAPunch);
+    };
+
+    const dispose = () => {
+        ctx.eventBus.off('DOOR_OPEN_REQUEST', handlers.doorOpen);
+        ctx.eventBus.off('POWER_ON_REQUEST', handlers.powerOn);
+        ctx.eventBus.off('WEAPON_PICKUP_REQUEST', handlers.weaponPickup);
+        ctx.eventBus.off('PACK_A_PUNCH_REQUEST', handlers.packAPunch);
     };
 
     return {
@@ -556,6 +567,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         update,
         interact,
         checkHover,
-        handleWeaponPickup
+        handleWeaponPickup,
+        dispose
     };
 };

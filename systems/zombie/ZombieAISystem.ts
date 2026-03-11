@@ -351,14 +351,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     // Only CHASING regular zombies use the crowd.
     // Window-state zombies and hellhounds retain their existing manual movement.
     let crowd: BABYLON.ICrowd | undefined;
-    if (ctx.navPlugin) {
-        try {
-            crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
-            console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
-        } catch (e) {
-            console.warn('[ZombieAI] Failed to create Recast Crowd, falling back to computePath:', e);
-        }
-    }
+    let crowdInitialized = false;
 
     // Per-frame scratch vector for crowd agent velocity reads
     const _crowdVelocity = new BABYLON.Vector3();
@@ -753,7 +746,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         },
         update: (dt: number, now: number) => {
 
-            if (ctx.gameState.isDebugMode) return;
+            if (!ctx.gameState.hasStarted || ctx.gameState.isDebugMode) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;
 
@@ -767,6 +760,17 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const frameFactor = dt * 60;
             const sc = ctx.configManager.sync;
             const gc = ctx.configManager.gameplay;
+
+            // Lazy initialize crowd now that the map has started.
+            if (!crowdInitialized && ctx.navPlugin) {
+                crowdInitialized = true;
+                try {
+                    crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
+                    console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
+                } catch (e) {
+                    console.warn('[ZombieAI] Failed to create Recast Crowd, falling back to computePath:', e);
+                }
+            }
 
             // ── Single crowd update (replaces N computePath + moveWithCollisions) ──
             // Must run BEFORE the zombie loop so positions are already updated when

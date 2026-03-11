@@ -1,18 +1,19 @@
 
 import * as BABYLON from '@babylonjs/core';
 import { GameMessage, PowerUpType, DoorState, ZombieSyncData } from '../types/index';
+import { StoredPos } from '../types/network';
 import { StateManager } from '../state/StateManager';
 import { GameFields, PlayerFields, RemoteFields } from '../store/useGameStore';
 
 export interface NetworkHandlerActions {
-    updateGame:   (updates: Partial<GameFields>)   => void;
+    updateGame: (updates: Partial<GameFields>) => void;
     updateRemote: (updates: Partial<RemoteFields>) => void;
     updatePlayer: (updates: Partial<PlayerFields>) => void;
 
-    setIsClientReady:    (ready: boolean) => void;
-    setRemotePlayerName: (name: string)   => void;
-    setSelectedMap:      (mapId: string)  => void;
-    startGameLocal:      (overrideMode?: string, overrideMapId?: string) => void;
+    setIsClientReady: (ready: boolean) => void;
+    setRemotePlayerName: (name: string) => void;
+    setSelectedMap: (mapId: string) => void;
+    startGameLocal: (overrideMode?: string, overrideMapId?: string) => void;
 
     setInteractionMsg: (msg: string | null) => void;
 }
@@ -21,28 +22,28 @@ export interface NetworkHandlerActions {
 
 export interface CachedHostState {
     [key: string]: any;
-    doors:              Record<string, DoorState>;
-    hostPos:            { x: number; y: number; z: number; rot: number; pitch: number };
-    activeWeaponIndex:  number;
-    activeWeaponId:     string;
-    hostHealth:         number;
-    hostPoints:         number;
-    hostTotalEarned:    number;
-    hostName:           string;
-    hostPerks:          Record<string, boolean>;
-    hostIsDowned:       boolean;
-    hostKills:          number;
-    hostShots:          number;
-    zombies:            ZombieSyncData[];
-    windowStates:       Record<string, number>;
+    doors: Record<string, DoorState>;
+    hostPos: StoredPos;
+    activeWeaponIndex: number;
+    activeWeaponId: string;
+    hostHealth: number;
+    hostPoints: number;
+    hostTotalEarned: number;
+    hostName: string;
+    hostPerks: Record<string, boolean>;
+    hostIsDowned: boolean;
+    hostKills: number;
+    hostShots: number;
+    zombies: ZombieSyncData[];
+    windowStates: Record<string, number>;
     activeZombiesCount: number;
-    totalRoundZombies:  number;
-    zombiesSpawned:     number;
+    totalRoundZombies: number;
+    zombiesSpawned: number;
     zombiesKilledInRound: number;
-    round:              number;
-    powerOn:            boolean;
-    isDogRound:         boolean;
-    activePowerUps:     PowerUpType[];
+    round: number;
+    powerOn: boolean;
+    isDogRound: boolean;
+    activePowerUps: PowerUpType[];
     mysteryBox: {
         state: number; locIndex: number; lidAngle: number;
         weaponId: string | null; rollIndex: number; owner: string | null;
@@ -51,17 +52,17 @@ export interface CachedHostState {
 
 export interface CachedClientState {
     [key: string]: any;
-    pos:               { x: number; y: number; z: number; rot: number; pitch: number };
+    pos: StoredPos;
     activeWeaponIndex: number;
-    activeWeaponId:    string;
-    clientHealth:      number;
-    clientPoints:      number;
+    activeWeaponId: string;
+    clientHealth: number;
+    clientPoints: number;
     clientTotalEarned: number;
-    clientPerks:       Record<string, boolean>;
-    clientIsDowned:    boolean;
-    clientName:        string;
-    clientKills:       number;
-    clientShots:       number;
+    clientPerks: Record<string, boolean>;
+    clientIsDowned: boolean;
+    clientName: string;
+    clientKills: number;
+    clientShots: number;
 }
 
 // ── Default factories ─────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ function defaultHostCache(startPoints = 0, name = 'Unknown'): CachedHostState {
         hostHealth: 100, hostPoints: startPoints, hostTotalEarned: startPoints,
         hostName: name, hostPerks: {}, hostIsDowned: false,
         hostKills: 0, hostShots: 0, zombies: [], windowStates: {},
-        activeZombiesCount: 0, totalRoundZombies: 0, 
+        activeZombiesCount: 0, totalRoundZombies: 0,
         zombiesSpawned: 0, zombiesKilledInRound: 0,
         round: 1,
         powerOn: false, isDogRound: false, activePowerUps: [],
@@ -115,19 +116,19 @@ function mergeIfDefined<T extends Record<string, unknown>>(
  */
 function syncRemotePosition(
     sm: StateManager,
-    pos: { x: number; y: number; z: number; rot: number; pitch: number }
+    pos: StoredPos
 ): void {
     sm.remote.interpolationBuffer.push({
         timestamp: Date.now(),
-        x:     pos.x,
-        y:     pos.y,
-        z:     pos.z,
-        rotY:  pos.rot,
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        rotY: pos.rot,
         pitch: pos.pitch,
     });
 
     sm.remote.pos.set(pos.x, pos.y, pos.z);
-    sm.remote.rot   = pos.rot;
+    sm.remote.rot = pos.rot;
     sm.remote.pitch = pos.pitch;
 }
 
@@ -143,21 +144,21 @@ function syncRemoteGameState(
     shots: number,
     perks: Record<string, boolean>
 ): void {
-    sm.remote.gameState.health   = health;
-    sm.remote.gameState.points   = points;
+    sm.remote.gameState.health = health;
+    sm.remote.gameState.points = points;
     sm.remote.gameState.isDowned = isDowned;
-    sm.remote.gameState.kills    = kills;
-    sm.remote.gameState.shots    = shots;
-    sm.remote.gameState.perks    = perks;
+    sm.remote.gameState.kills = kills;
+    sm.remote.gameState.shots = shots;
+    sm.remote.gameState.perks = perks;
 }
 
 export const createNetworkMessageHandler = (
     stateManager: StateManager,
     actions: NetworkHandlerActions,
 ) => {
-    let cachedHost:   CachedHostState   = defaultHostCache();
+    let cachedHost: CachedHostState = defaultHostCache();
     let cachedClient: CachedClientState = defaultClientCache();
-    let lastHostSeq   = -1;
+    let lastHostSeq = -1;
     let lastClientSeq = -1;
 
     // On game start / restart wipe cached state so a fresh full-sync is required
@@ -166,10 +167,10 @@ export const createNetworkMessageHandler = (
         const currentRemoteName = stateManager.remote.name;
         const localName = stateManager.gameState.playerName;
 
-        cachedHost   = defaultHostCache(startPoints, stateManager.gameModeRef.current === 'HOST' ? localName : currentRemoteName);
+        cachedHost = defaultHostCache(startPoints, stateManager.gameModeRef.current === 'HOST' ? localName : currentRemoteName);
         cachedClient = defaultClientCache(startPoints, stateManager.gameModeRef.current === 'CLIENT' ? localName : currentRemoteName);
-        
-        lastHostSeq   = -1;
+
+        lastHostSeq = -1;
         lastClientSeq = -1;
         stateManager.remote.interpolationBuffer.clear();
 
@@ -331,9 +332,9 @@ export const createNetworkMessageHandler = (
 
             case 'SPAWN_POWERUP':
                 sm.gameState.pendingPowerUps.push({
-                    id:        msg.id,
-                    type:      msg.pType,
-                    position:  new BABYLON.Vector3(msg.x, msg.y, msg.z),
+                    id: msg.id,
+                    type: msg.pType,
+                    position: new BABYLON.Vector3(msg.x, msg.y, msg.z),
                     spawnTime: Date.now(),
                 });
                 break;
@@ -361,7 +362,7 @@ export const createNetworkMessageHandler = (
                 if (sm.gameState.health <= 0 && !sm.gameState.isDowned) {
                     const isSolo = sm.gameModeRef.current === 'SOLO';
                     const hasQuickRevive = sm.gameState.perkStates['quickRevive'];
-                    
+
                     if (isSolo && !hasQuickRevive) {
                         sm.setHealth(0);
                         sm.setIsGameOver(true);
@@ -370,7 +371,7 @@ export const createNetworkMessageHandler = (
                         sm.gameState.downedStartTime = now;
                         sm.gameState.downedTimeLimit = sm.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
                         sm.setIsDowned(true);
-                        
+
                         // Notify others (host) that we went down
                         sm.send({
                             type: 'PLAYER_DOWNED',
@@ -406,7 +407,7 @@ export const createNetworkMessageHandler = (
                 sm.remote.gameState.isDowned = true;
                 actions.setInteractionMsg(`${msg.playerName} IS DOWN!`);
                 sm.timerManager.schedule('net_downed_msg_clear', 3000, () => actions.setInteractionMsg(null));
-                
+
                 // In multiplayer, if both players are now downed, trigger game over on the host
                 if (sm.gameModeRef.current === 'HOST' && sm.gameState.isDowned) {
                     sm.setIsGameOver(true);
@@ -444,7 +445,7 @@ export const createNetworkMessageHandler = (
 
             case 'STATE': {
                 const seq: number | undefined = msg._seq;
-                const isFull: boolean         = !!msg._full;
+                const isFull: boolean = !!msg._full;
 
                 // Gap detection: if seq jumped and this isn't a full sync, our delta
                 // chain is broken. Reset the cache and wait for the next full sync.
@@ -541,7 +542,7 @@ export const createNetworkMessageHandler = (
 
             case 'INPUT': {
                 const seq: number | undefined = msg._seq;
-                const isFull: boolean         = !!msg._full;
+                const isFull: boolean = !!msg._full;
 
                 // Gap detection for client → host direction
                 if (seq !== undefined && lastClientSeq !== -1 && seq > lastClientSeq + 1 && !isFull) {

@@ -93,13 +93,7 @@ export class DecalManager {
             angle: Math.random() * Math.PI
         });
 
-        let bloodMat = this.resourceManager.getMaterial("bloodDecalMat", () => {
-            const mat = new BABYLON.StandardMaterial("bloodDecalMat", this.scene);
-            mat.diffuseColor = new BABYLON.Color3(0.6, 0, 0);
-            mat.specularColor = BABYLON.Color3.Black();
-            mat.zOffset = -1;
-            return mat;
-        });
+        let bloodMat = this.getBloodDecalMaterial();
 
         decal.material = bloodMat;
         decal.isPickable = false;

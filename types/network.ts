@@ -32,3 +32,11 @@ export interface Peer {
     destroy: () => void;
     removeAllListeners: () => void;
 }
+
+export interface StoredPos {
+    x: number;
+    y: number;
+    z: number;
+    rot: number;
+    pitch: number;
+}

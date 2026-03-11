@@ -58,21 +58,14 @@ export class GoreManager {
     }
 
     private initGoreDiscPool() {
-        const mat = this.resourceManager.getMaterial("floorGoreMat", () => {
-            const m = new BABYLON.StandardMaterial("floorGoreMat", this.scene);
-            m.diffuseColor = new BABYLON.Color3(0.42, 0.0, 0.0);
-            m.specularColor = new BABYLON.Color3(0.02, 0, 0);
-            m.emissiveColor = new BABYLON.Color3(0.04, 0, 0);
-            m.backFaceCulling = false;
-            return m;
-        });
+        const mat = this.getFloorGoreMaterial();
 
         for (let i = 0; i < GoreManager.MAX_FLOOR_GORE; i++) {
             const disc = BABYLON.MeshBuilder.CreateDisc(`goreDisc_${i}`, {
                 radius: 1,
                 tessellation: 12
             }, this.scene);
-            disc.material = mat;
+            disc.material = mat ?? null;
             disc.isPickable = false;
             disc.setEnabled(false);
             disc.rotation.x = Math.PI / 2;

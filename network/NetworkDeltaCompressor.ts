@@ -1,6 +1,7 @@
 
 import { SYNC_CONFIG } from '../config';
 import { DoorState, PowerUpType, ZombieSyncData } from '../types/index';
+import { StoredPos } from '../types/network';
 
 // ── Precision helpers ─────────────────────────────────────────────────────────
 
@@ -11,13 +12,13 @@ export function rnd(v: number): number {
     return Math.round(v * MULT) / MULT;
 }
 
-export function rndPos(p: { x: number; y: number; z: number; rot: number; pitch: number }) {
+export function rndPos(p: StoredPos) {
     return { x: rnd(p.x), y: rnd(p.y), z: rnd(p.z), rot: rnd(p.rot), pitch: rnd(p.pitch) };
 }
 
 // ── Internal snapshot shapes ──────────────────────────────────────────────────
 
-export interface StoredPos { x: number; y: number; z: number; rot: number; pitch: number; }
+
 
 export interface MysteryBoxSnapshot {
     state: number; locIndex: number; lidAngle: number;
@@ -109,11 +110,11 @@ function powerUpsChanged(a: PowerUpType[], b: PowerUpType[]): boolean {
 
 function mysteryBoxChanged(a: MysteryBoxSnapshot, b: MysteryBoxSnapshot): boolean {
     return a.state !== b.state ||
-           a.locIndex !== b.locIndex ||
-           a.lidAngle !== b.lidAngle ||
-           a.weaponId !== b.weaponId ||
-           a.rollIndex !== b.rollIndex ||
-           a.owner !== b.owner;
+        a.locIndex !== b.locIndex ||
+        a.lidAngle !== b.lidAngle ||
+        a.weaponId !== b.weaponId ||
+        a.rollIndex !== b.rollIndex ||
+        a.owner !== b.owner;
 }
 
 // ── NetworkDeltaCompressor ────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ export class NetworkDeltaCompressor {
 
     // ── Dirty flags for expensive O(n) host-side Record comparisons ──────────
     // Start true so first tick always compares (establishes baseline snapshot).
-    private _doorsDirty   = true;
+    private _doorsDirty = true;
     private _windowsDirty = true;
 
     /**
@@ -159,7 +160,7 @@ export class NetworkDeltaCompressor {
      * no change and reset the flag).
      */
     public markHostDirty(field: 'doors' | 'windows'): void {
-        if (field === 'doors')   this._doorsDirty   = true;
+        if (field === 'doors') this._doorsDirty = true;
         if (field === 'windows') this._windowsDirty = true;
     }
 
@@ -171,7 +172,7 @@ export class NetworkDeltaCompressor {
         this.lastFullHostAt = 0;
         this.lastFullClientAt = 0;
         // Reset dirty flags — next tick will compare everything fresh.
-        this._doorsDirty   = true;
+        this._doorsDirty = true;
         this._windowsDirty = true;
     }
 
@@ -184,7 +185,7 @@ export class NetworkDeltaCompressor {
      */
     public computeHostDelta(now: number, full: {
         doors: Record<string, DoorState>;
-        hostPos: { x: number; y: number; z: number; rot: number; pitch: number };
+        hostPos: StoredPos;
         activeWeaponIndex: number;
         activeWeaponId: string;
         hostHealth: number;
@@ -251,13 +252,14 @@ export class NetworkDeltaCompressor {
                 round: full.round,
                 powerOn: full.powerOn,
                 isDogRound: full.isDogRound,
-                activePowerUps: [ ...full.activePowerUps ],
+                isGameOver: full.isGameOver,
+                activePowerUps: [...full.activePowerUps],
                 mysteryBox: { ...full.mysteryBox },
             };
             this.lastFullHostAt = now;
             // Full sync sent — snapshot is up to date, no need to compare on
             // the next tick unless a mutation is signalled first.
-            this._doorsDirty   = false;
+            this._doorsDirty = false;
             this._windowsDirty = false;
 
             return {
@@ -394,7 +396,7 @@ export class NetworkDeltaCompressor {
 
         if (powerUpsChanged(full.activePowerUps, snap.activePowerUps)) {
             delta.activePowerUps = full.activePowerUps;
-            snap.activePowerUps = [ ...full.activePowerUps ];
+            snap.activePowerUps = [...full.activePowerUps];
         }
 
         if (mysteryBoxChanged(full.mysteryBox, snap.mysteryBox)) {
@@ -456,7 +458,7 @@ export class NetworkDeltaCompressor {
      * containing only fields that changed since the last call.
      */
     public computeClientDelta(now: number, full: {
-        pos: { x: number; y: number; z: number; rot: number; pitch: number };
+        pos: StoredPos;
         activeWeaponIndex: number;
         activeWeaponId: string;
         clientHealth: number;

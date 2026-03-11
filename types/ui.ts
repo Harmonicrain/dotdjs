@@ -3,10 +3,11 @@ import React from 'react';
 import * as BABYLON from '@babylonjs/core';
 import type { GameEngine } from '../game/GameEngine';
 import type { InputManager } from '../engine/InputManager';
-import type { StateManager } from '../state/StateManager'; 
+import type { StateManager } from '../state/StateManager';
 import { WeaponState, RemoteGameState } from './player';
 import { MysteryBox, InteractableType, DoorState, WindowBarrierState } from './world';
 import { MysteryBoxSystem, RemotePlayerVisuals } from './systems';
+import { StoredPos } from './network';
 
 export enum PowerUpType {
     MAX_AMMO = 'MAX_AMMO',
@@ -72,30 +73,30 @@ export interface PlayerState {
     maxHealth: number;
     weapons: WeaponState[];
     activeWeaponIndex: number;
-    
+
     isReloading: boolean;
     isFiring: boolean;
     isAiming: boolean;
     isKnifing: boolean;
     lastShotTime: number;
     isPackAPunching: boolean;
-    weaponFiredThisTriggerPull: boolean; 
-    
+    weaponFiredThisTriggerPull: boolean;
+
     kills: number;
     shots: number;
-    
+
     lastDamageTime: number;
     lastRegenTime: number;
-    
+
     // Perks (Generic System - State tracking)
     perkStates: Record<string, boolean>;
-    
+
     isDowned: boolean;
     downedStartTime: number;
     downedTimeLimit: number;
     isBeingRevived: boolean;
     isRevivingTeammate: boolean;
-    reviveProgress: number; 
+    reviveProgress: number;
     quickRevivesRemaining: number;
 
     playerName: string;
@@ -116,14 +117,14 @@ export interface WorldState {
     perkStates: Record<string, boolean>;
     interactableStates: Record<string, boolean>;
     powerOn: boolean;
-    
+
     accumulatedDropPoints: number;
     nextDropThreshold: number;
     lastDeathPos: BABYLON.Vector3 | null;
     activePowerUps: Partial<Record<PowerUpType, number>>;
     repairPointsRound: number;
     lastRepairTime: number;
-    
+
     powerUps: PowerUp[];
     pendingPowerUps: PendingPowerUp[];
 }
@@ -139,16 +140,16 @@ export interface GameContext {
     scene: React.MutableRefObject<BABYLON.Scene | null>;
     camera: React.MutableRefObject<BABYLON.UniversalCamera | null>;
     gameEngine: React.MutableRefObject<GameEngine | null>;
-    
+
     stateManager: React.MutableRefObject<StateManager | null>;
 
     mysteryBoxSystem: React.MutableRefObject<MysteryBoxSystem | null>;
     inputManager: React.MutableRefObject<InputManager | null>;
-    
+
     gameMode: React.MutableRefObject<string>;
     connectionStatus: React.MutableRefObject<string>;
     navPlugin: React.MutableRefObject<BABYLON.RecastJSPlugin | undefined>;
-    
+
     remotePlayer: {
         visual: React.MutableRefObject<RemotePlayerVisuals | null>;
         name: React.MutableRefObject<string>;
@@ -175,11 +176,11 @@ export interface ZombieSyncData {
     isCrawling?: boolean;
 }
 
-export type GameMessage = 
+export type GameMessage =
     | { type: 'READY'; name: string }
     | { type: 'START_GAME'; mapId: string }
     | { type: 'PING' }
-    | { 
+    | {
         type: 'STATE';
         /** Monotonic sequence number for gap detection. */
         _seq: number;
@@ -187,7 +188,7 @@ export type GameMessage =
         _full?: boolean;
         // All payload fields optional – absent means "unchanged since last full sync".
         doors?: Record<string, DoorState>;
-        hostPos?: { x: number; y: number; z: number; rot: number; pitch: number };
+        hostPos?: StoredPos;
         activeWeaponIndex?: number;
         activeWeaponId?: string;
         hostHealth?: number;
@@ -219,7 +220,7 @@ export type GameMessage =
             rollIndex: number;
             owner: string | null;
         };
-      }
+    }
     | {
         type: 'INPUT';
         /** Monotonic sequence number for gap detection. */
@@ -227,7 +228,7 @@ export type GameMessage =
         /** Present and true on full snapshots; absent on delta packets. */
         _full?: boolean;
         // All payload fields optional – absent means "unchanged since last full sync".
-        pos?: { x: number; y: number; z: number; rot: number; pitch: number };
+        pos?: StoredPos;
         activeWeaponIndex?: number;
         activeWeaponId?: string;
         clientHealth?: number;
@@ -251,7 +252,7 @@ export type GameMessage =
         splashRadius?: number;
         splashDamage?: number;
         selfDamageMultiplier?: number;
-      }
+    }
     | { type: 'INTERACT_DOOR'; doorId: string }
     | { type: 'INTERACT_PERK'; perkId: string; perkType: string; cost: number }
     | { type: 'INTERACT_WALL_BUY'; weaponId: string; cost: number }
