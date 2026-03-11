@@ -324,7 +324,6 @@ export class Game {
             zombies: sm.zombies,
             windows: sm.windows,
             groundSpawns: sm.groundSpawns,
-            zoneSystem: sm.zoneSystem,
             navPlugin: sm.navPlugin,
             remote: {
                 pos: sm.remote.pos,

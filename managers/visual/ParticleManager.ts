@@ -86,6 +86,13 @@ export class ParticleManager {
     private static readonly _trailColorPacked = new BABYLON.Color4(0.6, 0.1, 1, 1);
     private static readonly _trailColorPacked2 = new BABYLON.Color4(0.48, 0.08, 0.8, 1);
 
+    // Staggered nuke explosion queue — prevents simultaneous mass kills from spiking the frame
+    private static readonly MAX_ZOMBIE_EXPLOSIONS_PER_FRAME = 2;
+    private static readonly _queuePos = new BABYLON.Vector3();
+    private static readonly _queueHit = new BABYLON.Vector3();
+    private zombieExplosionQueue: Array<{ x: number; y: number; z: number; hx: number; hy: number; hz: number; hasHit: boolean }> = [];
+    private zombieExplosionFrameCount = 0;
+
     constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {
         this.initFlashLightPool();
         this.initExplosionPSPool();
@@ -122,6 +129,17 @@ export class ParticleManager {
                 } else {
                     this.flashLightPool[i].intensity = 5 * (1 - t);
                 }
+            }
+            // Reset per-frame explosion budget and drain the nuke queue
+            this.zombieExplosionFrameCount = 0;
+            const toFire = Math.min(this.zombieExplosionQueue.length, ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME);
+            for (let j = 0; j < toFire; j++) {
+                const e = this.zombieExplosionQueue.shift()!;
+                ParticleManager._queuePos.set(e.x, e.y, e.z);
+                this._fireZombieExplosionParticles(
+                    ParticleManager._queuePos,
+                    e.hasHit ? ParticleManager._queueHit.set(e.hx, e.hy, e.hz) : undefined
+                );
             }
         });
     }
@@ -495,7 +513,7 @@ export class ParticleManager {
         ps.start();
     }
 
-    public createZombieExplosionParticles(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
+    private _fireZombieExplosionParticles(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
         const bx = hitDir ? -hitDir.x : 0;
         const by = hitDir ? Math.max(-hitDir.y + 0.8, 0.5) : 1.0;
         const bz = hitDir ? -hitDir.z : 0;
@@ -523,6 +541,22 @@ export class ParticleManager {
         chunks.direction1.set(bx - 1.5, by + 0.5, bz - 1.5);
         chunks.direction2.set(bx + 1.5, by + 3.0, bz + 1.5);
         chunks.start();
+    }
+
+    public createZombieExplosionParticles(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
+        if (this.zombieExplosionFrameCount < ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME) {
+            this.zombieExplosionFrameCount++;
+            this._fireZombieExplosionParticles(pos, hitDir);
+        } else {
+            // Queue for subsequent frames — positions copied as scalars to avoid stale mesh refs
+            this.zombieExplosionQueue.push({
+                x: pos.x, y: pos.y, z: pos.z,
+                hx: hitDir ? hitDir.x : 0,
+                hy: hitDir ? hitDir.y : 0,
+                hz: hitDir ? hitDir.z : 0,
+                hasHit: hitDir !== undefined
+            });
+        }
     }
 
     public createHeadExplosionParticles(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
@@ -686,6 +720,8 @@ export class ParticleManager {
         this.mistPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.chunksPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.brainPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
+        this.zombieExplosionQueue.length = 0;
+        this.zombieExplosionFrameCount = 0;
         this.houndExplosionPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.spawnEffectPSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });
         this.spawnSmokePSPool.forEach(ps => { if (ps.isStarted()) { ps.stop(); ps.reset(); } });

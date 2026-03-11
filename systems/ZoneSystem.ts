@@ -1,7 +1,6 @@
 
 import * as BABYLON from '@babylonjs/core';
 import { ZoneDefinition, DoorConnection, DoorState } from '../types/index';
-import { Pathfinder } from '../engine/Pathfinder';
 
 /**
  * ZoneSystem
@@ -70,89 +69,6 @@ export class ZoneSystem {
             }
         }
         return 1;
-    }
-
-    /**
-     * Returns the door that connects `fromZone` to `toZone` via the shortest
-     * path (BFS over the door graph), or `null` if no path exists.
-     *
-     * The returned door is the *first hop* on the path, i.e. the door the
-     * entity should move toward immediately.
-     */
-    public getDoorBetween(fromZone: number, toZone: number): DoorConnection | null {
-        const direct = this.doors.find(d =>
-            (d.fromZone === fromZone && d.toZone === toZone) ||
-            (d.fromZone === toZone   && d.toZone === fromZone)
-        );
-        if (direct) return direct;
-
-        const queue: { zone: number; firstDoor: DoorConnection | null }[] = [
-            { zone: fromZone, firstDoor: null },
-        ];
-        const visited = new Set<number>([fromZone]);
-
-        while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (current.zone === toZone) return current.firstDoor;
-
-            const neighbors = this.doors.filter(
-                d => d.fromZone === current.zone || d.toZone === current.zone
-            );
-            for (const door of neighbors) {
-                const nextZone = door.fromZone === current.zone ? door.toZone : door.fromZone;
-                if (!visited.has(nextZone)) {
-                    visited.add(nextZone);
-                    queue.push({ zone: nextZone, firstDoor: current.firstDoor ?? door });
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Returns the shortest path (list of door connections) from fromZone to toZone.
-     * Use this for higher-level pathing between zones.
-     */
-    public getPathToZone(fromZone: number, toZone: number): DoorConnection[] | null {
-        if (fromZone === toZone) return [];
-
-        const path = Pathfinder.findPath<number>(
-            fromZone,
-            toZone,
-            (zoneId) => {
-                const neighbors = this.doors.filter(d => d.fromZone === zoneId || d.toZone === zoneId);
-                return neighbors.map(d => {
-                    const otherZone = d.fromZone === zoneId ? d.toZone : d.fromZone;
-                    // Cost is the distance between zone centers via the door waypoint
-                    const center1 = this.zoneCenters.get(zoneId) || BABYLON.Vector3.Zero();
-                    const center2 = this.zoneCenters.get(otherZone) || BABYLON.Vector3.Zero();
-                    const cost = BABYLON.Vector3.Distance(center1, d.waypoint) + BABYLON.Vector3.Distance(d.waypoint, center2);
-                    return { id: otherZone, cost };
-                });
-            },
-            (zoneId, goalId) => {
-                const center1 = this.zoneCenters.get(zoneId) || BABYLON.Vector3.Zero();
-                const center2 = this.zoneCenters.get(goalId) || BABYLON.Vector3.Zero();
-                return BABYLON.Vector3.Distance(center1, center2);
-            }
-        );
-
-        if (!path) return null;
-
-        // Convert zone sequence back into door sequence
-        const doorPath: DoorConnection[] = [];
-        for (let i = 0; i < path.length - 1; i++) {
-            const z1 = path[i];
-            const z2 = path[i+1];
-            const door = this.doors.find(d => 
-                (d.fromZone === z1 && d.toZone === z2) || 
-                (d.fromZone === z2 && d.toZone === z1)
-            );
-            if (door) doorPath.push(door);
-        }
-
-        return doorPath;
     }
 
     /**
