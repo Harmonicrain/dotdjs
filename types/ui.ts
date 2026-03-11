@@ -48,6 +48,7 @@ export interface GameFlowState {
     isGameOver: boolean;
     currentMapId: string;
     isHostLoaded?: boolean;
+    mapLoadGeneration: number;
     interactionMsg: string | null;
     hoverMsg: string | null;
 }

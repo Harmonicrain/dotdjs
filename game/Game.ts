@@ -662,6 +662,7 @@ export class Game {
         this.stateManager.mapVisuals.doorMeshes.clear();
         this.stateManager.windows.length = 0; // Clear array but keep reference
         this.stateManager.groundSpawns.length = 0; // Clear array but keep reference
+        this.stateManager.gameState.mapLoadGeneration++;
 
         // 2. Load New Map
 

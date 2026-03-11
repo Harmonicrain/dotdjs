@@ -222,7 +222,7 @@ export class StateManager {
 
         // Init GameState
         this.gameState = {
-            hasStarted: false, isPaused: false, startTime: 0, round: 1,
+            hasStarted: false, isPaused: false, startTime: 0, mapLoadGeneration: 0, round: 1,
             zombiesToSpawn: 0, zombiesSpawned: 0, zombiesAlive: 0, zombiesKilledInRound: 0, totalZombiesInRound: 0,
             lastSpawnTime: 0, nextRoundTime: 0, isIntermission: false, isDogRound: false,
             dogRoundStarted: false, dogRoundStartTime: 0, dogRoundNumber: 0,

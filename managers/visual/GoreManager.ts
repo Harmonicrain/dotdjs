@@ -158,6 +158,13 @@ export class GoreManager {
             b.mesh.setEnabled(false);
             if (b.material) b.material.alpha = 0.9;
         });
+
+        // Hide all gore discs and clear the active fade list
+        for (const disc of this.goreDiscPool) {
+            disc.setEnabled(false);
+        }
+        this.activeGoreDiscs.length = 0;
+        this.goreDiscCursor = 0;
     }
 
     public dispose() {

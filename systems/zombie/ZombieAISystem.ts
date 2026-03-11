@@ -59,6 +59,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const _crowdVelocity = new BABYLON.Vector3();
 
     let crowd: BABYLON.ICrowd | undefined;
+    let crowdMapGeneration = -1;
     let lastCrowdLogTime = 0;
 
     const addZombieToCrowd = (z: Zombie): void => {
@@ -245,12 +246,26 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const frameFactor = dt * 60;
             const gc = ctx.configManager.gameplay;
 
-            // ── Crowd init ────────────────────────────────────────────────────
+            // ── Crowd init / reload ───────────────────────────────────────────
             // Must run before the zombie loop so crowd positions are ready when
             // we read velocity for rotation smoothing.
+            // On map reload the navmesh is rebuilt but the old crowd still
+            // references the destroyed navmesh — dispose and recreate it.
+            const gen = ctx.gameState.mapLoadGeneration;
+            if (crowd && gen !== crowdMapGeneration) {
+                for (const z of zombies) {
+                    if (z.crowdAgentIndex !== undefined) {
+                        try { crowd.removeAgent(z.crowdAgentIndex); } catch (_) { }
+                        z.crowdAgentIndex = undefined;
+                    }
+                }
+                crowd.dispose();
+                crowd = undefined;
+            }
             if (!crowd && ctx.navPlugin) {
                 try {
                     crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
+                    crowdMapGeneration = gen;
                     console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
                 } catch (e) {
                     // Navmesh not ready yet — will retry next frame
