@@ -215,6 +215,10 @@ export const createGameLoop = (deps: GameLoopDeps) => {
             sm.ui.setIsDebugActive(sm.debugSelection.isActive);
             sm.gameState.isConsoleOpen = sm.isConsoleOpen;
 
+            if (sm.navPlugin) {
+                sm.navPlugin.timeFactor = isLogicFrozen ? 0 : 1;
+            }
+
             if (sm.gameState.isPaused || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
                 return;
             }
