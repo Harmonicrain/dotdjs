@@ -9,14 +9,25 @@ interface PowerUpIconProps {
 }
 
 const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
-    const [timeLeft, setTimeLeft] = useState(expireTime - Date.now());
+    const isPaused = useGameStore(s => s.isPaused);
+    const isConsoleOpen = useGameStore(s => s.isConsoleOpen);
+    const isLogicFrozen = isPaused || isConsoleOpen;
+
+    const [timeLeft, setTimeLeft] = useState(Math.max(0, expireTime - Date.now()));
+
+    // Keep it explicitly in sync when expireTime changes (e.g. from pause offset shift)
+    useEffect(() => {
+        setTimeLeft(Math.max(0, expireTime - Date.now()));
+    }, [expireTime]);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            setTimeLeft(expireTime - Date.now());
+            if (!isLogicFrozen) {
+                setTimeLeft(Math.max(0, expireTime - Date.now()));
+            }
         }, 100);
         return () => clearInterval(interval);
-    }, [expireTime]);
+    }, [expireTime, isLogicFrozen]);
 
     const isExpiring = timeLeft < 5000;
     const isBlinking = timeLeft < 3000;
@@ -163,7 +174,6 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
 export const PowerUpDisplay: React.FC = () => {
     const activePowerUps = useGameStore(s => s.activePowerUps);
     const activePowerUpEntries = Object.entries(activePowerUps)
-        .filter(([_, expTime]) => expTime && expTime > Date.now())
         .map(([type, expTime]) => ({ type: type as PowerUpType, expTime: expTime! }));
 
     if (activePowerUpEntries.length === 0) return null;

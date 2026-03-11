@@ -342,6 +342,9 @@ export const createNetworkMessageHandler = (
             case 'ACTIVATE_POWERUP_EFFECT':
                 actions.updateGame({ interactionMsg: `${msg.pType.replace('_', ' ')}!` });
                 sm.timerManager.schedule('net_powerup_msg_clear', 3000, () => actions.updateGame({ interactionMsg: null }));
+                if (sm.powerUpManager) {
+                    sm.powerUpManager.activatePowerUp(msg.pType as PowerUpType, true);
+                }
                 break;
 
             case 'HIT_CONFIRM':

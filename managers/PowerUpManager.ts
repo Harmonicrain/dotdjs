@@ -36,19 +36,19 @@ export class PowerUpManager {
         const types = Object.values(PowerUpType);
         const type = specificType || types[Math.floor(Math.random() * types.length)];
         const id = "pu_" + Date.now();
-        
+
         // Float slightly above ground
         const spawnPos = new BABYLON.Vector3(pos.x, Math.max(pos.y, 0), pos.z);
         const mesh = createPowerUpMesh(this.scene, type, spawnPos);
-        
+
         this.gameState.powerUps.push({ id, type, mesh, position: spawnPos, spawnTime: Date.now(), isCollected: false });
-        
-        if (this.gameModeRef.current !== 'SOLO') { 
-            this.send({ type: 'SPAWN_POWERUP', id, pType: type, x: spawnPos.x, y: spawnPos.y, z: spawnPos.z }); 
+
+        if (this.gameModeRef.current !== 'SOLO') {
+            this.send({ type: 'SPAWN_POWERUP', id, pType: type, x: spawnPos.x, y: spawnPos.y, z: spawnPos.z });
         }
     }
 
-    public activatePowerUp(type: PowerUpType) {
+    public activatePowerUp(type: PowerUpType, fromNetwork = false) {
         const now = Date.now();
         const pc = this.configManager.powerUps;
         const endTime = now + pc.EFFECT_DURATION;
@@ -60,24 +60,25 @@ export class PowerUpManager {
             this.sm.setReserveAmmo(activeW.currentReserve);
         } else if (type === PowerUpType.NUKE) {
             if (this.onZombieDeathCallback) {
-                this.zombies.forEach(z => { 
-                    z.isBurning = true; 
-                    z.health = 0; 
-                    this.onZombieDeathCallback!(z, z.mesh.position, 'HOST'); 
+                this.zombies.forEach(z => {
+                    z.isBurning = true;
+                    z.health = 0;
+                    this.onZombieDeathCallback!(z, z.mesh.position, 'HOST');
                 });
             }
+            // Add points locally if activated from network or if we activated it
             this.addPoints(pc.NUKE_POINTS);
         } else if (type === PowerUpType.CARPENTER) {
-            this.windows.forEach(w => { 
-                w.boards.forEach((b: BABYLON.AbstractMesh) => b.setEnabled(true)); 
+            this.windows.forEach(w => {
+                w.boards.forEach((b: BABYLON.AbstractMesh) => b.setEnabled(true));
             });
             this.addPoints(pc.CARPENTER_POINTS);
-        } else { 
-            this.gameState.activePowerUps[type] = endTime; 
+        } else {
+            this.gameState.activePowerUps[type] = endTime;
         }
-        
-        if (this.gameModeRef.current !== 'SOLO') { 
-            this.send({ type: 'ACTIVATE_POWERUP_EFFECT', pType: type }); 
+
+        if (!fromNetwork && this.gameModeRef.current !== 'SOLO') {
+            this.send({ type: 'ACTIVATE_POWERUP_EFFECT', pType: type });
         }
     }
 }

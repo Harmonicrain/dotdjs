@@ -29,12 +29,32 @@ export interface IPowerUpContext {
 export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
     const activePowerUpIds = new Set<string>();
     const _spawnForward = new BABYLON.Vector3();
-    const _spawnPos     = new BABYLON.Vector3();
+    const _spawnPos = new BABYLON.Vector3();
+    let lastTickTime = 0;
 
     return {
         name: 'powerUp',
         update: (dt: number, now: number) => {
             if (!ctx.gameState.hasStarted) return;
+
+            // Handle pause or massive lag offset for timers
+            if (lastTickTime !== 0 && now - lastTickTime > 150) {
+                const pauseDuration = now - lastTickTime;
+
+                // Shift all active power-up end times
+                for (const key in ctx.gameState.activePowerUps) {
+                    ctx.gameState.activePowerUps[key as PowerUpType]! += pauseDuration;
+                }
+
+                // Shift all uncollected spawned powerups
+                for (const p of ctx.gameState.powerUps) {
+                    p.spawnTime += pauseDuration;
+                }
+
+                // Force sync the scaled out expiration times to React
+                ctx.setActivePowerUps({ ...ctx.gameState.activePowerUps });
+            }
+            lastTickTime = now;
 
             const camera = ctx.camera;
             if (!camera) return;
