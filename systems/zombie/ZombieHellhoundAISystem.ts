@@ -21,6 +21,7 @@ export interface IHellhoundAIContext {
     zombies: Zombie[];
     hellhoundManager: HellhoundManager;
     zombieManager: ZombieManager;
+    getIsPathfindingActive: () => boolean;
 }
 
 /**

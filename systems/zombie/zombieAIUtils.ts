@@ -35,6 +35,7 @@ export interface IBurnDamageCtx {
 
 export interface INavPathCtx {
     navPlugin?: BABYLON.RecastJSPlugin;
+    getIsPathfindingActive: () => boolean;
 }
 
 export interface ITargetCtx {
@@ -110,11 +111,15 @@ export const computeNavPath = (
         const distToNavEnd = BABYLON.Vector3.Distance(targetPos, navEnd);
 
         if (distToNavStart > 5 && !z.warnedNavStart) {
-            console.warn(`[ZombieAI] ${z.type} ${z.id}: Start far from navmesh (${distToNavStart.toFixed(2)}m)`);
+            if (ctx.getIsPathfindingActive()) {
+                console.warn(`[ZombieAI] ${z.type} ${z.id}: Start far from navmesh (${distToNavStart.toFixed(2)}m)`);
+            }
             z.warnedNavStart = true;
         }
         if (distToNavEnd > 5 && !z.warnedNavEnd) {
-            console.warn(`[ZombieAI] ${z.type} ${z.id}: Target far from navmesh (${distToNavEnd.toFixed(2)}m)`);
+            if (ctx.getIsPathfindingActive()) {
+                console.warn(`[ZombieAI] ${z.type} ${z.id}: Target far from navmesh (${distToNavEnd.toFixed(2)}m)`);
+            }
             z.warnedNavEnd = true;
         }
 
@@ -127,7 +132,9 @@ export const computeNavPath = (
             z.pathCursor = (BABYLON.Vector3.DistanceSquared(z.mesh.position, newPath[0]) < 0.25) ? 1 : 0;
         } else {
             if (!z.pathfindingFailed) {
-                console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
+                if (ctx.getIsPathfindingActive()) {
+                    console.warn(`[ZombieAI] ${z.type} ${z.id}: Navmesh pathfinding failed, using direct movement`);
+                }
                 z.pathfindingFailed = true;
             }
         }

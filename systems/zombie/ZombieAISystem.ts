@@ -28,6 +28,7 @@ export interface IZombieAIContext {
     hellhoundManager: HellhoundManager;
     /** Shared ref so ZombieCleanupSystem can remove crowd agents on despawn */
     crowdRef: { current?: BABYLON.ICrowd };
+    getIsPathfindingActive: () => boolean;
 }
 
 // ── Recast Crowd configuration ────────────────────────────────────────────────
@@ -73,10 +74,14 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             ..._BASE_AGENT_PARAMS,
             maxSpeed: z.speed * 60,
         };
-        console.log(`[ZombieAI] Adding ${z.id} to crowd. Pos:`, z.mesh.position.asArray());
+        if (ctx.getIsPathfindingActive()) {
+            console.log(`[ZombieAI] Adding ${z.id} to crowd. Pos:`, z.mesh.position.asArray());
+        }
         z.crowdAgentIndex = crowd.addAgent(z.mesh.position, params, z.mesh as BABYLON.TransformNode);
         crowd.agentGoto(z.crowdAgentIndex, z.mesh.position);
-        console.log(`[ZombieAI] Added ${z.id} to crowd as agent ${z.crowdAgentIndex} at ${z.mesh.position.y.toFixed(2)}m`);
+        if (ctx.getIsPathfindingActive()) {
+            console.log(`[ZombieAI] Added ${z.id} to crowd as agent ${z.crowdAgentIndex} at ${z.mesh.position.y.toFixed(2)}m`);
+        }
     };
 
     const removeZombieFromCrowd = (z: Zombie): void => {
@@ -184,7 +189,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         // ── Crowd path (fast) ─────────────────────────────────────────────────
         if (crowd && z.crowdAgentIndex !== undefined) {
             if (z.lastPathLogTime === undefined || now - z.lastPathLogTime > 10000) {
-                console.log(`[ZombieAI] ${z.type} ${z.id}: Using Recast Crowd`);
+                if (ctx.getIsPathfindingActive()) {
+                    console.log(`[ZombieAI] ${z.type} ${z.id}: Using Recast Crowd`);
+                }
                 z.lastPathLogTime = now;
             }
             if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
@@ -205,7 +212,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
         // ── Fallback: computeNavPath + moveWithCollisions (applied by caller) ─
         if (z.lastPathLogTime === undefined || now - z.lastPathLogTime > 10000) {
-            console.log(`[ZombieAI] ${z.type} ${z.id}: Using computeNavPath (Fallback)`);
+            if (ctx.getIsPathfindingActive()) {
+                console.log(`[ZombieAI] ${z.type} ${z.id}: Using computeNavPath (Fallback)`);
+            }
             z.lastPathLogTime = now;
         }
         const moveDir = computeNavPath(z, _targetPos, dt, ctx);
@@ -274,7 +283,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                     crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
                     crowdMapGeneration = gen;
                     syncCrowdRef();
-                    console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
+                    if (ctx.getIsPathfindingActive()) {
+                        console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
+                    }
                 } catch (e) {
                     // Navmesh not ready yet — will retry next frame
                 }
@@ -282,7 +293,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
             if (crowd && now - lastCrowdLogTime > 5000) {
                 const activeAgents = zombies.filter(z => z.crowdAgentIndex !== undefined).length;
-                console.log(`[ZombieAI] Recast Crowd active: ${activeAgents} agents updating.`);
+                if (ctx.getIsPathfindingActive()) {
+                    console.log(`[ZombieAI] Recast Crowd active: ${activeAgents} agents updating.`);
+                }
                 lastCrowdLogTime = now;
             }
 

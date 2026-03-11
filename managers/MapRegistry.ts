@@ -67,15 +67,7 @@ export const loadMap = (
 
     if (navPlugin && def.navigation?.navmeshParameters) {
         try {
-            console.log(`[NavMesh] Creating navmesh with ${levelData.navMeshes.length} meshes:`);
-            levelData.navMeshes.forEach(m => {
-                const bounds = m.getBoundingInfo().boundingBox;
-                const min = bounds.minimumWorld;
-                const max = bounds.maximumWorld;
-                console.log(`  - ${m.name}: bounds X(${min.x.toFixed(1)} to ${max.x.toFixed(1)}), Z(${min.z.toFixed(1)} to ${max.z.toFixed(1)})`);
-            });
             navPlugin.createNavMesh(levelData.navMeshes, def.navigation.navmeshParameters as any);
-            console.log(`[NavMesh] Created successfully`);
             
             // Add static wall obstacles to block paths through walls
             if (def.navigation.wallObstacles) {
@@ -84,33 +76,11 @@ export const loadMap = (
                     const extent = new BABYLON.Vector3(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
                     try {
                         navPlugin.addBoxObstacle(pos, extent, obs.rotation || 0);
-                        console.log(`[NavMesh] Added wall obstacle ${idx}: pos=(${pos.x}, ${pos.y}, ${pos.z}), size=(${obs.size[0]}, ${obs.size[1]}, ${obs.size[2]})`);
                     } catch (err) {
                         console.error(`[NavMesh] Failed to add wall obstacle ${idx}:`, err);
                     }
                 });
             }
-            
-            // Test path connectivity between zones
-            const pathTests = [
-                { from: new BABYLON.Vector3(0, 0, -15), to: new BABYLON.Vector3(0, 0, 20), desc: 'Zone1 to Zone2' },
-                { from: new BABYLON.Vector3(0, 0, 20), to: new BABYLON.Vector3(20, 0, 6), desc: 'Zone2 to Zone3 (via door)' },
-                { from: new BABYLON.Vector3(0, 0, -15), to: new BABYLON.Vector3(20, 0, 6), desc: 'Zone1 to Zone3 (full path)' },
-                { from: new BABYLON.Vector3(0, 0, -15), to: new BABYLON.Vector3(15, 0, -3), desc: 'Zone1 to Zone3 lower area' },
-            ];
-            pathTests.forEach(test => {
-                const fromClosest = navPlugin.getClosestPoint(test.from);
-                const toClosest = navPlugin.getClosestPoint(test.to);
-                console.log(`[NavMesh] Path test ${test.desc}:`);
-                console.log(`  From: (${test.from.x}, ${test.from.z}) -> closest: (${fromClosest.x.toFixed(1)}, ${fromClosest.z.toFixed(1)})`);
-                console.log(`  To: (${test.to.x}, ${test.to.z}) -> closest: (${toClosest.x.toFixed(1)}, ${toClosest.z.toFixed(1)})`);
-                const path = navPlugin.computePath(fromClosest, toClosest);
-                if (path && path.length > 0) {
-                    console.log(`  ✓ Path found: ${path.length} waypoints`);
-                } else {
-                    console.warn(`  ✗ NO PATH FOUND`);
-                }
-            });
             
         } catch (e) {
             console.error('NavMesh Bake Failed:', e);

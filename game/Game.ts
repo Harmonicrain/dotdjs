@@ -342,6 +342,7 @@ export class Game {
             zombieManager: sm.zombieManager,
             hellhoundManager: sm.hellhoundManager,
             crowdRef: sm.crowdRef,
+            getIsPathfindingActive: () => sm.showPathfinding.isActive,
         }));
 
         this.systemManager.register(createZombieHellhoundAISystem({
@@ -358,6 +359,7 @@ export class Game {
             zombies: sm.zombies,
             hellhoundManager: sm.hellhoundManager,
             zombieManager: sm.zombieManager,
+            getIsPathfindingActive: () => sm.showPathfinding.isActive,
         }));
 
         this.systemManager.register(createZombieWindowAISystem({
