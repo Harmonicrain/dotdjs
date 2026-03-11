@@ -659,7 +659,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         },
         update: (dt: number, now: number) => {
 
-            if (ctx.gameState.isDebugMode) return;
+            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;
 
