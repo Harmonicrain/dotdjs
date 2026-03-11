@@ -163,6 +163,7 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                     round: gameState.round,
                     powerOn: gameState.powerOn,
                     isDogRound: gameState.isDogRound,
+                    isGameOver: gameState.isGameOver,
                     activePowerUps: _activePowerUpTypes,
                     mysteryBox: {
                         state: ctx.mysteryBox.state,
