@@ -351,10 +351,11 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     // Only CHASING regular zombies use the crowd.
     // Window-state zombies and hellhounds retain their existing manual movement.
     let crowd: BABYLON.ICrowd | undefined;
-    let crowdInitialized = false;
+    let lastCrowdLogTime = 0;
 
     // Per-frame scratch vector for crowd agent velocity reads
     const _crowdVelocity = new BABYLON.Vector3();
+
 
     /**
      * Adds a zombie to the Recast Crowd as an agent.
@@ -368,8 +369,19 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             // Convert per-frame speed (at 60fps) to per-second for the crowd
             maxSpeed: z.speed * 60,
         };
+        
+        // --- DEBUG: Log the input position ---
+        console.log(`[ZombieAI] Adding ${z.id} to crowd. Pos:`, z.mesh.position.asArray());
+        
+        // Ensure the agent is added at the mesh's current position to avoid snapping
         z.crowdAgentIndex = crowd.addAgent(z.mesh.position, params, z.mesh as BABYLON.TransformNode);
+        
+        // --- FIX: Force sync agent position to mesh position ---
+        crowd.agentGoto(z.crowdAgentIndex, z.mesh.position);
+        
+        console.log(`[ZombieAI] Added ${z.id} to crowd as agent ${z.crowdAgentIndex} at ${z.mesh.position.y.toFixed(2)}m`);
     };
+
 
     /**
      * Removes a zombie's crowd agent and clears its index.
@@ -581,6 +593,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     const updateZombieChase = (
         z: Zombie,
         dt: number,
+        now: number,
         separation: BABYLON.Vector3,
         frameFactor: number
     ): void => {
@@ -603,10 +616,17 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
         // ── Crowd path (fast) ─────────────────────────────────────────────────
         if (crowd && z.crowdAgentIndex !== undefined) {
+            if (z.lastPathLogTime === undefined || now - z.lastPathLogTime > 10000) {
+                console.log(`[ZombieAI] ${z.type} ${z.id}: Using Recast Crowd`);
+                z.lastPathLogTime = now;
+            }
             // Refresh the goto target periodically — much cheaper than computePath
             if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
             z.pathUpdateTimer -= dt;
             if (z.pathUpdateTimer <= 0) {
+                // Snap target Y to navmesh surface. The crowd's default query extent
+                // is ±1 unit; camera Y (~1.6) puts the navmesh (Y≈0) out of range.
+                _targetPos.y = 0;
                 crowd.agentGoto(z.crowdAgentIndex, _targetPos);
                 z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * 0.05);
             }
@@ -618,12 +638,17 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 applyRotationSmoothing(z, _crowdVelocity, frameFactor);
             }
 
+            // --- REMOVED Y-CLAMPING: Crowd agents should follow the navmesh's Y surface ---
             // Keep zombie flush with ground (crowd uses navmesh Y; clamp to 0 on flat maps)
-            if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
+            // if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
             return;
         }
 
         // ── Fallback: legacy computeNavPath + moveWithCollisions ─────────────
+        if (z.lastPathLogTime === undefined || now - z.lastPathLogTime > 10000) {
+            console.log(`[ZombieAI] ${z.type} ${z.id}: Using computeNavPath (Fallback)`);
+            z.lastPathLogTime = now;
+        }
         const moveDir = computeNavPath(z, _targetPos, dt, ctx);
         if (moveDir) {
             moveDir.y = 0;
@@ -746,7 +771,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         },
         update: (dt: number, now: number) => {
 
-            if (!ctx.gameState.hasStarted || ctx.gameState.isDebugMode) return;
+            if (ctx.gameState.isDebugMode) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;
 
@@ -761,21 +786,28 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const sc = ctx.configManager.sync;
             const gc = ctx.configManager.gameplay;
 
-            // Lazy initialize crowd now that the map has started.
-            if (!crowdInitialized && ctx.navPlugin) {
-                crowdInitialized = true;
+            // ── Single crowd update (replaces N computePath + moveWithCollisions) ──
+            // Must run BEFORE the zombie loop so positions are already updated when
+            // we read velocity for rotation smoothing below.
+            if (!crowd && ctx.navPlugin) {
                 try {
                     crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
                     console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
                 } catch (e) {
-                    console.warn('[ZombieAI] Failed to create Recast Crowd, falling back to computePath:', e);
+                    // Ignore failure until navmesh is ready
                 }
             }
 
-            // ── Single crowd update (replaces N computePath + moveWithCollisions) ──
-            // Must run BEFORE the zombie loop so positions are already updated when
-            // we read velocity for rotation smoothing below.
-            if (crowd) crowd.update(dt);
+            // crowd.update() is called automatically by the scene's
+            // onBeforeAnimationsObservable (set in the RecastJSCrowd constructor).
+            // Calling it manually here would double-advance the simulation.
+            if (crowd) {
+                if (now - lastCrowdLogTime > 5000) {
+                    const activeAgents = zombies.filter(z => z.crowdAgentIndex !== undefined).length;
+                    console.log(`[ZombieAI] Recast Crowd active: ${activeAgents} agents updating.`);
+                    lastCrowdLogTime = now;
+                }
+            }
 
             // Build spatial grid once — O(n); each zombie then does O(k) neighbour check
             // Still needed for: window-state zombies, hellhounds, and downed-wander.
@@ -890,7 +922,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                         z.state = ZombieState.SPAWNING;
                     }
                 } else if (z.state === ZombieState.CHASING) {
-                    updateZombieChase(z, dt, separation, frameFactor);
+                    updateZombieChase(z, dt, now, separation, frameFactor);
                 } else if (z.type === 'ZOMBIE') {
                     // Window-state: not in crowd — ensure agent is removed if it somehow exists
                     if (z.crowdAgentIndex !== undefined) removeZombieFromCrowd(z);
