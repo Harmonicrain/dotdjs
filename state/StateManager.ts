@@ -46,6 +46,8 @@ export class StateManager {
     public navPlugin: BABYLON.RecastJSPlugin | undefined = undefined;
     public soundManager: SoundManager | null = null;
     public mapGameplay: MapGameplay = {};
+    /** Shared ref written by ZombieAISystem, read by ZombieCleanupSystem */
+    public crowdRef: { current?: BABYLON.ICrowd } = { current: undefined };
 
     public get inputDevice(): 'KM' | 'CONTROLLER' {
         return this.inputManager?.getInputDevice() ?? 'KM';

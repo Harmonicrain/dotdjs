@@ -26,6 +26,8 @@ export interface IZombieAIContext {
     connectionStatusRef: { current: string };
     zombieManager: ZombieManager;
     hellhoundManager: HellhoundManager;
+    /** Shared ref so ZombieCleanupSystem can remove crowd agents on despawn */
+    crowdRef: { current?: BABYLON.ICrowd };
 }
 
 // ── Recast Crowd configuration ────────────────────────────────────────────────
@@ -61,6 +63,9 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
     let crowd: BABYLON.ICrowd | undefined;
     let crowdMapGeneration = -1;
     let lastCrowdLogTime = 0;
+
+    // Keep the shared ref in sync so ZombieCleanupSystem can remove agents
+    const syncCrowdRef = () => { ctx.crowdRef.current = crowd; };
 
     const addZombieToCrowd = (z: Zombie): void => {
         if (!crowd || z.crowdAgentIndex !== undefined) return;
@@ -230,6 +235,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 }
                 crowd.dispose();
                 crowd = undefined;
+                syncCrowdRef();
             }
         },
         update: (dt: number, now: number) => {
@@ -261,11 +267,13 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 }
                 crowd.dispose();
                 crowd = undefined;
+                syncCrowdRef();
             }
             if (!crowd && ctx.navPlugin) {
                 try {
                     crowd = ctx.navPlugin.createCrowd(MAX_CROWD_AGENTS, CROWD_AGENT_RADIUS, ctx.scene);
                     crowdMapGeneration = gen;
+                    syncCrowdRef();
                     console.log('[ZombieAI] Recast Crowd initialised (max agents:', MAX_CROWD_AGENTS, ')');
                 } catch (e) {
                     // Navmesh not ready yet — will retry next frame

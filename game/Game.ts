@@ -341,6 +341,7 @@ export class Game {
             connectionStatusRef: sm.connectionStatusRef,
             zombieManager: sm.zombieManager,
             hellhoundManager: sm.hellhoundManager,
+            crowdRef: sm.crowdRef,
         }));
 
         this.systemManager.register(createZombieHellhoundAISystem({
@@ -447,7 +448,13 @@ export class Game {
 
     /** Clear all zombies and hellhounds */
     private _clearZombies(sm: StateManager): void {
+        const crowd = sm.crowdRef.current;
         sm.zombies.forEach(z => {
+            // Remove from Recast Crowd before releasing mesh
+            if (crowd && z.crowdAgentIndex !== undefined) {
+                crowd.removeAgent(z.crowdAgentIndex);
+                z.crowdAgentIndex = undefined;
+            }
             if (z.type === 'HELLHOUND') {
                 releaseHellhoundMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, limbs: z.limbs! });
             } else {

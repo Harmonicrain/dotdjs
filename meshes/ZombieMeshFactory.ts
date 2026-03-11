@@ -61,13 +61,21 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 };
             },
             (zmr) => {
-                zmr.mesh.setEnabled(true);
-                zmr.head.setEnabled(true);
-                if (zmr.torso) zmr.torso.setEnabled(true);
-                zmr.limbs.armL.setEnabled(true);
-                zmr.limbs.armR.setEnabled(true);
-                zmr.limbs.legL.setEnabled(true);
-                zmr.limbs.legR.setEnabled(true);
+                // Reset root transform — clear stale position/rotation from previous life
+                zmr.mesh.position.setAll(0);
+                zmr.mesh.rotation.setAll(0);
+                zmr.mesh.rotationQuaternion = null;
+
+                // Reset limb rotations to idle pose
+                zmr.limbs.armL.rotation.set(-Math.PI / 2.5, 0, 0);
+                zmr.limbs.armR.rotation.set(-Math.PI / 2.5, 0, 0);
+                zmr.limbs.legL.rotation.setAll(0);
+                zmr.limbs.legR.rotation.setAll(0);
+
+                // Reset torso bob offset
+                if (zmr.torso) zmr.torso.position.y = 1.275;
+
+                // Do NOT enable yet — caller sets position first, then enables
             },
             (zmr) => {
                 zmr.mesh.dispose();
@@ -111,12 +119,18 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 };
             },
             (zmr) => {
-                zmr.mesh.setEnabled(true);
-                zmr.head.setEnabled(true);
-                zmr.limbs.armL.setEnabled(true);
-                zmr.limbs.armR.setEnabled(true);
-                zmr.limbs.legL.setEnabled(true);
-                zmr.limbs.legR.setEnabled(true);
+                // Reset root transform — clear stale position/rotation from previous life
+                zmr.mesh.position.setAll(0);
+                zmr.mesh.rotation.setAll(0);
+                zmr.mesh.rotationQuaternion = null;
+
+                // Reset leg rotations to neutral
+                zmr.limbs.armL.rotation.setAll(0);
+                zmr.limbs.armR.rotation.setAll(0);
+                zmr.limbs.legL.rotation.setAll(0);
+                zmr.limbs.legR.rotation.setAll(0);
+
+                // Do NOT enable yet — caller sets position first, then enables
             },
             (zmr) => {
                 zmr.mesh.dispose();
@@ -477,28 +491,47 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
 };
 export const createZombieMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterZombie) preWarmTemplates(scene, resourceManager);
-    
+
     const instance = zombiePool!.acquire();
     instance.mesh.position.copyFrom(position);
-    
+
+    // Enable after position is set to avoid one-frame flash at old location
+    instance.mesh.setEnabled(true);
+    instance.head.setEnabled(true);
+    if (instance.torso) instance.torso.setEnabled(true);
+    instance.limbs.armL.setEnabled(true);
+    instance.limbs.armR.setEnabled(true);
+    instance.limbs.legL.setEnabled(true);
+    instance.limbs.legR.setEnabled(true);
+
     return instance;
 };
 export const createHellhoundMesh = (scene: BABYLON.Scene, position: BABYLON.Vector3, resourceManager: ResourceManager): ZombieMeshResult => {
     if (!masterHellhound) preWarmTemplates(scene, resourceManager);
-    
+
     const instance = hellhoundPool!.acquire();
     instance.mesh.position.copyFrom(position);
-    
+
+    // Enable after position is set to avoid one-frame flash at old location
+    instance.mesh.setEnabled(true);
+    instance.head.setEnabled(true);
+    instance.limbs.armL.setEnabled(true);
+    instance.limbs.armR.setEnabled(true);
+    instance.limbs.legL.setEnabled(true);
+    instance.limbs.legR.setEnabled(true);
+
     return instance;
 };
 
 export const releaseZombieMesh = (zmr: ZombieMeshResult) => {
     zmr.mesh.setEnabled(false);
+    zmr.mesh.rotationQuaternion = null;
     if (zombiePool) zombiePool.release(zmr);
 };
 
 export const releaseHellhoundMesh = (zmr: ZombieMeshResult) => {
     zmr.mesh.setEnabled(false);
+    zmr.mesh.rotationQuaternion = null;
     if (hellhoundPool) hellhoundPool.release(zmr);
 };
 
