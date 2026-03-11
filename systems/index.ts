@@ -9,6 +9,9 @@ export { createMysteryBoxSystem } from './MysteryBoxSystem';
 export { ZoneSystem } from './ZoneSystem';
 
 export { createZombieAISystem } from './zombie';
+export { createZombieHellhoundAISystem } from './zombie';
+export { createZombieWindowAISystem } from './zombie';
+export { createZombieSpawnSystem } from './zombie';
 export { createZombieAnimationSystem } from './zombie';
 export { createZombieCleanupSystem } from './zombie';
 export { createZombieDamageSystem } from './zombie';

@@ -25,7 +25,8 @@ import type { PlayerFields, GameFields } from '../store/useGameStore';
 // Systems
 import {
     createProjectileSystem, createPlayerMovementSystem, createPlayerCombatSystem,
-    createZombieAISystem, createZombieDamageSystem, createZombieCleanupSystem,
+    createZombieAISystem, createZombieHellhoundAISystem, createZombieWindowAISystem,
+    createZombieSpawnSystem, createZombieDamageSystem, createZombieCleanupSystem,
     createZombieAnimationSystem, createInteractionSystem,
     createPowerUpSystem, createWeaponViewSystem, createRoundSystem,
     createNetworkSystem, createRemotePlayerSystem, createDownedSystem, createReviveSystem,
@@ -310,32 +311,61 @@ export class Game {
         const interactionSys = createInteractionSystem(sm);
         this.systemManager.register(interactionSys);
 
+        // System execution order matters:
+        //  1. ZombieSpawnSystem  — SPAWNING/BREAKING_LID → sets CHASING
+        //  2. ZombieAISystem     — crowd init, adds fresh CHASING zombies, runs chase
+        //  3. ZombieHellhoundAISystem — independent hellhound state machine
+        //  4. ZombieWindowAISystem    — window barrier sub-machine
+        this.systemManager.register(createZombieSpawnSystem({
+            gameState: sm.gameState,
+            gameModeRef: sm.gameModeRef,
+            zombies: sm.zombies,
+            groundSpawns: sm.groundSpawns,
+            zombieManager: sm.zombieManager,
+            visualManager: sm.visualManager,
+        }));
+
         this.systemManager.register(createZombieAISystem({
             gameState: sm.gameState,
             scene: sm.scene,
             camera: sm.camera,
             gameModeRef: sm.gameModeRef,
-            eventBus: sm.eventBus,
-            timerManager: sm.timerManager,
-            zombieManager: sm.zombieManager,
-            hellhoundManager: sm.hellhoundManager,
-            visualManager: sm.visualManager,
             configManager: sm.configManager,
             zombies: sm.zombies,
-            windows: sm.windows,
-            groundSpawns: sm.groundSpawns,
             navPlugin: sm.navPlugin,
             remote: {
                 pos: sm.remote.pos,
                 gameState: sm.remote.gameState
             },
             connectionStatusRef: sm.connectionStatusRef,
-            isDoorOpen: (id) => sm.isDoorOpen(id),
-            send: (msg) => sm.send(msg),
-            setHealth: (v) => sm.setHealth(v),
-            setIsDowned: (v) => sm.setIsDowned(v),
-            setIsGameOver: (v) => sm.setIsGameOver(v),
-            setFlashColor: (v) => sm.setFlashColor(v)
+            zombieManager: sm.zombieManager,
+            hellhoundManager: sm.hellhoundManager,
+        }));
+
+        this.systemManager.register(createZombieHellhoundAISystem({
+            gameState: sm.gameState,
+            gameModeRef: sm.gameModeRef,
+            camera: sm.camera,
+            remote: {
+                pos: sm.remote.pos,
+                gameState: sm.remote.gameState,
+            },
+            connectionStatusRef: sm.connectionStatusRef,
+            configManager: sm.configManager,
+            navPlugin: sm.navPlugin,
+            zombies: sm.zombies,
+            hellhoundManager: sm.hellhoundManager,
+            zombieManager: sm.zombieManager,
+        }));
+
+        this.systemManager.register(createZombieWindowAISystem({
+            gameState: sm.gameState,
+            gameModeRef: sm.gameModeRef,
+            zombies: sm.zombies,
+            windows: sm.windows,
+            configManager: sm.configManager,
+            eventBus: sm.eventBus,
+            visualManager: sm.visualManager,
         }));
 
         this.systemManager.register(createZombieDamageSystem(sm));
