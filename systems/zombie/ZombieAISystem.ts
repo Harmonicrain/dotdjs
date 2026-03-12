@@ -73,6 +73,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         const params: BABYLON.IAgentParameters = {
             ..._BASE_AGENT_PARAMS,
             maxSpeed: z.speed * 60,
+            maxAcceleration: (z.speed * 60) * 10, // Snappy start/stop
         };
         if (ctx.getIsPathfindingActive()) {
             console.log(`[ZombieAI] Adding ${z.id} to crowd. Pos:`, z.mesh.position.asArray());
@@ -196,16 +197,57 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
             if (z.pathUpdateTimer === undefined) z.pathUpdateTimer = 0;
             z.pathUpdateTimer -= dt;
-            if (z.pathUpdateTimer <= 0) {
-                _targetPos.y = 0;
-                crowd.agentGoto(z.crowdAgentIndex, _targetPos);
-                z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * 0.05);
+
+            // Check if within attack range
+            const distHorizontalSq = getHorizontalDistSq(z.mesh.position, _targetPos);
+            const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
+            const inAttackRange = distHorizontalSq <= (zc.ATTACK_RANGE * 0.9) * (zc.ATTACK_RANGE * 0.9) && 
+                                  heightDiff <= ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD;
+
+            if (inAttackRange) {
+                if (!z.wasInAttackRange) {
+                    z.wasInAttackRange = true;
+                    // Stop agent by setting speed to 0 and stopping current goto
+                    const params: BABYLON.IAgentParameters = {
+                        ..._BASE_AGENT_PARAMS,
+                        maxSpeed: 0,
+                        maxAcceleration: 1000, // Decelerate instantly
+                    };
+                    crowd.updateAgentParameters(z.crowdAgentIndex, params);
+                    
+                    _tempDirectDir.copyFrom(z.mesh.position);
+                    _tempDirectDir.y = 0;
+                    crowd.agentGoto(z.crowdAgentIndex, _tempDirectDir);
+                }
+            } else {
+                if (z.wasInAttackRange) {
+                    z.wasInAttackRange = false;
+                    z.pathUpdateTimer = 0; // Force immediate path update this frame
+                    // Restore original speed and snappy acceleration
+                    const params: BABYLON.IAgentParameters = {
+                        ..._BASE_AGENT_PARAMS,
+                        maxSpeed: z.speed * 60,
+                        maxAcceleration: (z.speed * 60) * 10,
+                    };
+                    crowd.updateAgentParameters(z.crowdAgentIndex, params);
+                }
+
+                if (z.pathUpdateTimer <= 0) {
+                    _targetPos.y = 0;
+                    crowd.agentGoto(z.crowdAgentIndex, _targetPos);
+                    z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * 0.05);
+                }
             }
 
             crowd.getAgentVelocityToRef(z.crowdAgentIndex, _crowdVelocity);
             _crowdVelocity.y = 0;
             if (_crowdVelocity.lengthSquared() > 0.01) {
                 applyRotationSmoothing(z, _crowdVelocity, frameFactor);
+            } else if (inAttackRange) {
+                // Agent has stopped to attack, manually rotate toward target
+                _targetPos.subtractToRef(z.mesh.position, _tempDirectDir);
+                _tempDirectDir.y = 0;
+                applyRotationSmoothing(z, _tempDirectDir, frameFactor);
             }
             return;
         }

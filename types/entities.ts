@@ -84,6 +84,7 @@ export type Zombie = {
     lastPathLogTime?: number;     // Throttling for pathfinding logs
     warnedNavStart?: boolean;     // Track if we've warned about start position
     warnedNavEnd?: boolean;       // Track if we've warned about end position
+    wasInAttackRange?: boolean;   // Track if zombie was in attack range last frame
     // Recast Crowd — index into the ICrowd agent array; undefined = not in crowd
     crowdAgentIndex?: number;
     // Spawn hole lid breaking
