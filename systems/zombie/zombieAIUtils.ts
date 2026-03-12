@@ -162,6 +162,20 @@ export const computeNavPath = (
 };
 
 /**
+ * Tags a zombie's entire mesh hierarchy with metadata for O(1) lookup.
+ * Used by ProjectileSystem to find which zombie was hit without per-frame rebuilds.
+ */
+export const tagZombieMeshes = (z: Zombie) => {
+    const metadata = { zombie: z, isEnemy: true };
+    z.mesh.metadata = metadata;
+    // Recursively tag all children (head, torso, limbs, eyes, etc.)
+    const children = z.mesh.getChildMeshes(false);
+    for (let i = 0; i < children.length; i++) {
+        children[i].metadata = metadata;
+    }
+};
+
+/**
  * Applies SLERP rotation smoothing toward movement direction.
  * Uses pre-allocated _tempTargetQuat to avoid allocations.
  */

@@ -66,6 +66,13 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 zmr.mesh.rotation.setAll(0);
                 zmr.mesh.rotationQuaternion = null;
 
+                // Clear metadata to avoid stale zombie references
+                zmr.mesh.metadata = null;
+                const children = zmr.mesh.getChildMeshes(false);
+                for (let i = 0; i < children.length; i++) {
+                    children[i].metadata = null;
+                }
+
                 // Reset limb rotations to idle pose
                 zmr.limbs.armL.rotation.set(-Math.PI / 2.5, 0, 0);
                 zmr.limbs.armR.rotation.set(-Math.PI / 2.5, 0, 0);
@@ -123,6 +130,13 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 zmr.mesh.position.setAll(0);
                 zmr.mesh.rotation.setAll(0);
                 zmr.mesh.rotationQuaternion = null;
+
+                // Clear metadata to avoid stale zombie references
+                zmr.mesh.metadata = null;
+                const children = zmr.mesh.getChildMeshes(false);
+                for (let i = 0; i < children.length; i++) {
+                    children[i].metadata = null;
+                }
 
                 // Reset leg rotations to neutral
                 zmr.limbs.armL.rotation.setAll(0);

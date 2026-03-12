@@ -24,6 +24,10 @@ export class TimerManager {
     }
   }
 
+  has(id: string): boolean {
+    return this.timers.some(t => t.id === id);
+  }
+
   update(dt: number) {
     for (let i = this.timers.length - 1; i >= 0; i--) {
       const t = this.timers[i];

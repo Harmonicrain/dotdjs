@@ -60,7 +60,8 @@ export const createZombieCleanupSystem = (ctx: IZombieCleanupContext): System =>
                     } else {
                         releaseZombieMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
                     }
-                    zombies.splice(i, 1);
+                    zombies[i] = zombies[zombies.length - 1];
+                    zombies.pop();
                     continue;
                 }
 
@@ -79,7 +80,9 @@ export const createZombieCleanupSystem = (ctx: IZombieCleanupContext): System =>
                         } else {
                             releaseZombieMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
                         }
-                        zombies.splice(i, 1);
+                        zombies[i] = zombies[zombies.length - 1];
+                        zombies.pop();
+
                         ctx.gameState.zombiesToSpawn++;
                         ctx.gameState.zombiesAlive--;
                     }

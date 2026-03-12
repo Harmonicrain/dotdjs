@@ -114,7 +114,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
         });
     };
 
-    const performShoot = () => {
+    const performShoot = (now: number) => {
         const weapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
         if (!weapon.automatic && ctx.gameState.weaponFiredThisTriggerPull) return;
 
@@ -124,7 +124,6 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
             return;
         }
 
-        const now = Date.now();
         const hasDoubleTap = ctx.gameState.perkStates['doubleTap'];
         const fireDelay = (60000 / weapon.fireRate) / (hasDoubleTap ? 1.33 : 1);
         if (ctx.gameState.isReloading || ctx.gameState.isKnifing || now - ctx.gameState.lastShotTime < fireDelay) return;
@@ -337,7 +336,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
 
     return {
         name: 'playerCombat',
-        update: (dt: number) => {
+        update: (dt: number, now: number) => {
             if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating || ctx.gameState.isGameOver) return;
 
             const inputManager = ctx.inputManager;
@@ -355,7 +354,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                 ctx.gameState.isAiming = inputManager.isDown(GameAction.AIM);
 
                 if (ctx.gameState.isFiring) {
-                    performShoot();
+                    performShoot(now);
                 }
 
                 // Allow reload if we have ammo
@@ -406,7 +405,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
 
             // Execute shooting if firing
             if (ctx.gameState.isFiring) {
-                performShoot();
+                performShoot(now);
             }
         }
     };

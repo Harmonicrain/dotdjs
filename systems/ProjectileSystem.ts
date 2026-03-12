@@ -189,51 +189,15 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
     };
     ctx.eventBus.on('REMOTE_SHOOT', handleRemoteShoot);
 
-    // ── O(1) zombie mesh lookup ───────────────────────────────────────────────
-    // Rebuilt once per frame (O(n)) at the top of update() so every in-flight
-    // raycast hit resolves in O(1) instead of O(n * chain_depth).
-    const zombieMeshMap = new Map<BABYLON.AbstractMesh, Zombie>();
-    // Set of ALL zombie/hellhound meshes (root + children) for O(1) pick predicate
-    const allEnemyMeshes = new Set<BABYLON.AbstractMesh>();
-
-    const rebuildZombieMeshMap = () => {
-        zombieMeshMap.clear();
-        allEnemyMeshes.clear();
-        for (const z of ctx.zombies) {
-            zombieMeshMap.set(z.mesh, z);
-            allEnemyMeshes.add(z.mesh);
-            // Register child meshes (head, torso, limbs) for O(1) lookup
-            if (z.headMesh) { zombieMeshMap.set(z.headMesh, z); allEnemyMeshes.add(z.headMesh); }
-            if (z.torsoMesh) { zombieMeshMap.set(z.torsoMesh, z); allEnemyMeshes.add(z.torsoMesh); }
-            if (z.limbs) {
-                if (z.limbs.armL) { zombieMeshMap.set(z.limbs.armL, z); allEnemyMeshes.add(z.limbs.armL); }
-                if (z.limbs.armR) { zombieMeshMap.set(z.limbs.armR, z); allEnemyMeshes.add(z.limbs.armR); }
-                if (z.limbs.legL) { zombieMeshMap.set(z.limbs.legL, z); allEnemyMeshes.add(z.limbs.legL); }
-                if (z.limbs.legR) { zombieMeshMap.set(z.limbs.legR, z); allEnemyMeshes.add(z.limbs.legR); }
-            }
-            // Also register deep children (eyes, jaw, pants, flesh patch)
-            for (const child of z.mesh.getChildMeshes(false)) {
-                if (!zombieMeshMap.has(child)) {
-                    zombieMeshMap.set(child, z);
-                    allEnemyMeshes.add(child);
-                }
-            }
-        }
-    };
-
-    const findZombieFromMesh = (mesh: BABYLON.AbstractMesh) => {
-        return zombieMeshMap.get(mesh);
-    };
-
-    // ── Pick predicate using O(1) set/set lookups ─────────────────────────────
+    // ── Pick predicates using O(1) metadata/set lookups ───────────────────────
     const staticMeshes = ctx.staticLevelMeshes;
     const localPickPredicate = (mesh: BABYLON.AbstractMesh): boolean => {
         if (!mesh.isPickable || !mesh.isEnabled() || !mesh.isVisible) return false;
-        if (allEnemyMeshes.has(mesh)) return true;
+        if (mesh.metadata?.isEnemy) return true;
         return staticMeshes.has(mesh);
     };
     const remotePickPredicate = (mesh: BABYLON.AbstractMesh): boolean => {
-        if (allEnemyMeshes.has(mesh)) return true;
+        if (mesh.metadata?.isEnemy) return true;
         return mesh.checkCollisions && mesh.isVisible && staticMeshes.has(mesh);
     };
 
@@ -252,11 +216,8 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
 
             const projectiles = engine.activeProjectiles;
 
-            // Skip zombieMeshMap rebuild and all work when there are no projectiles
+            // Skip all work when there are no projectiles
             if (projectiles.length === 0) return;
-
-            // Rebuild mesh→zombie map once per frame — O(n) here, O(1) per hit below
-            rebuildZombieMeshMap();
 
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
@@ -280,7 +241,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                     _reusableRay.length = rayLen;
                     const ray = _reusableRay;
 
-                    // Combined raycast for zombies and environment — O(1) set lookups
+                    // Combined raycast for enemies and environment — O(1) lookups
                     const pick = scene.pickWithRay(ray, localPickPredicate);
 
                     // ── DEBUG SELECTION (reuse the combined pick — no extra raycast) ──
@@ -300,7 +261,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
 
                     if (pick && pick.hit && pick.pickedMesh) {
                         hit = true;
-                        const isEnemy = allEnemyMeshes.has(pick.pickedMesh);
+                        const isEnemy = pick.pickedMesh.metadata?.isEnemy;
 
                         if (isEnemy) {
                             ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);
@@ -317,7 +278,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                                     p
                                 );
                             } else if (isAuthority) {
-                                const z = findZombieFromMesh(pick.pickedMesh);
+                                const z = pick.pickedMesh.metadata?.zombie as Zombie | undefined;
                                 if (z) {
                                     z.lastHitTime = Date.now();
 
@@ -387,12 +348,12 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                     _reusableRay.length = rayLen;
                     const ray = _reusableRay;
 
-                    // Combined raycast for zombies and environment — O(1) set lookups
+                    // Combined raycast for enemies and environment — O(1) lookups
                     const pick = scene.pickWithRay(ray, remotePickPredicate);
 
                     if (pick && pick.hit && pick.pickedMesh) {
                         hit = true;
-                        const isEnemy = allEnemyMeshes.has(pick.pickedMesh);
+                        const isEnemy = pick.pickedMesh.metadata?.isEnemy;
 
                         if (isEnemy) {
                             ctx.visualManager.createBloodSplatter(pick.pickedPoint!, pick.getNormal(true)!, pick.pickedMesh);

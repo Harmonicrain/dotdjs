@@ -130,7 +130,8 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
 
                     if (lifeTime > pc.DURATION) {
                         p.mesh.dispose();
-                        gameState.powerUps.splice(i, 1);
+                        gameState.powerUps[i] = gameState.powerUps[gameState.powerUps.length - 1];
+                        gameState.powerUps.pop();
                         continue;
                     }
 
@@ -159,7 +160,8 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                             }
 
                             p.mesh.dispose();
-                            gameState.powerUps.splice(i, 1);
+                            gameState.powerUps[i] = gameState.powerUps[gameState.powerUps.length - 1];
+                            gameState.powerUps.pop();
                         }
                     }
                 }

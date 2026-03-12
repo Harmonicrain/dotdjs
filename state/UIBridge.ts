@@ -348,4 +348,8 @@ export class UIBridge {
     public getIsSpectating(): boolean {
         return useGameStore.getState().isSpectating;
     }
+
+    public getIsDebugActive(): boolean {
+        return useGameStore.getState().isDebugActive;
+    }
 }

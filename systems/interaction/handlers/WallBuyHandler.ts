@@ -5,12 +5,14 @@ import { getInputPrompt, GameAction } from '../../../engine/InputManager';
 export const WallBuyHandler: InteractionHandler = {
     getHoverLabel: ({ stateManager, metadata, inputDevice }) => {
         const weapons = stateManager.gameState.weapons;
-        const hasWeapon = weapons.some((w: WeaponState) => w.id === metadata.weapon);
-        const isPacked = hasWeapon && weapons.find(w => w.id === metadata.weapon)?.isPacked;
+        const weaponId = (metadata.weapon || metadata.data?.weaponId) as string;
+        const hasWeapon = weapons.some((w: WeaponState) => w.id === weaponId);
+        const isPacked = hasWeapon && weapons.find(w => w.id === weaponId)?.isPacked;
         const papAmmoCostHover = stateManager.configManager.gameplay.PACK_A_PUNCH_AMMO_COST;
         const cost = isPacked ? papAmmoCostHover : metadata.cost;
         const prompt = getInputPrompt(GameAction.INTERACT, inputDevice);
-        return `Hold [${prompt}] to Buy ${metadata.weapon?.toUpperCase() || 'WEAPON'} [${cost}]`;
+        const action = hasWeapon ? 'Purchase Ammo' : `Buy ${metadata.weapon?.toUpperCase() || 'WEAPON'}`;
+        return `Hold [${prompt}] to ${action} [${cost}]`;
     },
     interact: ({ stateManager, metadata }) => {
         const weaponId = (metadata.weapon || metadata.data?.weaponId) as string;

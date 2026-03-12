@@ -6,6 +6,7 @@ import { ZoneSystem } from '../systems/ZoneSystem';
 import { MapConfigManager } from './MapConfigManager';
 import { ResourceManager } from './ResourceManager';
 import { EventBus } from '../engine/EventBus';
+import { tagZombieMeshes } from '../systems/zombie/zombieAIUtils';
 
 import { SoundManager } from './SoundManager';
 
@@ -350,6 +351,7 @@ export class ZombieManager {
 
             if (zEntity.speed > zs.SUPER_SPRINTER) zEntity.speed = zs.SUPER_SPRINTER;
 
+            tagZombieMeshes(zEntity);
             this.zombies.push(zEntity);
         }
     }
@@ -418,6 +420,7 @@ export class ZombieManager {
             }
         }
 
+        tagZombieMeshes(zEntity);
         this.zombies.push(zEntity);
     }
 

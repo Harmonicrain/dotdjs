@@ -6,6 +6,7 @@ import { EventBus } from '../../engine/EventBus';
 import { CachedHostState } from '../../network/NetworkMessageHandler';
 import { createZombieMesh, createHellhoundMesh, releaseHellhoundMesh, releaseZombieMesh } from '../../factories/ZombieMeshFactory';
 import { ResourceManager } from '../../managers/ResourceManager';
+import { tagZombieMeshes } from './zombieAIUtils';
 
 export interface IZombieSyncContext {
     scene: BABYLON.Scene;
@@ -94,6 +95,7 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
                 };
                 z.mesh.rotation.y = sd.rot;
 
+                tagZombieMeshes(z);
                 knownZombies.set(sd.id, z);
                 ctx.zombies.push(z);
             }

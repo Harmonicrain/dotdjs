@@ -6,6 +6,7 @@ import { MapConfigManager } from './MapConfigManager';
 import { ResourceManager } from './ResourceManager';
 import { EventBus } from '../engine/EventBus';
 import { VisualManager } from './VisualManager';
+import { tagZombieMeshes } from '../systems/zombie/zombieAIUtils';
 
 /**
  * HellhoundManager
@@ -284,6 +285,7 @@ export class HellhoundManager {
             newMesh.mesh.animations.push(fadeAnim);
             newMesh.mesh.getScene().beginAnimation(newMesh.mesh, 0, 30, false);
 
+            tagZombieMeshes(zEntity);
             this.zombies.push(zEntity);
             lightningEffect.stop();
             lightningEffect.dispose(false); // false = don't dispose shared texture

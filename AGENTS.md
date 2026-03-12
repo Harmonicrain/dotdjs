@@ -25,8 +25,10 @@
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # production bundle
+npm run test       # run tests in watch mode
+npm run test:run   # run tests once (CI mode)
 ```
-There is **no test suite**. Verify changes by running the dev server and playing the game.
+Verify changes by running the test suite AND by playing the game.
 
 ---
 
@@ -305,7 +307,41 @@ Each interactable type has a handler in `systems/interaction/handlers/`. To add 
 
 ---
 
-## 5. ⚠️ Pause, Dispose, and Reset Patterns — CRITICAL
+## 5. Testing Patterns
+
+> **Mandatory Verification**: Every logic change MUST be verified by running `npm run test:run`. If you add a new system or math utility, you MUST add a corresponding test file.
+
+### 5a. Mocking Game Context
+Use `createMockContext` from `tests/mocks/mockContext` to test systems without a real Babylon engine.
+```typescript
+import { createMockContext } from '../tests/mocks/mockContext';
+const ctx = createMockContext();
+const system = createXxxSystem(ctx);
+```
+
+### 5b. Testing Pause Guards
+Always verify that your system respects the `isPaused` state.
+```typescript
+it('should NOT update when paused', () => {
+    ctx.gameState.isPaused = true;
+    system.update(16, Date.now());
+    // Assert no state changes
+});
+```
+
+### 5c. Testing UI Components
+Mock `useGameStore` to test React components in isolation.
+```typescript
+vi.mock('../../store/useGameStore', () => ({
+    useGameStore: vi.fn()
+}));
+// ... in test
+(useGameStore as any).mockImplementation((selector) => selector({ ...mockState }));
+```
+
+---
+
+## 6. ⚠️ Pause, Dispose, and Reset Patterns — CRITICAL
 
 > **This is the #1 area where AI assistants introduce bugs.** Every rule below must be followed exactly.
 

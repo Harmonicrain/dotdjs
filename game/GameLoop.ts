@@ -195,17 +195,19 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                 }
             }
 
-            // Update Developer Stats (Zone & Position)
-            if (sm.gameState.hasStarted) {
-                const cam = sm.camera;
-                if (cam) {
-                    const zone = sm.getZone(cam.position);
-                    sm.ui.setPlayerStats(zone, {
-                        x: cam.position.x,
-                        y: cam.position.y,
-                        z: cam.position.z,
-                        rot: cam.rotation.y
-                    });
+            // Update Developer Stats (Zone & Position) — Throttled & Debug Only
+            if (sm.gameState.hasStarted && frameCount % 10 === 0) {
+                if (sm.ui.getIsDebugActive() || sm.isConsoleOpen) {
+                    const cam = sm.camera;
+                    if (cam) {
+                        const zone = sm.getZone(cam.position);
+                        sm.ui.setPlayerStats(zone, {
+                            x: cam.position.x,
+                            y: cam.position.y,
+                            z: cam.position.z,
+                            rot: cam.rotation.y
+                        });
+                    }
                 }
             }
 
