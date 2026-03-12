@@ -66,11 +66,20 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 zmr.mesh.rotation.setAll(0);
                 zmr.mesh.rotationQuaternion = null;
 
-                // Clear metadata to avoid stale zombie references
+                // Clear metadata and dispose decals to avoid stale hit markers or references
                 zmr.mesh.metadata = null;
                 const children = zmr.mesh.getChildMeshes(false);
                 for (let i = 0; i < children.length; i++) {
-                    children[i].metadata = null;
+                    const child = children[i];
+                    child.metadata = null;
+                    
+                    // Dispose any hit markers or blood decals attached to the zombie parts
+                    if (child.name === "bulletHole" || child.name === "bloodDecal") {
+                        child.dispose();
+                    } else {
+                        // Restore visibility for limbs that might have been hidden (dismemberment)
+                        child.setEnabled(true);
+                    }
                 }
 
                 // Reset limb rotations to idle pose
@@ -131,11 +140,20 @@ export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: Resource
                 zmr.mesh.rotation.setAll(0);
                 zmr.mesh.rotationQuaternion = null;
 
-                // Clear metadata to avoid stale zombie references
+                // Clear metadata and dispose decals to avoid stale hit markers or references
                 zmr.mesh.metadata = null;
                 const children = zmr.mesh.getChildMeshes(false);
                 for (let i = 0; i < children.length; i++) {
-                    children[i].metadata = null;
+                    const child = children[i];
+                    child.metadata = null;
+                    
+                    // Dispose any hit markers or blood decals attached to the hound parts
+                    if (child.name === "bulletHole" || child.name === "bloodDecal") {
+                        child.dispose();
+                    } else {
+                        // Restore visibility for limbs that might have been hidden
+                        child.setEnabled(true);
+                    }
                 }
 
                 // Reset leg rotations to neutral
