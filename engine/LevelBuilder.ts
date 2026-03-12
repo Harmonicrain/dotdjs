@@ -3,8 +3,8 @@ import * as BABYLON from '@babylonjs/core';
 import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
-import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../meshes';
-import { createBuilding } from '../meshes/BuildingFactory';
+import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
+import { createBuilding } from '../factories/BuildingFactory';
 import { GAME_CONFIG, MYSTERY_BOX_CONFIG } from '../config';
 
 /**

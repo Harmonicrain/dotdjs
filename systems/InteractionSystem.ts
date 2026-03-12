@@ -2,7 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { GameStateData, GameMessage, WindowBarrier, DoorMeshEntry, MapGameplay, MysteryBox, WeaponState, InteractableMetadata } from '../types/index';
 import { InputManager, GameAction, InputDevice } from '../engine/InputManager';
 import { IInteractionSystem, MysteryBoxSystem } from '../types/systems';
-import { createWorldWeapon } from '../meshes';
+import { createWorldWeapon } from '../factories';
 import { EventBus } from '../engine/EventBus';
 import { TimerManager } from '../engine/TimerManager';
 import { ResourceManager } from '../managers/ResourceManager';

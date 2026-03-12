@@ -4,7 +4,7 @@ import { System } from '../../types/systems';
 import { Zombie, ZombieState } from '../../types/index';
 import { EventBus } from '../../engine/EventBus';
 import { CachedHostState } from '../../network/NetworkMessageHandler';
-import { createZombieMesh, createHellhoundMesh, releaseHellhoundMesh, releaseZombieMesh } from '../../meshes/ZombieMeshFactory';
+import { createZombieMesh, createHellhoundMesh, releaseHellhoundMesh, releaseZombieMesh } from '../../factories/ZombieMeshFactory';
 import { ResourceManager } from '../../managers/ResourceManager';
 
 export interface IZombieSyncContext {

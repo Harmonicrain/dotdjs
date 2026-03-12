@@ -3,7 +3,7 @@ import { GameStateData } from '../../types/index';
 import { System } from '../../types/systems';
 import { Zombie } from '../../types/entities';
 import { MapConfigManager } from '../../managers/MapConfigManager';
-import { releaseZombieMesh, releaseHellhoundMesh } from '../../meshes/ZombieMeshFactory';
+import { releaseZombieMesh, releaseHellhoundMesh } from '../../factories/ZombieMeshFactory';
 
 export interface IZombieCleanupContext {
     gameState: GameStateData;

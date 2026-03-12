@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { createPowerUpMesh } from '../meshes';
+import { createPowerUpMesh } from '../factories';
 import { PowerUpType, GameStateData, WindowBarrier, WeaponState, Zombie, GameMessage } from '../types/index';
 import { MapConfigManager } from './MapConfigManager';
 

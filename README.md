@@ -136,7 +136,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 │   ├── _template/       # Map template for new maps
 │   ├── MapTextureResolver.ts # Texture resolution
 │   └── validateMapDefinition.ts # Map validation
-├── meshes/               # Mesh Factories
+├── factories/             # Mesh Factories
 │   ├── BuildingFactory.ts    # Procedural building geometry
 │   ├── gameplay/        # Power-ups, power switches
 │   ├── mysterybox/     # Mystery Box

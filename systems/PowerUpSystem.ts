@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { PowerUpType, GameStateData, MysteryBox } from '../types/index';
-import { createPowerUpMesh } from '../meshes';
+import { createPowerUpMesh } from '../factories';
 import { System } from '../types/systems';
 import { PowerUpManager } from '../managers/PowerUpManager';
 import { TimerManager } from '../engine/TimerManager';

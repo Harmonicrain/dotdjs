@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { createHellhoundMesh, ZombieMeshResult, preWarmTemplates } from '../meshes';
+import { createHellhoundMesh, ZombieMeshResult, preWarmTemplates } from '../factories';
 import { Zombie, ZombieState, HellhoundState, GameStateData, GameMessage, PowerUpType } from '../types/index';
 import { ZoneSystem } from '../systems/ZoneSystem';
 import { MapConfigManager } from './MapConfigManager';
