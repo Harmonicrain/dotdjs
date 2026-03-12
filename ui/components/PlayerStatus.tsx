@@ -47,10 +47,15 @@ const PerkIcon: React.FC<{ type: string; active: boolean }> = ({ type, active })
             glow: 'shadow-[0_0_15px_rgba(16,185,129,0.8),inset_0_0_10px_rgba(255,255,255,0.2)]',
             icon: '⚡'
         },
-        quickRevive: { 
-            bg: 'bg-gradient-to-br from-cyan-400 to-cyan-700', 
+        quickRevive: {
+            bg: 'bg-gradient-to-br from-cyan-400 to-cyan-700',
             glow: 'shadow-[0_0_15px_rgba(34,211,238,0.8),inset_0_0_10px_rgba(255,255,255,0.2)]',
             icon: '✚'
+        },
+        doubleTap: {
+            bg: 'bg-gradient-to-br from-amber-500 to-amber-800',
+            glow: 'shadow-[0_0_15px_rgba(245,158,11,0.8),inset_0_0_10px_rgba(255,255,255,0.2)]',
+            icon: '💥'
         },
     };
     
@@ -157,6 +162,7 @@ export const PlayerStatus: React.FC<PlayerStatusProps> = ({
                         <PerkIcon type="juggernog" active={perks['juggernog']} />
                         <PerkIcon type="speedCola" active={perks['speedCola']} />
                         <PerkIcon type="quickRevive" active={perks['quickRevive']} />
+                        <PerkIcon type="doubleTap" active={perks['doubleTap']} />
                     </div>
                     
                     {/* KIA indicator */}

@@ -15,6 +15,13 @@ export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
     trigger.visibility = 0; 
     trigger.checkCollisions = false;
 
+    // Collision Box
+    const collisionBox = BABYLON.MeshBuilder.CreateBox("juggCollision", {height: 2.2, width: 1.3, depth: 1.3}, scene);
+    collisionBox.parent = root;
+    collisionBox.position.y = 1;
+    collisionBox.visibility = 0;
+    collisionBox.checkCollisions = true;
+
     // Load 3D Model
     const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.JUGGERNOG, scene)
         .then((result) => {
@@ -33,7 +40,7 @@ export const createJuggernog = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
             result.meshes.forEach(m => {
                 if (m instanceof BABYLON.Mesh) {
                     shadowCasters.push(m);
-                    m.checkCollisions = true;
+                    m.checkCollisions = false;
                     
                     // Limit lights to prevent shader overflow (GL_MAX_VERTEX_UNIFORM_BUFFERS)
                     if (m.material) {

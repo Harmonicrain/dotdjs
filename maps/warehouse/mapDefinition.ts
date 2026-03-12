@@ -65,7 +65,8 @@ export const WarehouseMapDefinition: MapDefinition = {
         perks: [
             { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 39], rotation: Math.PI },
             { type: "speed_cola", id: "speedCola", zone: 3, pos: [28, 0, 2], rotation: -Math.PI / 2 },
-            { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-3, 0, -28.9], rotation: 0 }
+            { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-3, 0, -28.9], rotation: 0 },
+            { type: "double_tap", id: "doubleTap", zone: 2, pos: [-9.25, 0, 21.16], rotation: Math.PI / 2 }
         ],
         wallbuys: [
             { weapon: "shotgun", cost: 500, id: "buy_shotgun", zone: 1, pos: [-9.4, 2.5, -15], rotation: Math.PI / 2 },
@@ -121,6 +122,7 @@ export const WarehouseMapDefinition: MapDefinition = {
         juggernog:    { scaling: [-1.50,    1.50,    1.50   ] },
         speed_cola:   { scaling: [-0.035,   0.035,   0.035  ] },
         quick_revive: { scaling: [-0.03,    0.03,    0.03   ] },
+        double_tap:   { scaling: [-1.50,   1.50,   1.50  ] },
         pack_a_punch: { scaling: [-1.5,     1.5,     1.5    ] },
         power_switch: { scaling: [-0.0025,  0.0025,  0.0025 ] },
         m1911_fps:    { scaling: [ 0.00012, 0.00012, 0.00012] },

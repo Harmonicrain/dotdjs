@@ -22,6 +22,11 @@ export const DEFAULT_MODEL_TRANSFORMS: Record<string, ModelTransform> = {
     rotation: [0, Math.PI / 2, 0],
     scaling: [-0.03, 0.03, 0.03],
   },
+  double_tap: {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scaling: [-1.50, 1.50, 1.50],
+  },
   pack_a_punch: {
     position: [0.5, 0, 0],
     rotation: [0, 0, 0],

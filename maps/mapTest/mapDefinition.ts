@@ -61,6 +61,7 @@ export const MapTestDefinition: MapDefinition = {
              { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-6, 0, 10], rotation: Math.PI },
              { type: "juggernog", id: "juggernog", zone: 1, pos: [-2, 0, 10], rotation: Math.PI },
              { type: "speed_cola", id: "speedCola", zone: 1, pos: [2, 0, 10], rotation: Math.PI },
+             { type: "double_tap", id: "doubleTap", zone: 1, pos: [10, 0, 10], rotation: Math.PI },
         ],
         wallbuys: [],
         mysteryBoxes: [], 

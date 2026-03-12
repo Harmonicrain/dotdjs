@@ -125,7 +125,8 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
         }
 
         const now = Date.now();
-        const fireDelay = 60000 / weapon.fireRate;
+        const hasDoubleTap = ctx.gameState.perkStates['doubleTap'];
+        const fireDelay = (60000 / weapon.fireRate) / (hasDoubleTap ? 1.33 : 1);
         if (ctx.gameState.isReloading || ctx.gameState.isKnifing || now - ctx.gameState.lastShotTime < fireDelay) return;
         if (weapon.currentAmmo <= 0) { if (weapon.currentReserve > 0) reload(); return; }
 
@@ -220,12 +221,19 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
             _shootTargetPos.subtractToRef(_muzzlePos, _baseDir);
             _baseDir.normalize();
 
-            for (let i = 0; i < weapon.pellets; i++) {
+            const pelletCount = hasDoubleTap && !weapon.isExplosive ? weapon.pellets * 2 : weapon.pellets;
+            for (let i = 0; i < pelletCount; i++) {
                 _pelletDir.copyFrom(_baseDir);
                 if (spread > 0) {
                     _pelletDir.x += (Math.random() - 0.5) * spread;
                     _pelletDir.y += (Math.random() - 0.5) * spread;
                     _pelletDir.z += (Math.random() - 0.5) * spread;
+                    _pelletDir.normalize();
+                } else if (i >= weapon.pellets) {
+                    // Micro-spread for duplicate bullets to prevent raycast z-fighting
+                    _pelletDir.x += (Math.random() - 0.5) * 0.005;
+                    _pelletDir.y += (Math.random() - 0.5) * 0.005;
+                    _pelletDir.z += (Math.random() - 0.5) * 0.005;
                     _pelletDir.normalize();
                 }
                 _bulletVel.copyFrom(_pelletDir);

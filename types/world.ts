@@ -171,7 +171,7 @@ export interface WindowDefinition {
 }
 
 export interface PerkDefinition {
-    type: 'juggernog' | 'speed_cola' | 'quick_revive';
+    type: 'juggernog' | 'speed_cola' | 'quick_revive' | 'double_tap';
     id: string;
     zone: number;
     pos: [number, number, number];
