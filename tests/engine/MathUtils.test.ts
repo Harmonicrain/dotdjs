@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { frameIndependentLerp } from './MathUtils';
+import { frameIndependentLerp } from '../../engine/MathUtils';
 
 describe('MathUtils', () => {
     describe('frameIndependentLerp', () => {

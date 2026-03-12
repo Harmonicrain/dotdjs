@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { GameStateData, GameMessage, HellhoundState } from '../../types/index';
+import { GameStateData, GameMessage, HellhoundState, PowerUpType } from '../../types/index';
 import { System } from '../../types/systems';
 import { Zombie } from '../../types/entities';
 import { TimerManager } from '../../engine/TimerManager';
@@ -26,7 +26,32 @@ export interface IZombieDamageContext {
     setIsGameOver(v: boolean): void;
     setFlashColor(v: string | null): void;
     applyDamageToLocalPlayer(amount: number, flashColor: string): void;
+    addPoints(amount: number): void;
+    hasDoublePoints(): boolean;
 }
+
+/**
+ * applyDamageToZombie
+ * 
+ * Shared logic for applying damage to a zombie from any source (projectile, knife, etc.)
+ */
+export const applyDamageToZombie = (z: Zombie, amount: number, ctx: IZombieDamageContext, isHeadshot: boolean = false) => {
+    if (z.isDead) return;
+
+    const gc = ctx.configManager.gameplay;
+    const isInstaKill = !!(ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now());
+    
+    const finalDamage = isInstaKill ? z.maxHealth : amount;
+    z.health -= finalDamage;
+    z.lastHitTime = Date.now();
+
+    ctx.eventBus.emit('PLAYER_HIT', { zombieId: z.id, damage: finalDamage });
+
+    // Points logic
+    const basePoints = isHeadshot ? gc.POINTS_HEADSHOT : gc.POINTS_HIT;
+    const pointsToGive = ctx.hasDoublePoints() ? basePoints * 2 : basePoints;
+    ctx.addPoints(pointsToGive);
+};
 
 /**
  * ZombieDamageSystem

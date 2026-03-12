@@ -1,8 +1,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as BABYLON from '@babylonjs/core';
-import { createProjectileSystem } from './ProjectileSystem';
-import { createMockContext } from '../tests/mocks/mockContext';
+import { createProjectileSystem } from '../../systems/ProjectileSystem';
+import { createMockContext } from '../mocks/mockContext';
 
 describe('ProjectileSystem', () => {
     let ctx: any;

@@ -1,9 +1,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as BABYLON from '@babylonjs/core';
-import { StateManager } from './StateManager';
-import { GameEngine } from '../game/GameEngine';
-import { ResourceManager } from '../managers/ResourceManager';
+import { StateManager } from '../../state/StateManager';
+import { GameEngine } from '../../game/GameEngine';
+import { ResourceManager } from '../../managers/ResourceManager';
 
 describe('StateManager', () => {
     let stateManager: StateManager;

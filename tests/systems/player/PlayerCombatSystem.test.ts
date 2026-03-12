@@ -1,9 +1,9 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as BABYLON from '@babylonjs/core';
-import { createPlayerCombatSystem } from './PlayerCombatSystem';
-import { createMockContext } from '../../tests/mocks/mockContext';
-import { GameAction } from '../../engine/InputManager';
+import { createPlayerCombatSystem } from '../../../systems/player/PlayerCombatSystem';
+import { createMockContext } from '../../mocks/mockContext';
+import { GameAction } from '../../../engine/InputManager';
 
 describe('PlayerCombatSystem', () => {
     let ctx: any;

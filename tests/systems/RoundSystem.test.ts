@@ -1,7 +1,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createRoundSystem } from './RoundSystem';
-import { createMockContext } from '../tests/mocks/mockContext';
+import { createRoundSystem } from '../../systems/RoundSystem';
+import { createMockContext } from '../mocks/mockContext';
 
 describe('RoundSystem', () => {
     let ctx: any;

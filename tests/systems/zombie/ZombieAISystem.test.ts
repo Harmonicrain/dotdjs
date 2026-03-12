@@ -1,9 +1,9 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as BABYLON from '@babylonjs/core';
-import { createZombieAISystem } from './ZombieAISystem';
-import { createMockContext } from '../../tests/mocks/mockContext';
-import { ZombieState } from '../../types/index';
+import { createZombieAISystem } from '../../../systems/zombie/ZombieAISystem';
+import { createMockContext } from '../../mocks/mockContext';
+import { ZombieState } from '../../../types/index';
 
 describe('ZombieAISystem', () => {
     let ctx: any;

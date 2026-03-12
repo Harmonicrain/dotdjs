@@ -11,6 +11,7 @@ export interface GameEvents {
     'BOARD_STATE_CHANGE': { windowId: string };
     'LID_STATE_CHANGE': { groundSpawnId: string };
     'ZOMBIE_DEATH': { id: string, position: BABYLON.Vector3 };
+    'PLAYER_HIT': { zombieId: string, damage: number };
     'GAME_OVER': null;
     'COMMAND_CLOSE_CONSOLE': null;
     'WEAPON_PICKUP_REQUEST': string;

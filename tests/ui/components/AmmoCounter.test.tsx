@@ -1,12 +1,12 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { AmmoCounter } from './AmmoCounter';
-import { useGameStore } from '../../store/useGameStore';
+import { AmmoCounter } from '../../../ui/components/AmmoCounter';
+import { useGameStore } from '../../../store/useGameStore';
 import React from 'react';
 
 // Mock the store
-vi.mock('../../store/useGameStore', () => ({
+vi.mock('../../../store/useGameStore', () => ({
     useGameStore: vi.fn()
 }));
 
