@@ -99,96 +99,138 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 
 ## 📂 Project Structure
 
-```bash
-├── config/                 # Global defaults (gameplay, weapons, enemies, maps)
-│   └── weapons/           # Individual weapon configs (pistol, shotgun, fullauto, semiauto, wonderweapons)
-├── documentation/         # Project docs (ARCHITECTURE.md, MAP_CREATION.md, etc.)
-├── engine/                # Custom Engine core
-│   ├── CommandRegistry.ts # Debug console commands
-│   ├── EventBus.ts       # Global event system
-│   ├── GeometryUtils.ts  # Mesh geometry utilities
-│   ├── InputManager.ts   # Keyboard/mouse/controller input handling
-│   ├── LevelBuilder.ts  # Map geometry and entity builder
-│   ├── MapBuilder.ts    # In-game map building tool
-│   ├── ObjectPool.ts     # Object pooling for performance
-│   ├── Pathfinder.ts     # Navigation pathfinding utilities
-│   ├── SystemManager.ts # ECS system registration and update
-│   └── TimerManager.ts  # Scheduled event handling
-├── game/                 # Lifecycle and Core Render Loop
-│   ├── Game.ts           # Main game orchestrator
-│   ├── GameEngine.ts    # Babylon.js engine wrapper
-│   ├── GameLifecycle.ts # Game state transitions
-│   └── GameLoop.ts      # Render loop with fixed timestep
-├── managers/            # Game Managers
-│   ├── HellhoundManager.ts   # Hellhound enemy spawning/management
-│   ├── MapConfigManager.ts  # Map configuration handling
-│   ├── MapLoader.ts     # Data-driven level setup
-│   ├── MapRegistry.ts   # Map registration
-│   ├── PowerUpManager.ts # Power-up spawn and handling
-│   ├── ResourceManager.ts # Asset loading
-│   ├── SoundManager.ts  # Audio playback
-│   ├── VisualManager.ts # VFX, particles, lighting
-│   └── ZombieManager.ts # Zombie entity management
-├── maps/                 # Data-driven map definitions
-│   ├── warehouse/        # Warehouse 115 map
-│   ├── mapTest/        # Test arena map
-│   ├── barn/            # The Barn map
-│   ├── _template/       # Map template for new maps
-│   ├── MapTextureResolver.ts # Texture resolution
-│   └── validateMapDefinition.ts # Map validation
-├── factories/             # Mesh Factories
-│   ├── BuildingFactory.ts    # Procedural building geometry
-│   ├── gameplay/        # Power-ups, power switches
-│   ├── mysterybox/     # Mystery Box
-│   ├── packapunch/     # Pack-a-Punch machine
-│   ├── perks/          # Perk machines (Juggernog, Speed Cola, Quick Revive)
-│   ├── RemotePlayerFactory.ts # Remote player meshes
-│   ├── WeaponMeshFactory.ts   # FPS weapon meshes
-│   └── ZombieMeshFactory.ts    # Zombie meshes
-├── network/            # P2P Networking
-│   ├── InterpolationBuffer.ts  # Remote entity smoothing
-│   ├── NetworkDeltaCompressor.ts # Bandwidth optimization
-│   ├── NetworkMessageHandler.ts # Message processing
-│   └── useMultiplayer.ts       # Multiplayer hook
-├── public/             # Static assets
-│   └── sounds/        # Audio files (weapons, powerups, ambient)
-├── state/             # State Management
-│   ├── RemotePlayerState.ts # Remote player state
-│   ├── StateManager.ts # Central game state (Single Source of Truth)
-│   └── UIBridge.ts    # Engine-to-UI communication
-├── store/            # Zustand store for React UI
-├── systems/          # Modular ECS-style logic systems
-│   ├── interaction/  # Interaction system
-│   │   ├── handlers/ # Interaction handlers (Door, Perk, WallBuy, etc.)
-│   │   └── types.ts  # Interaction types
-│   ├── DownedSystem.ts      # Downed state handling
-│   ├── InteractionSystem.ts # Player world interactions
-│   ├── MysteryBoxSystem.ts  # Mystery Box mechanics
-│   ├── NetworkSystem.ts     # Multiplayer sync
-│   ├── PlayerCombatSystem.ts # Shooting, reloading, knifing
-│   ├── PlayerMovementSystem.ts # Movement physics
-│   ├── PowerUpSystem.ts    # Power-up effects
-│   ├── ProjectileSystem.ts # Bullet/projectile handling
-│   ├── RemotePlayerSystem.ts # Remote player interpolation
-│   ├── ReviveSystem.ts     # Cooperative revive
-│   ├── RoundSystem.ts      # Round progression
-│   ├── WeaponViewSystem.ts # Weapon view/animations
-│   ├── ZoneSystem.ts       # Zone management
-│   ├── ZombieAISystem.ts   # Pathfinding and movement
-│   ├── ZombieAnimationSystem.ts # Zombie animations
-│   ├── ZombieCleanupSystem.ts   # Entity lifecycle
-│   └── ZombieDamageSystem.ts    # Damage handling
-├── types/            # Strict TypeScript definitions
-├── ui/               # React-based HUD and Menus
-│   ├── components/   # HUD components (AmmoCounter, Crosshair, Console, etc.)
-│   ├── GameMenuManager.ts # Menu state management
-│   ├── GameMenus.tsx      # Main menu, host/join lobbies
-│   ├── GameScene.tsx      # Canvas wrapper
-│   └── HUD.tsx           # Main HUD layout
-├── App.tsx           # Root React component
-├── index.tsx         # Entry point
-├── vite.config.ts   # Vite configuration
-└── tsconfig.json    # TypeScript configuration
+```
+config/                    # Global gameplay defaults
+├── gameplay.ts            # GAME_CONFIG, ZOMBIE_CONFIG, COMBAT_CONFIG, ROUND_CONFIG, etc.
+├── enemies.ts             # Hellhound and mystery box defaults
+├── maps.ts                # Map list for lobby menu
+├── modelTransforms.ts     # Weapon model positioning data
+├── models.ts              # Model URL defaults
+├── textures.ts            # Texture URL defaults
+└── weapons/               # Weapon configs (pistol, shotgun, fullauto, semiauto, wonderweapons)
+    └── index.ts           # Exports WEAPON_CONFIGS[] and UPGRADED_WEAPON_CONFIGS{}
+
+engine/                    # Custom engine core
+├── CommandRegistry.ts     # Debug console commands (/debug, /give, /tp, etc.)
+├── EventBus.ts            # Typed pub/sub event system
+├── GeometryUtils.ts       # Mesh/geometry creation utilities
+├── InputManager.ts        # Keyboard, mouse, controller input (action-based)
+├── LevelBuilder.ts        # Builds map geometry, doors, windows, lights from MapDefinition
+├── MathUtils.ts           # Math helpers
+├── MinHeap.ts             # Priority queue for pathfinding
+├── ObjectPool.ts          # Generic object pool for performance
+├── SystemManager.ts       # ECS system registration, priority sorting, update loop
+└── TimerManager.ts        # Scheduled one-shot event handling
+
+game/                      # Lifecycle and render loop
+├── Game.ts                # Main orchestrator — creates everything, registers systems
+├── GameEngine.ts          # Babylon.js engine wrapper, projectile pool
+├── GameLifecycle.ts       # Start game, return to menu, transitions
+└── GameLoop.ts            # Per-frame callback with pause/freeze logic
+
+managers/                  # Game managers (created in Game.ts, injected into StateManager)
+├── HellhoundManager.ts   # Hellhound enemy spawning and management
+├── MapConfigManager.ts    # Runtime merge of global + per-map configs
+├── MapLoader.ts           # Data-driven level setup from MapDefinition
+├── MapRegistry.ts         # Map registration (MAP_DEFINITIONS record)
+├── PowerUpManager.ts      # Power-up spawning, activation, effects
+├── ResourceManager.ts     # GPU asset caching (textures, materials) with dispose()
+├── SoundManager.ts        # Audio playback (load, play, stopAll, resumeAll)
+├── VisualManager.ts       # VFX orchestrator → delegates to sub-managers
+├── ZombieManager.ts       # Zombie entity creation, death handling, mesh pooling
+└── visual/
+    ├── DecalManager.ts    # Blood/bullet decals on surfaces
+    ├── GoreManager.ts     # Dismemberment gore pieces
+    └── ParticleManager.ts # All particle systems (blood, explosions, spawn effects, etc.)
+
+maps/                      # Data-driven map definitions
+├── _template/             # Starter template for new maps
+├── warehouse/             # Warehouse 115 map
+├── mapTest/               # Test arena map
+├── barn/                  # The Barn map
+├── ADDING_MAPS.md         # Step-by-step guide for adding maps
+├── MapTextureResolver.ts  # Texture loading for maps
+├── types.ts               # MapConfiguration, MapGameplayConfig, etc.
+└── validateMapDefinition.ts
+
+factories/                  # Mesh factories (procedural geometry)
+├── BuildingFactory.ts     # Procedural building geometry
+├── RemotePlayerFactory.ts # Remote player visual representation
+├── WeaponMeshFactory.ts   # First-person weapon meshes
+├── ZombieMeshFactory.ts   # Zombie/hellhound mesh pooling (acquire/release pattern)
+├── gameplay/              # Power switch, power-up meshes
+├── mysterybox/            # Mystery Box mesh
+├── packapunch/            # Pack-a-Punch machine mesh
+└── perks/                 # Perk machine meshes (Juggernog, Speed Cola, Quick Revive)
+
+network/                   # P2P networking
+├── InterpolationBuffer.ts # Remote entity position smoothing
+├── NetworkDeltaCompressor.ts # Bandwidth optimization (delta encoding)
+├── NetworkMessageHandler.ts  # Incoming message processing
+└── useMultiplayer.ts      # React hook for multiplayer connection lifecycle
+
+state/                     # State management
+├── RemotePlayerState.ts   # Remote player state container
+├── StateManager.ts        # THE single source of truth for all game state
+└── UIBridge.ts            # Engine → Zustand bridge with throttling
+
+store/
+└── useGameStore.ts        # Zustand store (PlayerFields, GameFields, RemoteFields)
+
+systems/                   # Modular ECS-style logic systems
+├── index.ts               # Re-exports all system factory functions
+├── InteractionSystem.ts   # Player world interactions (doors, wallbuys, perks, etc.)
+├── MysteryBoxSystem.ts    # Mystery Box state machine
+├── NetworkSystem.ts       # Multiplayer sync (sends state/input at 20Hz)
+├── PowerUpSystem.ts       # Power-up spawning, pickup, active effect lifecycle
+├── ProjectileSystem.ts    # Bullet/projectile physics and hit detection
+├── RemotePlayerSystem.ts  # Remote player interpolation rendering
+├── RoundSystem.ts         # Round progression, intermissions, dog rounds
+├── ZoneSystem.ts          # Zone management (which zone is the player in?)
+├── interaction/
+│   ├── types.ts           # InteractionHandler interface
+│   └── handlers/          # One handler per interactable type:
+│       ├── DoorHandler.ts
+│       ├── MysteryBoxHandler.ts
+│       ├── PackAPunchHandler.ts
+│       ├── PerkHandler.ts
+│       ├── PowerHandler.ts
+│       ├── SpawnHoleLidHandler.ts
+│       ├── WallBuyHandler.ts
+│       └── WindowHandler.ts
+├── player/
+│   ├── PlayerMovementSystem.ts  # Movement physics, sprinting, jumping, crouching
+│   ├── PlayerCombatSystem.ts    # Shooting, reloading, knifing
+│   ├── WeaponViewSystem.ts      # Weapon view model animations (sway, bob, ADS)
+│   ├── DownedSystem.ts          # Downed state handling (bleed-out timer)
+│   └── ReviveSystem.ts          # Cooperative revive mechanics
+└── zombie/
+    ├── ZombieAISystem.ts          # Crowd-based pathfinding and chase logic
+    ├── ZombieHellhoundAISystem.ts # Hellhound state machine (spawn→chase→attack→recovery)
+    ├── ZombieWindowAISystem.ts    # Window barrier sub-machine (approach→attack→enter)
+    ├── ZombieSpawnSystem.ts       # Spawn logic (ground holes and windows)
+    ├── ZombieAnimationSystem.ts   # Skeleton animations (walk, idle, attack)
+    ├── ZombieCleanupSystem.ts     # Dead zombie disposal, stuck timeout
+    ├── ZombieDamageSystem.ts      # Damage handling, authority checks
+    ├── ZombieSyncSystem.ts        # Network sync for zombie state
+    └── zombieAIUtils.ts           # Shared AI utility functions
+
+types/                     # TypeScript type definitions
+├── index.ts               # Re-exports all types
+├── entities.ts            # Zombie, Projectile, WindowBarrier, GroundSpawn
+├── player.ts              # WeaponConfig, WeaponState, RemoteGameState
+├── world.ts               # MapDefinition, DoorDefinition, ZoneDefinition, etc.
+├── ui.ts                  # GameStateData, PowerUpType, GameMessage, all state slices
+├── systems.ts             # System interface, MysteryBoxSystem, IInteractionSystem
+└── network.ts             # Network-specific types
+
+ui/                        # React-based HUD and menus
+├── HUD.tsx                # Main HUD layout (composes all HUD components)
+├── GameScene.tsx           # Canvas wrapper + game initialization
+├── GameMenuManager.tsx    # Menu state management (main menu, pause, game over)
+├── GameMenus.tsx          # Menu entry point
+├── components/            # 20 HUD components (AmmoCounter, Crosshair, RoundDisplay, etc.)
+└── menus/                 # MainMenu, HostLobby, JoinLobby
 ```
 
 ---
