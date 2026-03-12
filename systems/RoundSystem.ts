@@ -34,19 +34,25 @@ export interface IRoundContext {
  * handling intermissions, and calculating round-based difficulty scaling.
  */
 export const createRoundSystem = (ctx: IRoundContext): System => {
-    
-    // Listen for zombie deaths to update round-based death counter
-    ctx.eventBus.on('ZOMBIE_DEATH', () => {
+     
+    // Handler for zombie death events - named for proper disposal
+    const zombieDeathHandler = () => {
         ctx.gameState.zombiesKilledInRound = (ctx.gameState.zombiesKilledInRound || 0) + 1;
         ctx.setZombiesKilledInRound(ctx.gameState.zombiesKilledInRound);
         ctx.setActiveZombiesCount(ctx.gameState.zombiesAlive);
-    });
+    };
 
-    ctx.eventBus.on('HELLHOUND_DEATH', () => {
+    // Handler for hellhound death events - named for proper disposal
+    const hellhoundDeathHandler = () => {
         ctx.gameState.zombiesKilledInRound = (ctx.gameState.zombiesKilledInRound || 0) + 1;
         ctx.setZombiesKilledInRound(ctx.gameState.zombiesKilledInRound);
         ctx.setActiveZombiesCount(ctx.gameState.zombiesAlive);
-    });
+    };
+
+    // Listen for zombie deaths to update round-based death counter
+    ctx.eventBus.on('ZOMBIE_DEATH', zombieDeathHandler);
+
+    ctx.eventBus.on('HELLHOUND_DEATH', hellhoundDeathHandler);
 
     const calculateZombiesInRound = (round: number) => {
         const rc = ctx.configManager.round;
@@ -167,6 +173,12 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
                     ctx.send({ type: 'RESPAWN', round: gs.round + 1, points: rc.RESPAWN_POINTS_BASE + ((gs.round + 1) * rc.RESPAWN_POINTS_PER_ROUND) });
                 }
             }
+        },
+
+        // Clean up EventBus handlers to prevent memory leaks
+        dispose: () => {
+            ctx.eventBus.off('ZOMBIE_DEATH', zombieDeathHandler);
+            ctx.eventBus.off('HELLHOUND_DEATH', hellhoundDeathHandler);
         }
     };
 };

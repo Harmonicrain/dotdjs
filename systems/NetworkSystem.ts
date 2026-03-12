@@ -41,23 +41,26 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
 
     // Reset compressor snapshot whenever a new game session begins so we
     // never diff against state from a previous play-through.
-    ctx.eventBus.on('GAME_STARTED', () => {
+    const gameStartedHandler = () => {
         compressor.reset();
         windowsDirty = true;
-    });
+    };
+    ctx.eventBus.on('GAME_STARTED', gameStartedHandler);
 
     // Listen for board changes to mark windows dirty
-    ctx.eventBus.on('BOARD_STATE_CHANGE', () => {
+    const boardStateChangeHandler = () => {
         windowsDirty = true;
         compressor.markHostDirty('windows');
-    });
+    };
+    ctx.eventBus.on('BOARD_STATE_CHANGE', boardStateChangeHandler);
 
     // Door state changes when a door open request is processed.
     // Marking dirty here is safe even if the request is ultimately rejected —
     // the comparison will just confirm no change and clear the flag again.
-    ctx.eventBus.on('DOOR_OPEN_REQUEST', () => {
+    const doorOpenRequestHandler = () => {
         compressor.markHostDirty('doors');
-    });
+    };
+    ctx.eventBus.on('DOOR_OPEN_REQUEST', doorOpenRequestHandler);
 
     return {
         name: 'network',
@@ -178,5 +181,12 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                 ctx.send(delta as GameMessage);
             }
         },
+
+        // Clean up EventBus handlers to prevent memory leaks
+        dispose: () => {
+            ctx.eventBus.off('GAME_STARTED', gameStartedHandler);
+            ctx.eventBus.off('BOARD_STATE_CHANGE', boardStateChangeHandler);
+            ctx.eventBus.off('DOOR_OPEN_REQUEST', doorOpenRequestHandler);
+        }
     };
 };
