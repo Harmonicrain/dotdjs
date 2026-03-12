@@ -7,6 +7,7 @@ export * from './BuildingFactory';
 export * from './mysterybox/MysteryBoxFactory';
 export * from './packapunch/PackAPunchFactory';
 export * from './perks/SpeedColaFactory';
+export * from './perks/DoubleTapFactory';
 export * from './perks/QuickReviveFactory';
 export * from './perks/JuggernogFactory';
 export * from './gameplay/PowerSwitchFactory';

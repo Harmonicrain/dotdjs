@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
-import { createJuggernog, createSpeedCola, createQuickRevive, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
+import { createJuggernog, createSpeedCola, createQuickRevive, createDoubleTap, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
 import { createBuilding } from '../factories/BuildingFactory';
 import { GAME_CONFIG, MYSTERY_BOX_CONFIG } from '../config';
 
@@ -625,6 +625,7 @@ export class LevelBuilder {
             juggernog: GAME_CONFIG.JUGGERNOG_COST,
             speed_cola: GAME_CONFIG.SPEED_COLA_COST,
             quick_revive: GAME_CONFIG.QUICK_REVIVE_COST,
+            double_tap: GAME_CONFIG.DOUBLE_TAP_COST,
         };
 
         perks.forEach(p => {
@@ -635,6 +636,8 @@ export class LevelBuilder {
                 machine = createJuggernog(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['juggernog'], this.loadPromises);
             } else if (p.type === 'speed_cola') {
                 machine = createSpeedCola(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['speed_cola'], this.loadPromises);
+            } else if (p.type === 'double_tap') {
+                machine = createDoubleTap(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['double_tap'], this.loadPromises);
             } else {
                 machine = createQuickRevive(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['quick_revive'], this.loadPromises);
             }
