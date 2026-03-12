@@ -15,6 +15,13 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
     trigger.visibility = 0;
     trigger.checkCollisions = false;
 
+    // Collision Box
+    const collisionBox = BABYLON.MeshBuilder.CreateBox("papCollision", {width: 2.1, height: 1.7, depth: 1.3}, scene);
+    collisionBox.parent = root;
+    collisionBox.position.y = 0.85;
+    collisionBox.visibility = 0;
+    collisionBox.checkCollisions = true;
+
     // Weapon Animation Anchor (Critical for InteractionSystem animations)
     // This node represents where the weapon floats during the upgrade sequence.
     const anchor = new BABYLON.TransformNode("papWeaponAnchor", scene);
@@ -38,7 +45,7 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
             // Register shadow casters & collisions
             result.meshes.forEach(m => {
                 if (m instanceof BABYLON.Mesh) {
-                    m.checkCollisions = true;
+                    m.checkCollisions = false;
                     // Limit lights to prevent shader overflow
                     if (m.material) {
                         (m.material as any).maxSimultaneousLights = 4;

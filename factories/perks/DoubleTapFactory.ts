@@ -15,6 +15,13 @@ export const createDoubleTap = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
     trigger.visibility = 0;
     trigger.checkCollisions = false;
 
+    // Collision Box
+    const collisionBox = BABYLON.MeshBuilder.CreateBox("dtCollision", {height: 2.4, width: 1.5, depth: 1.1}, scene);
+    collisionBox.parent = root;
+    collisionBox.position.y = 1.1;
+    collisionBox.visibility = 0;
+    collisionBox.checkCollisions = true;
+
     // Load 3D Model
     const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.DOUBLE_TAP, scene)
         .then((result) => {
@@ -33,7 +40,7 @@ export const createDoubleTap = (scene: BABYLON.Scene, shadowCasters: BABYLON.Abs
             result.meshes.forEach(m => {
                 if (m instanceof BABYLON.Mesh) {
                     shadowCasters.push(m);
-                    m.checkCollisions = true;
+                    m.checkCollisions = false;
 
                     // Limit lights to prevent shader overflow
                     if (m.material) {
