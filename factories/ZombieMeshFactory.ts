@@ -332,17 +332,14 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
         return mat;
     });
 
-    const head = BABYLON.MeshBuilder.CreateSphere("zombie_head", { diameter: 0.4 }, scene);
-    head.parent = torso;
-    head.position = new BABYLON.Vector3(0, 0.575, 0);
-    head.rotation.x = -Math.PI / 12; // Tilt up to compensate for torso lean
-    head.material = headMat;
+    const headBase = BABYLON.MeshBuilder.CreateSphere("zombie_head_base", { diameter: 0.4 }, scene);
+    headBase.material = headMat;
 
     const brow = BABYLON.MeshBuilder.CreateBox("brow", { width: 0.32, height: 0.06, depth: 0.14 }, scene);
-    brow.parent = head; brow.position = new BABYLON.Vector3(0, 0.1, 0.12); brow.material = headMat;
+    brow.parent = headBase; brow.position = new BABYLON.Vector3(0, 0.1, 0.12); brow.material = headMat;
 
     const jaw = BABYLON.MeshBuilder.CreateBox("jaw", { width: 0.25, height: 0.1, depth: 0.2 }, scene);
-    jaw.parent = head; jaw.position = new BABYLON.Vector3(0, -0.15, 0.05);
+    jaw.parent = headBase; jaw.position = new BABYLON.Vector3(0, -0.15, 0.05);
     jaw.rotation.x = 0.3;
     jaw.material = headMat;
 
@@ -361,56 +358,66 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
     });
 
     const eyeL = BABYLON.MeshBuilder.CreateSphere("zombie_eye_l", { diameter: 0.05 }, scene);
-    eyeL.parent = head; eyeL.position = new BABYLON.Vector3(-0.1, 0.03, 0.16); eyeL.material = eyeMat;
+    eyeL.parent = headBase; eyeL.position = new BABYLON.Vector3(-0.1, 0.03, 0.16); eyeL.material = eyeMat;
 
     const eyeR = BABYLON.MeshBuilder.CreateSphere("zombie_eye_r", { diameter: 0.08 }, scene);
-    eyeR.parent = head; eyeR.position = new BABYLON.Vector3(0.1, 0.06, 0.15); eyeR.material = eyeMat;
+    eyeR.parent = headBase; eyeR.position = new BABYLON.Vector3(0.1, 0.06, 0.15); eyeR.material = eyeMat;
 
-    // Shoulders — spheres positioned at the edge of the torso top
-    const shoulderL = BABYLON.MeshBuilder.CreateSphere("shoulderL", { diameter: 0.20, segments: 6 }, scene);
-    shoulderL.parent = torso;
-    shoulderL.position = new BABYLON.Vector3(-0.24, 0.26, 0);
-    shoulderL.material = bodyMat;
+    // Merge Head
+    headBase.computeWorldMatrix(true);
+    brow.computeWorldMatrix(true);
+    jaw.computeWorldMatrix(true);
+    teeth.computeWorldMatrix(true);
+    eyeL.computeWorldMatrix(true);
+    eyeR.computeWorldMatrix(true);
+    const head = BABYLON.Mesh.MergeMeshes([headBase, brow, jaw, teeth, eyeL, eyeR], true, true, undefined, false, true) as BABYLON.Mesh;
+    head.name = "zombie_head";
+    head.parent = torso;
+    head.position = new BABYLON.Vector3(0, 0.575, 0);
+    head.rotation.x = -Math.PI / 12; // Tilt up to compensate for torso lean
 
-    const shoulderR = BABYLON.MeshBuilder.CreateSphere("shoulderR", { diameter: 0.20, segments: 6 }, scene);
-    shoulderR.parent = torso;
-    shoulderR.position = new BABYLON.Vector3(0.24, 0.26, 0);
-    shoulderR.material = bodyMat;
 
-    // Arms — tapered cylinders, pivot at top so they swing from shoulder
-    // Arm height=0.75, pivot at top (0.375). Position the arm so its top
-    // overlaps into the shoulder sphere (no gap).
-    const armL = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_l", {
+    // Arms — built at origin, merged, then positioned
+    const armLBase = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_l_base", {
         diameterTop: 0.14, diameterBottom: 0.09, height: 0.75, tessellation: 8
     }, scene);
-    armL.parent = torso;
-    armL.setPivotPoint(new BABYLON.Vector3(0, 0.375, 0));
-    // Place arm top inside the shoulder sphere centre
-    armL.position = new BABYLON.Vector3(-0.28, -0.10, 0.05);
-    armL.rotation.x = -Math.PI / 2.5;
-    armL.material = bodyMat;
+    armLBase.material = bodyMat;
 
-    // Left hand
     const handL = BABYLON.MeshBuilder.CreateSphere("hand_l", { diameter: 0.12, segments: 6 }, scene);
-    handL.parent = armL;
+    handL.parent = armLBase;
     handL.position = new BABYLON.Vector3(0, -0.375, 0);
     handL.material = bodyMat;
 
-    const armR = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_r", {
+    // Merge Left Arm
+    armLBase.computeWorldMatrix(true);
+    handL.computeWorldMatrix(true);
+    const armL = BABYLON.Mesh.MergeMeshes([armLBase, handL], true, true, undefined, false, true) as BABYLON.Mesh;
+    armL.name = "zombie_arm_l";
+    armL.parent = torso;
+    armL.setPivotPoint(new BABYLON.Vector3(0, 0.375, 0));
+    armL.position = new BABYLON.Vector3(-0.28, -0.10, 0.05);
+    armL.rotation.x = -Math.PI / 2.5;
+
+
+    const armRBase = BABYLON.MeshBuilder.CreateCylinder("zombie_arm_r_base", {
         diameterTop: 0.14, diameterBottom: 0.09, height: 0.75, tessellation: 8
     }, scene);
-    armR.parent = torso;
-    armR.setPivotPoint(new BABYLON.Vector3(0, 0.375, 0));
-    // Place arm top inside the shoulder sphere centre
-    armR.position = new BABYLON.Vector3(0.28, -0.10, 0.05);
-    armR.rotation.x = -Math.PI / 2.5;
-    armR.material = bodyMat;
+    armRBase.material = bodyMat;
 
-    // Right hand
     const handR = BABYLON.MeshBuilder.CreateSphere("hand_r", { diameter: 0.12, segments: 6 }, scene);
-    handR.parent = armR;
+    handR.parent = armRBase;
     handR.position = new BABYLON.Vector3(0, -0.375, 0);
     handR.material = bodyMat;
+
+    // Merge Right Arm
+    armRBase.computeWorldMatrix(true);
+    handR.computeWorldMatrix(true);
+    const armR = BABYLON.Mesh.MergeMeshes([armRBase, handR], true, true, undefined, false, true) as BABYLON.Mesh;
+    armR.name = "zombie_arm_r";
+    armR.parent = torso;
+    armR.setPivotPoint(new BABYLON.Vector3(0, 0.375, 0));
+    armR.position = new BABYLON.Vector3(0.28, -0.10, 0.05);
+    armR.rotation.x = -Math.PI / 2.5;
 
     root.checkCollisions = true;
     root.ellipsoid = new BABYLON.Vector3(0.4, 0.9, 0.4);
@@ -437,31 +444,53 @@ const buildHellhoundTemplate = (scene: BABYLON.Scene, resourceManager: ResourceM
         mat.maxSimultaneousLights = 8;
         return mat;
     });
-    const body = BABYLON.MeshBuilder.CreateBox("hellhound_body", { width: 0.6, height: 0.6, depth: 1.0 }, scene);
+    const bodyBase = BABYLON.MeshBuilder.CreateBox("hellhound_body_base", { width: 0.6, height: 0.6, depth: 1.0 }, scene);
+    bodyBase.material = furMat;
+
+    const tail = BABYLON.MeshBuilder.CreateBox("hellhound_tail", { width: 0.2, height: 0.2, depth: 0.6 }, scene);
+    tail.parent = bodyBase;
+    tail.position = new BABYLON.Vector3(0, 0.2 - 0.6, -0.6); // relative to body center which is at y=0.6, so we adjust
+    tail.position.y += 0.6; // We'll build body at origin, then move merged body up to y=0.6
+    tail.position = new BABYLON.Vector3(0, -0.4, -0.6); // Adjusted for building at origin
+    tail.rotation.x = -Math.PI / 6;
+    tail.material = furMat;
+
+    // Merge Body
+    bodyBase.computeWorldMatrix(true);
+    tail.computeWorldMatrix(true);
+    const body = BABYLON.Mesh.MergeMeshes([bodyBase, tail], true, true, undefined, false, true) as BABYLON.Mesh;
+    body.name = "hellhound_body";
     body.parent = root;
     body.position.y = 0.6;
-    body.material = furMat;
+
+
     const headPivot = new BABYLON.TransformNode("headPivot", scene);
     headPivot.parent = body;
     headPivot.position = new BABYLON.Vector3(0, 0.3, 0.5);
-    const head = BABYLON.MeshBuilder.CreateBox("hellhound_head", { size: 0.5 }, scene);
-    head.parent = headPivot;
-    head.position.y = 0.25;
-    head.material = furMat;
+
+    const headBase = BABYLON.MeshBuilder.CreateBox("hellhound_head_base", { size: 0.5 }, scene);
+    headBase.material = furMat;
+
     const snout = BABYLON.MeshBuilder.CreateBox("hellhound_snout", { width: 0.25, height: 0.2, depth: 0.3 }, scene);
-    snout.parent = head;
+    snout.parent = headBase;
     snout.position = new BABYLON.Vector3(0, -0.1, 0.35);
     snout.material = darkMat;
+
     const earL = BABYLON.MeshBuilder.CreateBox("hellhound_earL", { width: 0.15, height: 0.15, depth: 0.1 }, scene);
-    earL.parent = head; earL.position = new BABYLON.Vector3(-0.15, 0.3, 0); earL.material = furMat;
+    earL.parent = headBase; earL.position = new BABYLON.Vector3(-0.15, 0.3, 0); earL.material = furMat;
 
     const earR = BABYLON.MeshBuilder.CreateBox("hellhound_earR", { width: 0.15, height: 0.15, depth: 0.1 }, scene);
-    earR.parent = head; earR.position = new BABYLON.Vector3(0.15, 0.3, 0); earR.material = furMat;
-    const tail = BABYLON.MeshBuilder.CreateBox("hellhound_tail", { width: 0.2, height: 0.2, depth: 0.6 }, scene);
-    tail.parent = body;
-    tail.position = new BABYLON.Vector3(0, 0.2, -0.6);
-    tail.rotation.x = -Math.PI / 6;
-    tail.material = furMat;
+    earR.parent = headBase; earR.position = new BABYLON.Vector3(0.15, 0.3, 0); earR.material = furMat;
+
+    // Merge Head
+    headBase.computeWorldMatrix(true);
+    snout.computeWorldMatrix(true);
+    earL.computeWorldMatrix(true);
+    earR.computeWorldMatrix(true);
+    const head = BABYLON.Mesh.MergeMeshes([headBase, snout, earL, earR], true, true, undefined, false, true) as BABYLON.Mesh;
+    head.name = "hellhound_head";
+    head.parent = headPivot;
+    head.position.y = 0.25;
     const createLeg = (name: string, x: number, z: number) => {
         const leg = BABYLON.MeshBuilder.CreateBox("hellhound_" + name, { width: 0.2, height: 0.6, depth: 0.2 }, scene);
         leg.parent = root;
