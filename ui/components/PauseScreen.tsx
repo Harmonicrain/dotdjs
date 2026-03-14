@@ -1,5 +1,6 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { OptionsScreen } from './OptionsScreen';
 
 interface PauseScreenProps {
     onResume: () => void;
@@ -57,6 +58,16 @@ const MenuButton: React.FC<{
 );
 
 export const PauseScreen: React.FC<PauseScreenProps> = ({ onResume, onQuit }) => {
+    const [showOptions, setShowOptions] = useState(false);
+
+    const handleBackFromOptions = () => {
+        setShowOptions(false);
+    };
+
+    if (showOptions) {
+        return <OptionsScreen onBack={handleBackFromOptions} />;
+    }
+
     return (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-auto">
             {/* Background overlay */}
@@ -94,6 +105,10 @@ export const PauseScreen: React.FC<PauseScreenProps> = ({ onResume, onQuit }) =>
                 <div className="flex flex-col gap-4 items-center">
                     <MenuButton onClick={onResume} variant="primary">
                         Resume Game
+                    </MenuButton>
+                    
+                    <MenuButton onClick={() => setShowOptions(true)} variant="primary">
+                        Options
                     </MenuButton>
                     
                     <MenuButton onClick={onQuit} variant="secondary">
