@@ -132,6 +132,7 @@ export const createMockContext = (overrides: Partial<GameStateData> = {}) => {
             isDown: vi.fn(() => false),
             justPressed: vi.fn(() => false),
             isFireInputActive: vi.fn(() => false),
+            getMovementVector: vi.fn(() => ({ x: 0, y: 0 })),
         } as any,
         send: vi.fn(),
         addPoints: vi.fn(),

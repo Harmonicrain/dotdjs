@@ -137,6 +137,7 @@ export class InputManager {
   private controllerAxes: number[] = [];
   private gamepadLook = { x: 0, y: 0 };
   private controllerConnected = false;
+  private _movementVector = { x: 0, y: 0 };
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // DERIVED ACTION STATES - Computed from active device only
@@ -555,6 +556,10 @@ export class InputManager {
   public getGamepadLook() {
     return this.gamepadLook;
   }
+
+  public getMovementVector(): { x: number; y: number } {
+    return this._movementVector;
+  }
   
   public isControllerConnected(): boolean {
     return this.controllerConnected;
@@ -588,6 +593,21 @@ export class InputManager {
     // Zero out gamepad look since we're not using it
     this.gamepadLook.x = 0;
     this.gamepadLook.y = 0;
+
+    // Compute keyboard movement vector (binary, normalized for diagonals)
+    let kx = 0, ky = 0;
+    if (this.activeKeys.has(KM_BINDINGS[GameAction.MOVE_RIGHT]?.keyboard ?? '')) kx += 1;
+    if (this.activeKeys.has(KM_BINDINGS[GameAction.MOVE_LEFT]?.keyboard ?? '')) kx -= 1;
+    if (this.activeKeys.has(KM_BINDINGS[GameAction.MOVE_FORWARD]?.keyboard ?? '')) ky -= 1;
+    if (this.activeKeys.has(KM_BINDINGS[GameAction.MOVE_BACK]?.keyboard ?? '')) ky += 1;
+    const kMag = Math.sqrt(kx * kx + ky * ky);
+    if (kMag > 0) {
+      this._movementVector.x = kx / kMag;
+      this._movementVector.y = ky / kMag;
+    } else {
+      this._movementVector.x = 0;
+      this._movementVector.y = 0;
+    }
 
     // Compute action states from KB/M only
     for (const action of Object.values(GameAction)) {
@@ -624,7 +644,9 @@ export class InputManager {
       this.controllerButtons = [];
       this.controllerAxes = [];
       this.gamepadLook = { x: 0, y: 0 };
-      
+      this._movementVector.x = 0;
+      this._movementVector.y = 0;
+
       // Clear all action states
       for (const action of Object.values(GameAction)) {
         this.actionStates.set(action, false);
@@ -656,6 +678,20 @@ export class InputManager {
     // Log controller look when debug controls is active
     if (this.debugControlsActive && (this.gamepadLook.x !== 0 || this.gamepadLook.y !== 0)) {
       console.log(`[DEBUG_CONTROLS] CONTROLLER look: rawX=${rawX.toFixed(3)}, rawY=${rawY.toFixed(3)}, processed=(${this.gamepadLook.x.toFixed(3)}, ${this.gamepadLook.y.toFixed(3)})`);
+    }
+
+    // Scaled radial deadzone for left stick movement vector
+    const lsX = gp.axes[0] || 0;
+    const lsY = gp.axes[1] || 0;
+    const mag = Math.sqrt(lsX * lsX + lsY * lsY);
+    const moveDz = 0.2;
+    if (mag < moveDz) {
+      this._movementVector.x = 0;
+      this._movementVector.y = 0;
+    } else {
+      const scaled = Math.min((mag - moveDz) / (1 - moveDz), 1);
+      this._movementVector.x = (lsX / mag) * scaled;
+      this._movementVector.y = (lsY / mag) * scaled;
     }
 
     // Compute action states from controller only

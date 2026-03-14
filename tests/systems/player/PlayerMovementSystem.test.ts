@@ -209,17 +209,15 @@ describe('PlayerMovementSystem', () => {
 
     it('should use WALK_SPEED by default', () => {
         ctx.gameState.hasStarted = true;
-        
-        // Trigger movement calculation: need direction input to set speed
+
+        // Full tilt forward via movement vector
         ctx.camera.getDirectionToRef.mockImplementation((axis: BABYLON.Vector3, result: BABYLON.Vector3) => {
             result.set(0, 0, 1);
         });
-        ctx.inputManager.isDown.mockImplementation((action: GameAction) => 
-            action === GameAction.MOVE_FORWARD
-        );
-        
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: -1 });
+
         system.update(16, Date.now());
-        
+
         expect(ctx.camera.speed).toBe(GAME_CONFIG.WALK_SPEED);
     });
 
@@ -228,20 +226,21 @@ describe('PlayerMovementSystem', () => {
         ctx.camera.getDirectionToRef.mockImplementation((axis: BABYLON.Vector3, result: BABYLON.Vector3) => {
             result.set(0, 0, 1);
         });
-        ctx.inputManager.isDown.mockImplementation((action: GameAction) => 
-            action === GameAction.MOVE_FORWARD || action === GameAction.SPRINT
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: -1 });
+        ctx.inputManager.isDown.mockImplementation((action: GameAction) =>
+            action === GameAction.SPRINT
         );
-        
+
         system.update(16, Date.now());
-        
+
         expect(ctx.camera.speed).toBe(GAME_CONFIG.SPRINT_SPEED);
     });
 
     it('should calculate movement direction correctly', () => {
         ctx.gameState.hasStarted = true;
         ctx.camera.position.set(0, 10, 0);
-        
-        // Move forward and right
+
+        // Move forward-right (diagonal)
         ctx.camera.getDirectionToRef.mockImplementation((axis: BABYLON.Vector3, result: BABYLON.Vector3) => {
             if (axis.equals(new BABYLON.Vector3(0, 0, 1))) {
                 result.set(0, 0, 1);
@@ -249,18 +248,15 @@ describe('PlayerMovementSystem', () => {
                 result.set(1, 0, 0);
             }
         });
-        
-        ctx.inputManager.isDown.mockImplementation((action: GameAction) => 
-            action === GameAction.MOVE_FORWARD || action === GameAction.MOVE_RIGHT
-        );
-        
-        // Spy on addInPlaceFromFloats
+
+        // Normalized diagonal: forward(-y) + right(+x)
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0.707, y: -0.707 });
+
         const moveSpy = vi.fn();
-        const originalAddInPlaceFromFloats = ctx.camera.cameraDirection.addInPlaceFromFloats;
         ctx.camera.cameraDirection.addInPlaceFromFloats = moveSpy;
-        
+
         system.update(16, Date.now());
-        
+
         expect(moveSpy).toHaveBeenCalled();
         const [dx, dy, dz] = moveSpy.mock.calls[0];
         expect(dx).toBeGreaterThan(0);
@@ -270,33 +266,62 @@ describe('PlayerMovementSystem', () => {
 
     it('should not move when no direction input', () => {
         ctx.gameState.hasStarted = true;
-        ctx.inputManager.isDown.mockReturnValue(false);
-        
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: 0 });
+
         const moveSpy = vi.fn();
-        const originalAddInPlaceFromFloats = ctx.camera.cameraDirection.addInPlaceFromFloats;
         ctx.camera.cameraDirection.addInPlaceFromFloats = moveSpy;
-        
+
         system.update(16, Date.now());
-        
+
         expect(moveSpy).not.toHaveBeenCalled();
+    });
+
+    it('should scale movement speed by analog stick magnitude', () => {
+        ctx.gameState.hasStarted = true;
+        ctx.camera.getDirectionToRef.mockImplementation((axis: BABYLON.Vector3, result: BABYLON.Vector3) => {
+            if (axis.equals(new BABYLON.Vector3(0, 0, 1))) {
+                result.set(0, 0, 1);
+            } else {
+                result.set(1, 0, 0);
+            }
+        });
+
+        // Half-tilt forward
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: -0.5 });
+
+        const halfSpy = vi.fn();
+        ctx.camera.cameraDirection.addInPlaceFromFloats = halfSpy;
+        system.update(16, Date.now());
+
+        // Full tilt forward
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: -1 });
+        ctx.camera.cameraDirection = new BABYLON.Vector3(0, 0, 0);
+        const fullSpy = vi.fn();
+        ctx.camera.cameraDirection.addInPlaceFromFloats = fullSpy;
+        system.update(16, Date.now());
+
+        // Half-tilt should produce roughly half the displacement of full-tilt
+        const halfDz = halfSpy.mock.calls[0][2];
+        const fullDz = fullSpy.mock.calls[0][2];
+        expect(Math.abs(halfDz)).toBeCloseTo(Math.abs(fullDz) * 0.5, 1);
     });
 
     it('should respect downed state and not process movement', () => {
         ctx.gameState.hasStarted = true;
         ctx.gameState.isDowned = true;
         ctx.camera.position.set(0, 10, 0);
-        
+
         // Try to move
-        ctx.inputManager.isDown.mockReturnValue(true);
+        ctx.inputManager.getMovementVector.mockReturnValue({ x: 0, y: -1 });
         ctx.camera.getDirectionToRef.mockImplementation((axis: BABYLON.Vector3, result: BABYLON.Vector3) => {
             result.set(0, 0, 1);
         });
-        
+
         const moveSpy = vi.fn();
         ctx.camera.cameraDirection.addInPlaceFromFloats = moveSpy;
-        
+
         system.update(16, Date.now());
-        
+
         expect(moveSpy).not.toHaveBeenCalled();
     });
 

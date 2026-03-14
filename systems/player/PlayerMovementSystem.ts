@@ -132,20 +132,25 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             camera.getDirectionToRef(_axisRight, _camRight);
             _camRight.y = 0; _camRight.normalize();
 
-            // Zero the move accumulator, then add components in-place — no allocation
+            // Analog movement vector — direction + magnitude from InputManager
+            const mv = inputManager.getMovementVector();
+            // mv.x = right(+)/left(-), mv.y = down(+)/up(-) (stick convention)
             _moveDir.set(0, 0, 0);
-            if (inputManager.isDown(GameAction.MOVE_FORWARD)) _moveDir.addInPlace(_camForward);
-            if (inputManager.isDown(GameAction.MOVE_BACK))    _moveDir.subtractInPlace(_camForward);
-            if (inputManager.isDown(GameAction.MOVE_LEFT))    _moveDir.subtractInPlace(_camRight);
-            if (inputManager.isDown(GameAction.MOVE_RIGHT))   _moveDir.addInPlace(_camRight);
+            _moveDir.addInPlaceFromFloats(
+                _camRight.x * mv.x + _camForward.x * (-mv.y),
+                0,
+                _camRight.z * mv.x + _camForward.z * (-mv.y)
+            );
 
-            if (_moveDir.lengthSquared() > 0.001) {
-                _moveDir.normalize();
+            const moveMag = _moveDir.length();
+            if (moveMag > 0.001) {
+                _moveDir.scaleInPlace(1 / moveMag);
+                const analogScale = Math.min(moveMag, 1);
                 camera.speed = speed;
                 camera.cameraDirection.addInPlaceFromFloats(
-                    _moveDir.x * speed * dt,
-                    _moveDir.y * speed * dt,
-                    _moveDir.z * speed * dt
+                    _moveDir.x * speed * analogScale * dt,
+                    _moveDir.y * speed * analogScale * dt,
+                    _moveDir.z * speed * analogScale * dt
                 );
             }
 
