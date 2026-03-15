@@ -31,7 +31,8 @@ import {
     createZombieAnimationSystem, createInteractionSystem,
     createPowerUpSystem, createWeaponViewSystem, createRoundSystem,
     createNetworkSystem, createRemotePlayerSystem, createDownedSystem, createReviveSystem,
-    createMysteryBoxSystem, createZombieSyncSystem
+    createMysteryBoxSystem, createZombieSyncSystem,
+    createPackAPunchSystem
 } from '../systems';
 
 /** Plain ref-like object so Game.ts stays React-free. */
@@ -416,6 +417,9 @@ export class Game {
         this.systemManager.register(createReviveSystem(sm, this.inputManager));
 
         sm.mysteryBoxSystem = createMysteryBoxSystem(sm);
+
+        sm.packAPunchSystem = createPackAPunchSystem(sm);
+        sm.packAPunchSystem.init();
 
         this.systemManager.init();
 
@@ -925,6 +929,7 @@ export class Game {
             this.gameLoopDispose();
             this.gameLoopDispose = null;
         }
+        if (this.stateManager?.packAPunchSystem) this.stateManager.packAPunchSystem.dispose();
         if (this.systemManager) this.systemManager.dispose();
         if (this.gameEngine) this.gameEngine.dispose();
         if (this.resourceManager) this.resourceManager.dispose();

@@ -38,6 +38,7 @@ export class StateManager {
     public boxRotations: number[] = [];
     public configManager: MapConfigManager;
     public mysteryBoxSystem: MysteryBoxSystem | null = null;
+    public packAPunchSystem: { init(): void; dispose(): void } | null = null;
     public timerManager: TimerManager;
     public zoneSystem: ZoneSystem;
 

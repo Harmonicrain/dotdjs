@@ -1,6 +1,7 @@
 
 export { createProjectileSystem } from './ProjectileSystem';
 export { createInteractionSystem } from './InteractionSystem';
+export { createPackAPunchSystem } from './PackAPunchSystem';
 export { createPowerUpSystem } from './PowerUpSystem';
 export { createRoundSystem } from './RoundSystem';
 export { createNetworkSystem } from './NetworkSystem';
