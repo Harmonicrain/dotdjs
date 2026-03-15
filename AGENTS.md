@@ -567,7 +567,47 @@ See `maps/ADDING_MAPS.md` for full guide. Summary:
 
 ---
 
-## 8. Config Reference
+## 8. Pattern Conventions
+
+### Manager Dependency Injection
+All managers use `setDependencies()` for late-bound callbacks that can't be passed at construction time (due to circular references or ordering). When creating a new manager, follow this pattern:
+```typescript
+public setDependencies(cb1: ..., cb2: ...) { ... }
+```
+
+### Manager `reset()` vs `dispose()` Contract
+- `reset()` = between-round/between-game cleanup. Manager stays alive, observers keep running. Clears active items (particles, gore, decals) but preserves pools and structural observers.
+- `dispose()` = full teardown. Manager is destroyed, all GPU resources (meshes, materials, particle systems) and observers are released.
+
+### Observer Lifecycle
+Observers created in manager constructors are stored as instance fields and cleaned up in `dispose()` only (not `reset()`). This is intentional — structural observers (gore fade, light fade) have early-exit guards for empty state and are cheap to keep alive.
+
+Self-cleaning observers (e.g. `onDisposeObservable.addOnce`) are appropriate for observers tied to a specific mesh or light lifetime.
+
+### Material Creation
+- Use `createMaterial()` from `GeometryUtils.ts` for PBR materials with textures on level geometry (handles uScale, vScale, roughness, markDirty-on-load).
+- Use `createPBRMaterialWithTexture()` in `LevelBuilder.ts` for materials that need custom metallic/environment intensity.
+- Use inline `new PBRMaterial()`/`new StandardMaterial()` for simple materials without textures or with special setup (void, metal, frame).
+
+### HUD Component Update Strategy
+- **Standard React model** (store selector triggers re-render): Use for all HUD components that update at gameplay frequency (<10/sec). Example: `AmmoCounter`, `RoundDisplay`, `PlayerStatus`.
+- **Direct DOM refs** (`useRef` + `el.textContent = ...`): Use only for displays that update every frame (>30/sec) where React re-render overhead is measurable. Example: `FPSCounter`.
+
+### Factory Function Naming
+All factory functions that create 3D objects use the pattern `create[Thing]()`. The `Mesh` suffix is omitted since it's obvious from context that factories create meshes/TransformNodes:
+- `createJuggernog()`, `createSpeedCola()` — perk machines
+- `createPowerSwitch()`, `createMysteryBox()` — gameplay objects
+- `createBuilding()` — procedural buildings
+- Exception: `createPowerUpMesh()`, `createLidMesh()` — keep `Mesh` suffix when ambiguity exists (e.g. power-up has both mesh and logic concepts)
+
+### Perk Factory Pattern
+All perk factories share common post-load and error-fallback logic via `factories/perks/perkUtils.ts`:
+- `configurePerkModel()` — registers shadow casters and limits `maxSimultaneousLights`
+- `createPerkFallback()` — creates a colored placeholder box on model load failure
+
+---
+
+## 9. Config Reference
 
 ### `GAME_CONFIG` (config/gameplay.ts)
 Movement: `WALK_SPEED`, `SPRINT_SPEED`, `JUMP_FORCE`, `GRAVITY`

@@ -8,7 +8,7 @@ export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector
     root.position = position; 
     root.rotation.y = rotationY;
 
-    // Legacy pivot kept for compatibility — no longer used for rotation when GLB anim is present
+    // Pivot used for manual rotation fallback when GLB animation is absent
     const handlePivot = new BABYLON.TransformNode("handlePivot", scene);
     handlePivot.parent = root;
     handlePivot.rotation.x = Math.PI / 4; // Initial State: Up/Off

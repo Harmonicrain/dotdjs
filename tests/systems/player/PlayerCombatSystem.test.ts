@@ -155,16 +155,44 @@ describe('PlayerCombatSystem', () => {
         expect(ctx.timerManager.has('knife_hit')).toBe(true);
     });
 
-    it('should allow shooting while downed if weapon is available', () => {
+    it('should allow shooting while downed with M1911 (single-fire per press)', () => {
         ctx.gameState.hasStarted = true;
         ctx.gameState.isDowned = true;
         const weapon = ctx.gameState.weapons[0];
-        weapon.currentAmmo = 30;
-        weapon.automatic = true;
-        ctx.inputManager.isFireInputActive.mockReturnValue(true);
+        weapon.currentAmmo = 8;
+        weapon.automatic = false;
+        ctx.inputManager.isDown.mockImplementation((action: GameAction) => action === GameAction.FIRE);
 
         system.update(16, Date.now());
 
-        expect(weapon.currentAmmo).toBe(29);
+        expect(weapon.currentAmmo).toBe(7);
+    });
+
+    it('should not allow knifing or weapon switching while downed', () => {
+        ctx.gameState.hasStarted = true;
+        ctx.gameState.isDowned = true;
+        ctx.gameState.weapons.push({ ...ctx.gameState.weapons[0], id: 'shotgun', name: 'SHOTGUN' });
+        ctx.inputManager.justPressed.mockImplementation((action: GameAction) =>
+            action === GameAction.KNIFE || action === GameAction.WEAPON_2
+        );
+
+        system.update(16, Date.now());
+
+        expect(ctx.gameState.isKnifing).toBeFalsy();
+        expect(ctx.gameState.activeWeaponIndex).toBe(0);
+    });
+
+    it('should allow reloading while downed', () => {
+        ctx.gameState.hasStarted = true;
+        ctx.gameState.isDowned = true;
+        const weapon = ctx.gameState.weapons[0];
+        weapon.currentAmmo = 2;
+        weapon.clipSize = 8;
+        weapon.currentReserve = 48;
+        ctx.inputManager.justPressed.mockImplementation((action: GameAction) => action === GameAction.RELOAD);
+
+        system.update(16, Date.now());
+
+        expect(ctx.gameState.isReloading).toBe(true);
     });
 });

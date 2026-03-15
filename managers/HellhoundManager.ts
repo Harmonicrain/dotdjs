@@ -242,7 +242,7 @@ export class HellhoundManager {
 
         const id = "hellhound_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
         
-        // 1. Create smoke effect using injected VisualManager method (eliminates duplication)
+        // 1. Create smoke effect via injected callback
         const lightningEffect = this.createSpawnSmokeEffect(spawnPos);
         lightningEffect.start();
         
@@ -253,6 +253,8 @@ export class HellhoundManager {
             // Initially invulnerable and invisible-ish
             newMesh.mesh.visibility = 0;
             
+            // Intentional: hellhounds use a flat speed (no round scaling).
+            // They're already fast; round difficulty scales via health instead.
             const baseSpeed = hc.SPEED_BASE;
             const zc = this.configManager.zombieAI;
             const speedVariation = zc.SPEED_VARIATION_MIN + (Math.random() * zc.SPEED_VARIATION_RANGE);

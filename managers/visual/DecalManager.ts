@@ -132,6 +132,7 @@ export class DecalManager {
         });
     }
 
+    /** Between-round/between-game cleanup — disposes decal meshes, manager stays alive. */
     public reset() {
         for (const d of this.decalPool) {
             if (d && !d.isDisposed()) d.dispose();
@@ -146,6 +147,7 @@ export class DecalManager {
         this.bloodDecalCursor = 0;
     }
 
+    /** Full teardown — manager is destroyed, disposes decals + shared materials. */
     public dispose() {
         for (const d of this.decalPool) {
             if (d && !d.isDisposed()) d.dispose();

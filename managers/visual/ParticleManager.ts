@@ -713,6 +713,7 @@ export class ParticleManager {
         ps.stop();
     }
 
+    /** Between-round/between-game cleanup — stops all active effects, manager stays alive. */
     public reset() {
         this.flashLightPool.forEach(l => l.intensity = 0);
         this.flashLightFadeStart.fill(0);
@@ -734,6 +735,7 @@ export class ParticleManager {
         this.stopHoleSmoke();
     }
 
+    /** Full teardown — manager is destroyed, all GPU resources and observers released. */
     public dispose() {
         if (this.flashLightFadeObserver) {
             this.scene.onBeforeRenderObservable.remove(this.flashLightFadeObserver);

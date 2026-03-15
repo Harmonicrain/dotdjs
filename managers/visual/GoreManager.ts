@@ -151,6 +151,7 @@ export class GoreManager {
         });
     }
 
+    /** Between-round/between-game cleanup — manager stays alive, observer keeps running. */
     public reset() {
         this.floorGorePieces.forEach(m => { if (!m.isDisposed()) m.dispose(); });
         this.floorGorePieces = [];
@@ -168,6 +169,7 @@ export class GoreManager {
         this.goreDiscCursor = 0;
     }
 
+    /** Full teardown — manager is destroyed, all GPU resources and observers released. */
     public dispose() {
         for (const item of this.bloodPool) {
             if (item.observer) {

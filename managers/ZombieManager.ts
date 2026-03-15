@@ -32,7 +32,7 @@ export class ZombieManager {
     private lastSpawnSoundTime: number = 0;
     private pendingSpawnQueue: { round: number }[] = [];
 
-    // ── Cached spawn-point arrays (rebuilt only when door state changes) ──
+    // ── Cached spawn-point arrays (rebuilt when door state changes OR map reloads) ──
     private cachedValidWindows: WindowBarrier[] = [];
     private cachedValidGroundSpawns: GroundSpawn[] = [];
     private cachedDoorStateKey: string = '\x00UNINITIALIZED';

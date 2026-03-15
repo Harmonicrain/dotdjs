@@ -82,6 +82,8 @@ export const createMockGameState = (): GameStateData => ({
     reviveProgress: 0,
     quickRevivesRemaining: 3,
     playerName: 'LocalPlayer',
+    savedWeapons: null,
+    savedActiveWeaponIndex: 0,
 
     // PhysicsState
     isGrounded: true,

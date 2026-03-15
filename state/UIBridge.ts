@@ -78,6 +78,8 @@ export class UIBridge {
     public setTotalEarnedPoints(v: number) {
         this.gameState.totalEarnedPoints = v;
         if (this.uiCache.totalEarnedPoints !== v) {
+            // Throttled: updated on every point gain (high frequency), but only
+            // used for end-of-game stats — no visual urgency.
             if (this.checkThrottle('totalPoints')) {
                 this.uiCache.totalEarnedPoints = v;
                 this._updatePlayer({ totalEarnedPoints: v });
@@ -98,7 +100,7 @@ export class UIBridge {
 
     public setAmmo(v: number) {
         if (this.uiCache.ammo !== v) {
-            // Throttle ammo updates for automatic weapons
+            // Throttled: automatic weapons fire every ~75ms, producing per-frame updates.
             if (this.checkThrottle('ammo')) {
                 this.uiCache.ammo = v;
                 this._updatePlayer({ ammo: v });
@@ -108,6 +110,7 @@ export class UIBridge {
 
 
     public setReserveAmmo(v: number) {
+        // Not throttled: only changes on reload or max-ammo pickup (low frequency).
         if (this.uiCache.reserveAmmo !== v) {
             this.uiCache.reserveAmmo = v;
             this._updatePlayer({ reserveAmmo: v });
@@ -152,6 +155,8 @@ export class UIBridge {
     }
 
     public setKills(v: number) {
+        // Not throttled: kill events are spaced by gameplay (not per-frame) and
+        // drive visible HUD updates (kill feed).
         if (this.uiCache.kills !== v) {
             this.uiCache.kills = v;
             this._updatePlayer({ kills: v });
@@ -171,7 +176,7 @@ export class UIBridge {
 
     public setShotsFired(v: number) {
         if (this.uiCache.shotsFired !== v) {
-            // Throttle — shots fire at high frequency
+            // Throttled: increments every shot — only used for accuracy stats, no visual urgency.
             if (this.checkThrottle('shotsFired')) {
                 this.uiCache.shotsFired = v;
                 this._updatePlayer({ shotsFired: v });

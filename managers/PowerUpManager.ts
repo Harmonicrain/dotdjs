@@ -28,7 +28,7 @@ export class PowerUpManager {
         this.windows = windows;
     }
 
-    public setZombieKiller(cb: (z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT') => void) {
+    public setDependencies(cb: (z: Zombie, pos: BABYLON.Vector3, killer: 'HOST' | 'CLIENT') => void) {
         this.onZombieDeathCallback = cb;
     }
 

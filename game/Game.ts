@@ -246,7 +246,7 @@ export class Game {
             (kills) => sm.setKills(kills),
             (event) => sm.pushKillEvent(event),
         );
-        powerUpManager.setZombieKiller(
+        powerUpManager.setDependencies(
             (z, pos, k) => {
                 if (z.type === 'HELLHOUND') {
                     hellhoundManager.onHellhoundDeath(z, pos, k);
