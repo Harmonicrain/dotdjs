@@ -1,135 +1,122 @@
-# LLM Friendliness Improvements
+# LLM Friendliness
 
-Specific changes that would make this codebase significantly easier for AI coding assistants (Claude, Gemini, Copilot) to work with correctly.
+> Code patterns that make it harder for LLMs (Claude, Gemini, etc.) to correctly implement changes. Long functions, deep nesting, unclear naming, and files that try to do too much.
 
 ---
 
-## 1. The Hellhound Limb Naming Problem
+## Oversized Functions
 
-**The Issue**: Hellhounds reuse the zombie `limbs` type which has `armL`, `armR`, `legL`, `legR`. For hellhounds, `armL/armR` are actually **front legs**. Every LLM that reads this code will think hellhounds have arms.
+### `game/GameLoop.ts` — `createGameLoop()` (234 lines)
+**Problem**: This single function handles debug controls, console toggle, developer stats, spectator logic, zone updates, freeze checking, system updates, and health regen. An LLM asked to "add a new per-frame check" has to understand the entire 234-line flow to find the right insertion point.
 
-**Why This Trips Up LLMs**: When asked "make hellhounds lose a front leg when shot", an LLM will search for "leg" fields. It'll find `legL/legR` (which are BACK legs) and modify those. The front legs are `armL/armR`. This is a guaranteed wrong implementation.
+**Recommended extraction**:
+```
+createGameLoop()
+  ├── updateDebugControls(sm, inputManager)     // ~33 lines
+  ├── updateConsoleToggle(sm, inputManager)      // ~15 lines
+  ├── updateDeveloperStats(sm)                   // ~14 lines
+  ├── handleSpectatorGameOver(sm)                // ~6 lines
+  └── handleHealthRegeneration(sm, dt)           // ~10 lines
+```
 
-**Fix**: Add a comment block at the `limbs` definition in `types/entities.ts`:
+### `state/StateManager.ts` — `applyDamageToLocalPlayer()` (~40 lines, 4 levels deep)
+**Problem**: Mixes solo vs multiplayer logic, quick revive checks, and player downing in deeply nested conditionals. An LLM adding a new damage modifier has to trace through all branches.
+
+**Recommended**: Extract the downed-state transition into a separate method:
 ```typescript
-/**
- * Limb references. For zombies: arms and legs literal.
- * For hellhounds: armL/armR = FRONT legs, legL/legR = BACK legs.
- */
+private transitionToDowned(): void { ... }
+```
+
+### `game/Game.ts` — 934 lines total
+**Problem**: Game.ts is the main orchestrator and is expected to be large, but some methods like `loadLevel()` and `resetSession()` could benefit from better section comments that help LLMs understand boundaries.
+
+**Recommended**: Add `// ─── SECTION: Level Loading ───` style headers at major boundaries.
+
+---
+
+## Complex Closure Scopes
+
+### `network/NetworkMessageHandler.ts` — `createNetworkMessageHandler()`
+**Problem**: Creates many closure-scoped variables (`cachedHost`, `cachedClient`, `lastHostSeq`, `lastClientSeq`) without visual separation. The function processes a large `switch` statement over message types. An LLM asked to add a new message type must understand the entire closure scope.
+
+**Recommended**:
+- Add section comments before each message type case
+- Consider extracting the handler into a class with explicit state fields instead of closures
+
+### `systems/ProjectileSystem.ts` — update function
+**Problem**: Processes both local and remote projectiles with complex raycast logic, explosion handling, and zombie damage calculations. Multiple nested conditions make control flow hard to follow.
+
+**Recommended**: Extract `processProjectileHit()` and `handleExplosion()` as named helpers within the closure.
+
+---
+
+## Oversized React Components
+
+### `ui/GameScene.tsx` (~250+ lines)
+**Problem**: Manages canvas initialization, game lifecycle, network connection, state synchronization, and multiple event handlers in a single component. An LLM asked to change network behavior has to read the entire component.
+
+**Recommended**: Extract custom hooks:
+```
+GameScene.tsx
+  ├── useGameInitialization(canvasRef)
+  ├── useNetworkSync(gameRef)
+  └── useGameLifecycle(gameRef)
 ```
 
 ---
 
-## 2. Config Value Discoverability
+## Naming Clarity Issues
 
-**The Issue**: An LLM asked to "make zombies faster" has to know to look in:
-- `config/gameplay.ts` for `ZOMBIE_SPEEDS`
-- `config/gameplay.ts` for `ZOMBIE_SPEED_INC` in `ROUND_CONFIG`
-- `managers/ZombieManager.ts` for the speed calculation formula
-- `managers/HellhoundManager.ts` for hellhound-specific speed
-- The hardcoded `0.9 + (Math.random() * 0.2)` variation in both managers
-
-**Fix**: Add a "Speed Pipeline" comment in `config/gameplay.ts`:
+### `types/player.ts` — `automatic` field on WeaponConfig
 ```typescript
-// SPEED PIPELINE: base speed (ZOMBIE_SPEEDS) + round scaling (ZOMBIE_SPEED_INC per round)
-//   + random variation (0.9-1.1x) → applied in ZombieManager.ts / HellhoundManager.ts
+automatic: boolean;
 ```
+**Problem**: Ambiguous — does this mean "automatic fire mode" or "automatically equipped"? The JSDoc from commit `50274f5` helps but the field name itself misleads.
+**Better**: `fireMode: 'auto' | 'semi'` is self-documenting and prevents boolean blindness.
+
+### `systems/zombie/zombieAIUtils.ts` — `cursor` variable
+Assigned at line 102 but `z.pathCursor` is re-read directly at line 143. Two names for the same concept.
+
+### `state/StateManager.ts` — `null!` fields
+Five manager fields are typed as `null!`. An LLM sees these types and assumes they're always available, but they're uninitialized during construction. This is a trap.
 
 ---
 
-## 3. Projectile Speed — Undocumented Override System
+## Files That Should Be Split
 
-**The Issue**: `COMBAT_CONFIG.PROJECTILE_SPEED = 2.5` looks like THE projectile speed. But `WeaponConfig` has `projectileSpeedOverride?: number`, and Ray Gun uses `30`.
+### `state/StateManager.ts` (388 lines)
+**Problem**: Acts as a god object — holds ALL game state AND provides mutation methods AND manages manager references. Responsibilities:
+1. Game state container
+2. State mutation API
+3. Manager dependency holder
+4. Damage calculation logic
+5. Session reset coordination
 
-**Why This Trips Up LLMs**: An LLM asked to "change projectile speed" will find `COMBAT_CONFIG.PROJECTILE_SPEED`, change it, and think it's done. It won't know about the override system. Ray Gun will be unaffected.
+**Recommended split**:
+- `StateManager.ts` — state container + getters
+- `StateMutations.ts` — all setter/mutation methods
+- Keep manager references in `StateManager` since it's the injection point
 
-**Fix**: Add comment to `COMBAT_CONFIG`:
-```typescript
-PROJECTILE_SPEED: 2.5, // Default. Weapons can override via WeaponConfig.projectileSpeedOverride
-```
-
----
-
-## 4. GameScene.tsx — Engine/UI Boundary Violation
-
-**The Issue**: `GameScene.tsx` directly imports and instantiates `GameLifecycle`. AGENTS.md says "Engine/system code must NEVER import React" but doesn't explicitly forbid the reverse (UI importing engine).
-
-**Why This Trips Up LLMs**: An LLM reading AGENTS.md will think the boundary is one-way. When asked to add a new game lifecycle feature, it might add it to GameScene.tsx because that's where the lifecycle is created.
-
-**Fix**: Add to AGENTS.md Section 4:
-```
-**NOTE**: `GameScene.tsx` is the ONLY UI file that directly touches engine code
-(it creates GameLifecycle). All other UI files must go through the Zustand store.
-Do NOT add engine imports to any other UI component.
-```
+### `game/GameLoop.ts` (269 lines)
+Already discussed above — extract helper functions.
 
 ---
 
-## 5. Multiple Source-of-Truth for Types
+## Patterns That Help LLMs (already good)
 
-**The Issue**: `WeaponUpgrade` is defined in both `types/player.ts` AND `config/weapons/types.ts`. `BuildingDefinition` is defined in both `types/world.ts` AND `factories/BuildingFactory.ts`. An LLM importing types will randomly pick one source.
-
-**Why This Trips Up LLMs**: When Gemini is asked to "add a field to WeaponUpgrade", it might update one definition but not the other. The types diverge. Future code breaks silently.
-
-**Fix**: Consolidate to single definitions. Add to AGENTS.md:
-```
-All type definitions live in `types/`. Never define interfaces in config/ or factories/ —
-import from types/ instead.
-```
+These patterns in the codebase are excellent for LLM comprehension:
+- **AGENTS.md** — comprehensive architecture doc means LLMs don't have to infer patterns
+- **Factory pattern** for systems — consistent `createXxxSystem` signature
+- **Named constants at file top** in PlayerMovementSystem — clear what's tunable
+- **Handler pattern** for interactions — adding a new handler is copy-paste predictable
+- **Type re-exports** from `types/index.ts` — single import point
 
 ---
 
-## 6. The "Demo" Components Problem
+## Refactoring Strategy
 
-**The Issue**: `HitMarker.tsx` and `KillFeed.tsx` have comments saying "Random for demo" and "simplified - in real implementation would use event bus". These are in the production codebase.
-
-**Why This Trips Up LLMs**: When asked to "fix the hit marker", an LLM will try to connect it to real game events. It'll spend time searching for the event bus integration that doesn't exist, then either:
-- Wire it up (scope creep beyond what was asked)
-- Get confused about why there's no connection
-
-**Fix**: Either:
-- Connect them to real data (proper fix)
-- Add clear `// TODO: Currently uses placeholder data. Wire to EventBus ZOMBIE_DEATH/PLAYER_DAMAGE events.`
-
----
-
-## 7. Naming Convention Documentation
-
-**The Issue**: Model transform keys use `snake_case` (`speed_cola`, `ray_gun_fps`) while everything else uses `camelCase`. Factory names are inconsistent (some say `Mesh`, some don't).
-
-**Why This Trips Up LLMs**: When creating a new weapon or perk, an LLM has to guess the naming convention. It'll look at nearby examples and may pick the wrong one.
-
-**Fix**: Add to AGENTS.md Section 4 under conventions:
-```
-### Naming Conventions
-- Model transform keys: `snake_case` (e.g., `speed_cola`, `ray_gun_fps`)
-- Factory functions: `create[Thing]()` (e.g., `createJuggernog()`, `createPowerSwitch()`)
-- System factories: `create[Name]System()` (e.g., `createRoundSystem()`)
-- Config keys: `UPPER_SNAKE_CASE` (e.g., `WALK_SPEED`, `PROJECTILE_SPEED`)
-```
-
----
-
-## 8. MysteryBoxSystem — Not in SystemManager
-
-**The Issue**: AGENTS.md Section 11 notes that "MysteryBoxSystem is NOT registered with SystemManager — it's called directly in GameLoop.ts." This is the ONLY system with this exception.
-
-**Why This Trips Up LLMs**: When asked to "add a new system", an LLM follows the documented pattern: create factory, register in SystemManager. If it looks at MysteryBoxSystem as an example, it'll do it wrong. If asked to modify MysteryBox behavior, it might look in SystemManager registration and not find it.
-
-**Fix**: Either register MysteryBoxSystem with SystemManager (preferred — removes the exception) or add a more prominent warning in the file itself:
-```typescript
-// WARNING: This system is NOT managed by SystemManager.
-// It is called directly from GameLoop.ts. See AGENTS.md Section 11.
-```
-
----
-
-## Summary: Highest-Impact Changes for LLM Correctness
-
-1. **Consolidate duplicate type definitions** (prevents wrong imports)
-2. **Document the hellhound limb mapping** (prevents wrong field access)
-3. **Add config pipeline comments** (prevents partial changes)
-4. **Add naming convention docs to AGENTS.md** (prevents naming guesses)
-5. **Clarify the GameScene.tsx exception** (prevents architecture violations)
-
-These five changes would prevent the majority of LLM implementation errors in this codebase.
+1. **Extract GameLoop helpers** — biggest readability win, low risk
+2. **Split StateManager mutations** — reduces god-object cognitive load
+3. **Extract GameScene hooks** — standard React best practice
+4. **Add section headers** to Game.ts — zero-risk documentation improvement
+5. **Rename `automatic` to `fireMode`** — prevents misinterpretation (breaking change, needs weapon config updates)

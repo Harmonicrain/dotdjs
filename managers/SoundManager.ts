@@ -132,4 +132,17 @@ export class SoundManager {
         this.sounds.forEach(s => s.stop());
         this.activeSoundCounts.clear();
     }
+
+    /** Between-game cleanup — stops all active sounds but keeps loaded assets. */
+    public reset() {
+        this.stopAll();
+    }
+
+    /** Full teardown — disposes all sound instances and releases references. */
+    public dispose() {
+        this.stopAll();
+        this.sounds.forEach(s => s.dispose());
+        this.sounds.clear();
+        this.activeSoundCounts.clear();
+    }
 }

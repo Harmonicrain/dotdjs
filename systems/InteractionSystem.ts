@@ -141,6 +141,22 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         return anchorPos;
     };
 
+    // Tracks the active PaP animation observer so dispose() can clean it up
+    // if the session resets before the 3s timer fires.
+    let activePapAnimObs: BABYLON.Observer<BABYLON.Scene> | null = null;
+    let activePapAnimMesh: BABYLON.TransformNode | null = null;
+
+    const cleanupPapAnimation = () => {
+        if (activePapAnimObs) {
+            ctx.scene.onBeforeRenderObservable.remove(activePapAnimObs);
+            activePapAnimObs = null;
+        }
+        if (activePapAnimMesh) {
+            activePapAnimMesh.dispose();
+            activePapAnimMesh = null;
+        }
+    };
+
     const setupPackAPunchAnimation = (
         targetMachine: BABYLON.AbstractMesh,
         weapon: WeaponState,
@@ -151,6 +167,9 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         const oldMesh = weapon.mesh;
         if (oldMesh) oldMesh.setEnabled(false);
 
+        // Clean up any in-progress PaP animation before starting a new one
+        cleanupPapAnimation();
+
         let rootNode = targetMachine;
         while (rootNode.parent && rootNode.parent instanceof BABYLON.TransformNode && rootNode.parent.name !== 'levelRoot') {
             rootNode = rootNode.parent as BABYLON.AbstractMesh;
@@ -158,13 +177,12 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         const children = rootNode.getChildTransformNodes(false);
         const anchorNode = children.find(c => c.name === 'papWeaponAnchor');
 
-        let animMesh: BABYLON.TransformNode | null = null;
         if (scene) {
             // GLB weapons need upright orientation for PAP display; _world transforms are for ground pickup
             let papOverride: { rotation: [number, number, number] } | undefined;
             if (weapon.id === 'pistol') papOverride = { rotation: [0, Math.PI / 2, 0] };
             else if (weapon.id === 'ray_gun') papOverride = { rotation: [0, Math.PI, 0] };
-            animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode, papOverride);
+            const animMesh = createWorldWeapon(scene, weapon.id, rootNode as BABYLON.TransformNode, papOverride);
             animMesh.parent = null;
             animMesh.position.copyFrom(anchorPos).addInPlace(_tempPapVec);
             if (anchorNode) {
@@ -172,24 +190,24 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                 animMesh.position.copyFromFloats(0, 0, -0.5);
                 animMesh.rotation.copyFromFloats(0, Math.PI / 2, 0);
             }
+            activePapAnimMesh = animMesh;
 
             let t = 0;
-            const animObs = scene.onBeforeRenderObservable.add(() => {
+            activePapAnimObs = scene.onBeforeRenderObservable.add(() => {
                 t += scene.getEngine().getDeltaTime() / 1000;
-                if (!animMesh) return;
-                animMesh.rotation.y += 0.1;
+                if (!activePapAnimMesh) return;
+                activePapAnimMesh.rotation.y += 0.1;
                 if (t < 1.0) {
-                    animMesh.position.z = BABYLON.Scalar.Lerp(-0.5, 0.2, t);
+                    activePapAnimMesh.position.z = BABYLON.Scalar.Lerp(-0.5, 0.2, t);
                 } else if (t < 2.5) {
-                    animMesh.position.y = Math.sin(t * 5) * 0.05;
+                    activePapAnimMesh.position.y = Math.sin(t * 5) * 0.05;
                 } else if (t < 3.0) {
-                    animMesh.scaling.scaleInPlace(0.9);
+                    activePapAnimMesh.scaling.scaleInPlace(0.9);
                 }
             });
 
             ctx.timerManager.schedule('pap_anim_cleanup', 3000, () => {
-                scene.onBeforeRenderObservable.remove(animObs);
-                if (animMesh) animMesh.dispose();
+                cleanupPapAnimation();
             });
         }
     };
@@ -559,6 +577,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         ctx.eventBus.off('POWER_ON_REQUEST', handlers.powerOn);
         ctx.eventBus.off('WEAPON_PICKUP_REQUEST', handlers.weaponPickup);
         ctx.eventBus.off('PACK_A_PUNCH_REQUEST', handlers.packAPunch);
+        cleanupPapAnimation();
     };
 
     return {

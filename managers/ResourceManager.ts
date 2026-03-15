@@ -120,6 +120,15 @@ export class ResourceManager {
         }, delayMs);
     }
 
+    /**
+     * Between-game cleanup. The cache intentionally persists across sessions —
+     * materials and textures are expensive to recreate and safe to reuse as
+     * long as the Babylon scene is the same.  This is a no-op by design.
+     */
+    public reset(): void {
+        // Cache survives between games — see class docstring.
+    }
+
     /** Releases all cached materials and textures. Call once on engine teardown. */
     public dispose(): void {
         this.materials.forEach(m => m.dispose());

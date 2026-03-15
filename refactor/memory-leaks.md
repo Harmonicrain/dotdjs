@@ -1,54 +1,43 @@
-# Memory Leak Risks
+# Memory Leaks & Resource Disposal
 
-Observer and handler accumulation bugs that grow over time, especially across level reloads.
-
----
-
-## 1. GoreManager — Observer Survives reset()
-
-**File**: `managers/visual/GoreManager.ts` ~lines 78, 153-168
-**Issue**: `goreFadeObserver` is registered with `scene.onBeforeRenderObservable.add()` in `initGoreFadeObserver()`. The `dispose()` method removes it (~line 182), but `reset()` does NOT.
-**Impact**: After `reset()`, the observer continues running every frame, iterating an empty `activeGoreDiscs` array. Wasted CPU per frame. Not a true leak but unnecessary work.
-**Fix**: Either remove and re-add the observer in `reset()`, or make the observer gracefully no-op when arrays are empty (it may already, but should be explicit).
+> Observer leaks, EventBus handler accumulation, and Babylon.js resources not properly cleaned up. These cause degradation across level reloads and long play sessions.
 
 ---
 
-## 2. ParticleManager — Observer Survives reset()
+## FIXED
 
-**File**: `managers/visual/ParticleManager.ts` ~lines 120, 710-729
-**Issue**: Same pattern as GoreManager. `flashLightFadeObserver` is added to scene (~line 120) and cleaned in `dispose()` (~line 733), but `reset()` doesn't touch it.
-**Impact**: Observer runs every frame after reset, processing empty/cleared pools.
-**Fix**: Same approach — clean observer in `reset()` or ensure it no-ops safely.
+### `systems/InteractionSystem.ts` — PaP animation observer leak
+**Was**: `animObs` (scene render observer) and `animMesh` for the Pack-a-Punch weapon spin animation were only cleaned up by a 3s TimerManager schedule. If `timerManager.clear()` ran during `resetSession()` before the timer fired, the observer and mesh leaked.
+**Fix**: Stored `activePapAnimObs` and `activePapAnimMesh` at closure scope. Added `cleanupPapAnimation()` helper called both by the timer AND by `dispose()`. Also cleans up any in-progress animation before starting a new one.
 
----
+### `systems/zombie/ZombieSyncSystem.ts` ~line 51 — Inconsistent `dispose(false)`
+**Was**: `z.fireSystem.dispose()` called without `false`, risking disposal of the shared fire texture.
+**Fix**: Changed to `z.fireSystem.dispose(false)` to match the pattern used everywhere else (ZombieCleanupSystem lines 57, 77).
 
-## 3. CommandRegistry — Pathfinding Observer Accumulation
+### `managers/ResourceManager.ts` — Missing `reset()`
+**Was**: No `reset()` method, breaking the manager lifecycle contract from AGENTS.md.
+**Fix**: Added no-op `reset()` with documentation explaining the cache intentionally persists across game sessions.
 
-**File**: `engine/CommandRegistry.ts` ~lines 173-273 (pathfinding visualization toggle)
-**Issue**: Each time the user toggles pathfinding visualization ON, a new `observer` is created with `scene.onBeforeRenderObservable.add()` and stored in a local variable. Toggling OFF doesn't remove the previous observer — it just stops rendering.
-**Impact**: Each toggle-on creates an additional observer. After 10 toggles, 10 observers are running.
-**Fix**: Store the observer reference at module/closure scope and remove it before creating a new one.
+### `managers/SoundManager.ts` — Missing `reset()` and `dispose()`
+**Was**: Had `stopAll()` but no formal lifecycle methods.
+**Fix**: Added `reset()` (delegates to `stopAll()`) and `dispose()` (stops all, disposes Sound instances, clears maps).
 
----
-
-## 4. GeometryUtils — Fixture Light Observer Orphaned
-
-**File**: `engine/GeometryUtils.ts` ~lines 273-284
-**Issue**: `createFixture()` creates a scene observer that monitors whether the fixture light is disposed. The observer is stored in a local `obs` variable with no external reference for cleanup.
-**Impact**: If the fixture is disposed, the observer detects it and removes itself (self-cleanup). But if the scene is rebuilt without disposing the light first, the observer persists.
-**Fix**: Return the observer as part of the fixture result, or register it for cleanup in a manager.
+### `systems/player/DownedSystem.ts` — Missing `dispose()` scaffold
+**Was**: No `dispose()` method. Currently safe but future EventBus additions would lack the pattern.
+**Fix**: Added empty `dispose()` scaffold with comment.
 
 ---
 
-## 5. LevelBuilder — Shadow Caster Promise Race Condition
+## Verified Not Leaking (false positives from initial analysis)
 
-**File**: `engine/LevelBuilder.ts` ~lines 84-90
-**Issue**: Shadow casters are added to the shadow generator after async promises resolve. If the scene is disposed during loading, the resolved promise still runs and references disposed objects.
-**Impact**: Could throw errors or reference disposed meshes. Not a memory leak per se, but a resource safety issue.
-**Fix**: Add a disposed check: `if (scene.isDisposed) return;` inside the promise callback.
+### `systems/NetworkSystem.ts` — EventBus handlers
+**Status**: Already correct. `dispose()` at lines 186-190 properly calls `off()` for all three handlers (`gameStartedHandler`, `boardStateChangeHandler`, `doorOpenRequestHandler`). Named handler references are stored before subscription.
 
----
+### `systems/InteractionSystem.ts` — PaP texture observer (createPackAPunchTexture)
+**Status**: Already correct. The render observer that scrolls the PaP camo texture UV offsets is cleaned up via `dynamicTexture.onDisposeObservable`. This is the correct Babylon.js pattern — when the texture is disposed (during `_resetWeaponMaterials()` in `resetSession()`), the observer is automatically removed.
 
-## Priority
+### `systems/InteractionSystem.ts` — PaP material emissive `timeObs`
+**Status**: Already correct. The observer is cleaned up when `newPapMats[0]` is disposed. Comment at line 347 explains: materials are all disposed together when the weapon is swapped or re-packed, so hooking the first material is sufficient.
 
-Item 3 (CommandRegistry) is the most impactful — it's the only one that actively accumulates without bound. Items 1-2 are minor performance issues. Items 4-5 are edge cases but worth hardening.
+### `managers/visual/GoreManager.ts` — Observer nullification
+**Status**: Already correct. Line 177 sets `item.observer = null` after removing from the observable. The initial analysis was wrong.

@@ -1,84 +1,62 @@
-# Dead Code & Unused Exports
+# Dead Code
 
-Code that is unused, unreachable, or serving no purpose. Removing it reduces noise for LLMs and humans alike.
+> Unused exports, unreachable paths, and stale code that adds noise for LLMs and humans alike.
 
 ---
 
-## 1. ZombieDamageSystem.ts — Empty dispose()
+## Unused Exports
 
-**File**: `systems/zombie/ZombieDamageSystem.ts` ~lines 70-71
+### `managers/SoundManager.ts` ~line 115-117
 ```typescript
-dispose: () => {
-},
-```
-Empty function body. Either remove `dispose` entirely (it's optional on the System interface) or add a comment explaining why it's intentionally empty if needed for future use.
-
----
-
-## 2. Duplicate `BuildingDefinition` Interface
-
-**File 1**: `types/world.ts` ~lines 262-271
-**File 2**: `factories/BuildingFactory.ts` ~lines 3-12
-**Issue**: Identical interface defined in both places. The factory's copy is never imported by anything else — it's a stale duplicate.
-**Fix**: Delete the definition from `BuildingFactory.ts` and import from `types/world.ts`.
-
----
-
-## 3. Duplicate `WeaponUpgrade` Type
-
-**File 1**: `types/player.ts` ~line 33
-**File 2**: `config/weapons/types.ts` ~line 3
-**Issue**: Both define `WeaponUpgrade = Partial<WeaponConfig> & { name: string }`. Different parts of the codebase import from different locations.
-**Fix**: Keep one canonical definition (probably `types/player.ts`) and have `config/weapons/types.ts` re-export it, or consolidate to a single source.
-
----
-
-## 4. Unused `MapGameplay` Interface
-
-**File**: `types/index.ts` ~lines 9-12
-```typescript
-export interface MapGameplay {
-  perkCosts?: Record<string, number>;
-  packAPunchCost?: number;
+public getSound(name: string): HTMLAudioElement | undefined {
+    return this.sounds.get(name);
 }
 ```
-Never imported or used anywhere. The actual per-map config uses `MapConfiguration` from `maps/types.ts`.
-**Fix**: Delete it.
+**Issue**: No callers found in the codebase. If needed for future use, mark with `/** @internal — reserved for future debug tooling */`. Otherwise remove.
 
 ---
 
-## 5. HitMarker.tsx — Demo/Placeholder Logic
+## Stale/Dead Variables
 
-**File**: `ui/components/HitMarker.tsx` ~lines 13-34
-**Issue**: Comment says `"simplified - in real implementation would use event bus"` and uses `Math.random() > 0.7` for headshot detection. This is demo code in production.
-**Fix**: Either connect to actual event bus data or document clearly that this is intentionally randomized for the current implementation stage.
-
----
-
-## 6. KillFeed.tsx — Random Kill Generation
-
-**File**: `ui/components/KillFeed.tsx` ~lines 24-43
-**Issue**: Comment says `"Random for demo"` — generates random headshot status with `Math.random() > 0.6`. Production code using demo placeholders.
-**Fix**: Same as HitMarker — connect to real data or clearly document intent.
+### `systems/zombie/zombieAIUtils.ts` ~line 102-103
+```typescript
+const cursor = z.pathCursor ?? 0;
+```
+**Issue**: `cursor` is assigned but the function body later re-checks `z.pathCursor` directly at line 143 instead of using `cursor`. Either use `cursor` consistently or remove the variable.
 
 ---
 
-## 7. Unused `PowerUpManager.windows` Property
+## Suppression Code with Bug
 
-**File**: `managers/PowerUpManager.ts`
-**Issue**: `windows` property is set in constructor (~line 28) but never referenced by any method in the class.
-**Fix**: Remove the property if not needed.
+### `game/Game.ts` ~lines 77-84
+```typescript
+const suppressedWarn = (msg: string, ...args: any[]) => {
+    if (typeof msg === 'string' && (msg.includes('context') || ...)) {
+        return;
+    }
+    originalWarn(msg, args);  // BUG: should be ...args
+};
+```
+**Issues**:
+1. `originalWarn(msg, args)` passes args as a single array instead of spreading. Should be `originalWarn(msg, ...args)`.
+2. The suppression is broad — any warning containing "context" is silently swallowed, including potentially useful ones.
+3. Consider scoping the suppression more tightly (only during engine construction) and restoring `console.warn` immediately after.
 
 ---
 
-## 8. NetworkDeltaCompressor — Unexported-Only Types
+## Debug Flag That's Never Enabled
 
-**File**: `network/NetworkDeltaCompressor.ts` ~lines 23-68
-**Issue**: `MysteryBoxSnapshot`, `HostSnapshot`, `ClientSnapshot` types are exported but only used internally within this file.
-**Fix**: Remove `export` keyword — keep them as file-local types.
+### `engine/LevelBuilder.ts` ~line 380
+```typescript
+const DEBUG_SHOW_NAVFLOORS = false;
+```
+**Issue**: This flag is hardcoded `false` and never toggled. If it's useful for debugging, wire it to a debug command (`/shownavfloors`). If not, remove the conditional branch entirely.
 
 ---
 
-## Priority
+## Refactoring Strategy
 
-Items 2-4 are the most impactful — duplicate type definitions are a major source of LLM confusion because the AI doesn't know which one is canonical and may import from the wrong location or create yet another duplicate.
+1. **Remove** `SoundManager.getSound()` if truly unused (verify with grep first)
+2. **Fix** the `...args` spread bug in Game.ts console.warn suppression
+3. **Use `cursor`** consistently in `zombieAIUtils.ts` or remove the variable
+4. **Wire or remove** `DEBUG_SHOW_NAVFLOORS`

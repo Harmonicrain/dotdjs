@@ -123,5 +123,9 @@ export const createDownedSystem = (ctx: IDownedContext): System => {
                 }
             }
         },
+        dispose: () => {
+            // No EventBus subscriptions currently, but scaffold ensures the
+            // pattern is in place for future additions.
+        },
     };
 };

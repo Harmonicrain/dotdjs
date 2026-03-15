@@ -48,7 +48,7 @@ export const createZombieSyncSystem = (ctx: IZombieSyncContext): System => {
                 } else {
                     releaseZombieMesh({ mesh: z.mesh as BABYLON.Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
                 }
-                if (z.fireSystem) { z.fireSystem.stop(); z.fireSystem.dispose(); }
+                if (z.fireSystem) { z.fireSystem.stop(); z.fireSystem.dispose(false); }
                 knownZombies.delete(id);
                 const idx = ctx.zombies.indexOf(z);
                 if (idx !== -1) ctx.zombies.splice(idx, 1);
