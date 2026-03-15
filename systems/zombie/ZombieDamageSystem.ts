@@ -67,8 +67,6 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
 
     return {
         name: 'zombieDamage',
-        dispose: () => {
-        },
         update: (dt: number, now: number) => {
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority || ctx.gameState.isDebugMode || ctx.gameState.isGodMode) return;

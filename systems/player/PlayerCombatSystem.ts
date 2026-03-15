@@ -124,8 +124,9 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
             return;
         }
 
+        const cc = ctx.configManager.combat;
         const hasDoubleTap = ctx.gameState.perkStates['doubleTap'];
-        const fireDelay = (60000 / weapon.fireRate) / (hasDoubleTap ? 1.33 : 1);
+        const fireDelay = (60000 / weapon.fireRate) / (hasDoubleTap ? cc.DOUBLE_TAP_FIRE_RATE_MULT : 1);
         if (ctx.gameState.isReloading || ctx.gameState.isKnifing || now - ctx.gameState.lastShotTime < fireDelay) return;
         if (weapon.currentAmmo <= 0) { if (weapon.currentReserve > 0) reload(); return; }
 
@@ -140,7 +141,6 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
         // Play weapon sound
         ctx.soundManager?.play('M1911');
 
-        const cc = ctx.configManager.combat;
         if (ctx.camera && ctx.gameEngine) {
             const spread = ctx.gameState.isAiming ? 0 : cc.HIP_FIRE_SPREAD;
 
@@ -344,13 +344,8 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
 
             // PREVENT ACTIONS IF DOWNED
             if (ctx.gameState.isDowned) {
-                // Allow shooting if we have a pistol (which we should in downed state)
-                const downedWeapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
-                if (downedWeapon?.automatic) {
-                    ctx.gameState.isFiring = inputManager.isFireInputActive();
-                } else {
-                    ctx.gameState.isFiring = inputManager.isDown(GameAction.FIRE);
-                }
+                // Allow shooting while downed (M1911 with limited ammo, semi-auto only)
+                ctx.gameState.isFiring = inputManager.isDown(GameAction.FIRE);
                 ctx.gameState.isAiming = inputManager.isDown(GameAction.AIM);
 
                 if (ctx.gameState.isFiring) {

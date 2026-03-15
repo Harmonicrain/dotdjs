@@ -118,6 +118,13 @@ export class ParticleManager {
             this.flashLightFadeStart.push(0);
         }
         this.flashLightFadeObserver = this.scene.onBeforeRenderObservable.add(() => {
+            // Always reset per-frame explosion budget so the cap is per-frame, not cumulative
+            this.zombieExplosionFrameCount = 0;
+
+            // Early exit when nothing is active (e.g. after reset()) — avoids unnecessary work
+            const hasActiveLight = this.flashLightFadeStart.some(s => s !== 0);
+            if (!hasActiveLight && this.zombieExplosionQueue.length === 0) return;
+
             const now = Date.now();
             for (let i = 0; i < this.flashLightPool.length; i++) {
                 const start = this.flashLightFadeStart[i];
@@ -130,8 +137,7 @@ export class ParticleManager {
                     this.flashLightPool[i].intensity = 5 * (1 - t);
                 }
             }
-            // Reset per-frame explosion budget and drain the nuke queue
-            this.zombieExplosionFrameCount = 0;
+            // Drain the nuke queue
             const toFire = Math.min(this.zombieExplosionQueue.length, ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME);
             for (let j = 0; j < toFire; j++) {
                 const e = this.zombieExplosionQueue.shift()!;

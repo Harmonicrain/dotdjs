@@ -102,6 +102,10 @@ export interface PlayerState {
     reviveProgress: number;
     quickRevivesRemaining: number;
 
+    /** Weapons saved when entering downed state, restored on revive */
+    savedWeapons: WeaponState[] | null;
+    savedActiveWeaponIndex: number;
+
     playerName: string;
 }
 

@@ -24,6 +24,7 @@ export class HellhoundManager {
     private addPointsCallback: ((amount: number) => void) | null = null;
     private sendNetworkMessage: ((msg: GameMessage) => void) | null = null;
     private setKillsCallback: ((kills: number) => void) | null = null;
+    private pushKillEventCallback: ((event: import('../store/useGameStore').KillEvent) => void) | null = null;
 
     constructor(
         private scene: BABYLON.Scene,
@@ -43,15 +44,17 @@ export class HellhoundManager {
 
 
     public setDependencies(
-        spawnPowerUp: (pos: BABYLON.Vector3, type?: PowerUpType) => void, 
+        spawnPowerUp: (pos: BABYLON.Vector3, type?: PowerUpType) => void,
         addPoints: (amount: number) => void,
         send: (msg: GameMessage) => void,
-        setKills: (kills: number) => void
+        setKills: (kills: number) => void,
+        pushKillEvent?: (event: import('../store/useGameStore').KillEvent) => void
     ) {
         this.spawnPowerUpCallback = spawnPowerUp;
         this.addPointsCallback = addPoints;
         this.sendNetworkMessage = send;
         this.setKillsCallback = setKills;
+        this.pushKillEventCallback = pushKillEvent ?? null;
     }
 
     /**
@@ -101,6 +104,15 @@ export class HellhoundManager {
             this.gameState.kills++;
             if (this.setKillsCallback) this.setKillsCallback(this.gameState.kills);
             if (this.addPointsCallback) this.addPointsCallback(baseKillPts);
+            if (this.pushKillEventCallback) {
+                this.pushKillEventCallback({
+                    id: z.id,
+                    enemyType: 'hellhound',
+                    isHeadshot: false,
+                    points: baseKillPts,
+                    timestamp: Date.now(),
+                });
+            }
         } else if (this.sendNetworkMessage) {
             this.sendNetworkMessage({ type: 'HIT_CONFIRM', amount: baseKillPts });
         }
@@ -242,7 +254,8 @@ export class HellhoundManager {
             newMesh.mesh.visibility = 0;
             
             const baseSpeed = hc.SPEED_BASE;
-            const speedVariation = 0.9 + (Math.random() * 0.2);
+            const zc = this.configManager.zombieAI;
+            const speedVariation = zc.SPEED_VARIATION_MIN + (Math.random() * zc.SPEED_VARIATION_RANGE);
             
             // Health scaling with cap
             const health = Math.min(

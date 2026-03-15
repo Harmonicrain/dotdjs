@@ -27,7 +27,8 @@ export const GAME_CONFIG = {
   ZOMBIE_DAMAGE: 25,
   
   // DOWNED & REVIVE
-  DOWNED_BLEED_OUT_TIME: 45000, 
+  DOWNED_PISTOL_RESERVE: 48,     // M1911 reserve ammo while downed (limited supply)
+  DOWNED_BLEED_OUT_TIME: 45000,
   REVIVE_BASE_TIME: 5000,        
   REVIVE_QUICK_TIME: 2500,       
   SOLO_SELF_REVIVE_TIME: 10000,  
@@ -45,6 +46,8 @@ export const GAME_CONFIG = {
 };
 
 export const ZOMBIE_CONFIG = {
+  SPEED_VARIATION_MIN: 0.9,   // min multiplier applied to base speed (90%)
+  SPEED_VARIATION_RANGE: 0.2, // random range added on top (90%–110%)
   SPAWN_SOUND_CHANCE: 0.20,
   SPAWN_SOUND_MAX_DIST: 35,
   SPAWN_SOUND_CONCURRENT: 6,
@@ -66,6 +69,7 @@ export const ZOMBIE_CONFIG = {
 };
 
 export const COMBAT_CONFIG = {
+  DOUBLE_TAP_FIRE_RATE_MULT: 1.33, // fire-rate divisor when Double Tap perk is active
   PROJECTILE_SPEED: 2.5,
   HIP_FIRE_SPREAD: 0.05,
   KNIFE_HIT_DELAY_MS: 150,

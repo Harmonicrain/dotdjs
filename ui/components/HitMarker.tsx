@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { useGameStore } from '../../store/useGameStore';
+import React, { useState, useEffect, useRef } from 'react';
+import { useGameStore, KillEvent } from '../../store/useGameStore';
 
 interface HitMark {
     id: string;
@@ -11,32 +11,36 @@ interface HitMark {
 
 export const HitMarker: React.FC = () => {
     const [hitMarks, setHitMarks] = useState<HitMark[]>([]);
-    const kills = useGameStore(state => state.kills);
-    const prevKills = React.useRef(kills);
+    const killEvents = useGameStore(state => state.killEvents);
+    const processedRef = useRef<Set<string>>(new Set());
 
-    // Listen for kill events (simplified - in real implementation would use event bus)
     useEffect(() => {
-        if (kills > prevKills.current) {
-            const id = Math.random().toString(36).substr(2, 9);
-            setHitMarks(prev => [...prev, { 
-                id, 
-                isKill: true, 
-                isHeadshot: Math.random() > 0.7, // Random for demo
-                timestamp: Date.now() 
-            }]);
-            
-            // Remove after animation
+        if (killEvents.length === 0) return;
+
+        const newEvents = killEvents.filter(e => !processedRef.current.has(e.id));
+        if (newEvents.length === 0) return;
+
+        for (const event of newEvents) {
+            processedRef.current.add(event.id);
+            const mark: HitMark = {
+                id: event.id,
+                isKill: true,
+                isHeadshot: event.isHeadshot,
+                timestamp: event.timestamp,
+            };
+            setHitMarks(prev => [...prev, mark]);
+
+            // Remove after animation (keep ID in processedRef to prevent re-processing)
             setTimeout(() => {
-                setHitMarks(prev => prev.filter(h => h.id !== id));
+                setHitMarks(prev => prev.filter(h => h.id !== event.id));
             }, 500);
         }
-        prevKills.current = kills;
-    }, [kills]);
+    }, [killEvents]);
 
     return (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
             {hitMarks.map(hit => (
-                <div 
+                <div
                     key={hit.id}
                     className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
                     style={{ animation: 'hitMarkerPop 0.3s ease-out forwards' }}
@@ -53,10 +57,10 @@ export const HitMarker: React.FC = () => {
                                           ${hit.isHeadshot ? 'bg-red-500' : 'bg-white'}
                                           shadow-[0_0_10px_rgba(255,255,255,0.8)]`}
                                  style={{ left: '-12px', top: '-1.5px' }} />
-                            
+
                             {/* Headshot indicator */}
                             {hit.isHeadshot && (
-                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 
+                                <div className="absolute -top-6 left-1/2 -translate-x-1/2
                                               text-red-500 text-[10px] font-bold tracking-wider
                                               animate-pulse whitespace-nowrap">
                                     HEADSHOT

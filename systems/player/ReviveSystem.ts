@@ -25,6 +25,7 @@ export interface IReviveContext {
     setInteractionMsg(v: string | null): void;
     setHoverMsg(v: string | null): void;
     setPerks(v: Record<string, boolean>): void;
+    restoreWeaponsAfterRevive(): void;
 }
 
 /**
@@ -63,6 +64,7 @@ export const createReviveSystem = (
                 gameState.health            = GAME_CONFIG.REVIVE_HEALTH;
                 gameState.isBeingRevived    = false;
                 gameState.perkStates        = {};
+                ctx.restoreWeaponsAfterRevive();
                 ctx.setPerks({});
                 ctx.setHealth(GAME_CONFIG.REVIVE_HEALTH);
                 ctx.setIsDowned(false);

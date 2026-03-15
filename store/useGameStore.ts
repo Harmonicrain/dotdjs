@@ -5,6 +5,14 @@ import { WEAPON_CONFIGS, DEFAULT_SETTINGS } from '../config';
 
 const startWeapon = WEAPON_CONFIGS[0];
 
+export interface KillEvent {
+  id: string;
+  enemyType: 'zombie' | 'hellhound';
+  isHeadshot: boolean;
+  points: number;
+  timestamp: number;
+}
+
 export interface PlayerFields {
   points: number;
   totalEarnedPoints: number;
@@ -22,6 +30,7 @@ export interface PlayerFields {
   shotsFired: number;
   playerName: string;
   reviveProgress: number;
+  killEvents: KillEvent[];
 }
 
 export interface ScaleWeaponModeData {
@@ -122,6 +131,7 @@ export const useGameStore = create<GameStore>((set) => ({
   shotsFired: 0,
   playerName: 'Unknown',
   reviveProgress: 0,
+  killEvents: [],
 
   // Game Defaults
   round: 1,

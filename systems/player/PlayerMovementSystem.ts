@@ -50,6 +50,10 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
     // 0.5-0.7 is good for reducing jitter while staying responsive
     const CAMERA_SMOOTHING = 0.65;
 
+    const TERMINAL_VELOCITY = -0.8;      // maximum downward speed (units/frame)
+    const GROUND_SNAP_FACTOR = 0.2;      // fraction of height diff corrected per frame
+    const EXTERNAL_FORCE_DECAY = 0.85;   // multiplier applied to knockback each frame
+
     return {
         name: 'playerMove',
         init: () => {
@@ -170,7 +174,7 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
 
             // --- PHYSICS & JUMP ---
             ctx.gameState.verticalVelocity += GAME_CONFIG.GRAVITY;
-            if (ctx.gameState.verticalVelocity < -0.8) ctx.gameState.verticalVelocity = -0.8;
+            if (ctx.gameState.verticalVelocity < TERMINAL_VELOCITY) ctx.gameState.verticalVelocity = TERMINAL_VELOCITY;
 
             const rayLength = GAME_CONFIG.PLAYER_HEIGHT + 0.2;
             // Reuse pre-allocated ray to avoid per-frame allocation
@@ -207,7 +211,7 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
                 const targetY = pick.pickedPoint!.y + GAME_CONFIG.PLAYER_HEIGHT;
                 const diff = targetY - camera.position.y;
                 if (Math.abs(diff) > 0.001) {
-                    camera.position.y += diff * 0.2;
+                    camera.position.y += diff * GROUND_SNAP_FACTOR;
                 }
             } else {
                 ctx.gameState.isGrounded = false;
@@ -226,8 +230,7 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             const externalForce = ctx.gameState.externalForce;
             if (externalForce.lengthSquared() > 0.0001) {
                 camera.cameraDirection.addInPlace(externalForce);
-                // Decay external force (0.85 = quick but smooth decay)
-                externalForce.scaleInPlace(0.85);
+                externalForce.scaleInPlace(EXTERNAL_FORCE_DECAY);
                 // Zero out when negligible to prevent drift
                 if (externalForce.lengthSquared() < 0.0001) {
                     externalForce.set(0, 0, 0);

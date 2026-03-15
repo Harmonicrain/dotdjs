@@ -62,7 +62,8 @@ export class StateManager {
         isActive: boolean;
         pathMeshes: BABYLON.AbstractMesh[];
         lastUpdate: number;
-    } = { isActive: false, pathMeshes: [], lastUpdate: 0 };
+        observer: BABYLON.Observer<BABYLON.Scene> | null;
+    } = { isActive: false, pathMeshes: [], lastUpdate: 0, observer: null };
     public isConsoleOpen: boolean = false;
     public isInternalPointerRelease: boolean = false;
 
@@ -132,6 +133,7 @@ export class StateManager {
     public setIsBeingRevived(v: boolean) { this.ui.setIsBeingRevived(v); }
     public setReviveProgress(v: number) { this.ui.setReviveProgress(v); }
     public setKills(v: number) { this.ui.setKills(v); }
+    public pushKillEvent(event: import('../store/useGameStore').KillEvent) { this.ui.pushKillEvent(event); }
 
     public setShotsFired(v: number) { this.ui.setShotsFired(v); }
     public setInteractionMsg(v: string | null) { this.ui.setInteractionMsg(v); }
@@ -169,6 +171,10 @@ export class StateManager {
                 this.gameState.downedStartTime = Date.now();
                 this.gameState.downedTimeLimit = this.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
                 this.setIsDowned(true);
+
+                // CoD-style: save current weapons and swap to M1911 with limited ammo
+                this.swapToDownedWeapon();
+
                 if (!isSolo) {
                     this.send({
                         type: 'PLAYER_DOWNED',
@@ -182,6 +188,64 @@ export class StateManager {
                     }
                 }
             }
+        }
+    }
+
+    /** Save current weapons and switch to M1911 with limited ammo while downed */
+    private swapToDownedWeapon(): void {
+        const gs = this.gameState;
+
+        // Save current weapon loadout
+        gs.savedWeapons = gs.weapons.map(w => ({ ...w }));
+        gs.savedActiveWeaponIndex = gs.activeWeaponIndex;
+
+        // Find M1911 base config
+        const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');
+        if (!pistolConfig) return;
+
+        // Replace weapons array with a single M1911
+        gs.weapons = [{
+            ...pistolConfig,
+            currentAmmo: pistolConfig.clipSize,
+            currentReserve: GAME_CONFIG.DOWNED_PISTOL_RESERVE,
+            isPacked: false,
+            mesh: gs.weaponMeshes['pistol'] || null,
+        }];
+        gs.activeWeaponIndex = 0;
+        gs.isReloading = false;
+        gs.isFiring = false;
+        gs.isAiming = false;
+
+        // Sync HUD
+        this.setActiveWeaponIndex(0);
+        this.setWeaponName(pistolConfig.name);
+        this.setAmmo(pistolConfig.clipSize);
+        this.setReserveAmmo(GAME_CONFIG.DOWNED_PISTOL_RESERVE);
+        this.setMaxClip(pistolConfig.clipSize);
+    }
+
+    /** Restore the weapons the player had before going downed */
+    public restoreWeaponsAfterRevive(): void {
+        const gs = this.gameState;
+        if (!gs.savedWeapons) return;
+
+        gs.weapons = gs.savedWeapons;
+        gs.activeWeaponIndex = gs.savedActiveWeaponIndex;
+        gs.savedWeapons = null;
+
+        // Re-link weapon meshes
+        for (const w of gs.weapons) {
+            w.mesh = gs.weaponMeshes[w.id] || null;
+        }
+
+        // Sync HUD with restored weapon
+        const active = gs.weapons[gs.activeWeaponIndex];
+        if (active) {
+            this.setActiveWeaponIndex(gs.activeWeaponIndex);
+            this.setWeaponName(active.name);
+            this.setAmmo(active.currentAmmo);
+            this.setReserveAmmo(active.currentReserve);
+            this.setMaxClip(active.clipSize);
         }
     }
 
@@ -255,6 +319,8 @@ export class StateManager {
             isRevivingTeammate: false,
             reviveProgress: 0,
             quickRevivesRemaining: GAME_CONFIG.MAX_QUICK_REVIVES_SOLO,
+            savedWeapons: null,
+            savedActiveWeaponIndex: 0,
             playerName: "Unknown",
             interactionMsg: null,
             hoverMsg: null

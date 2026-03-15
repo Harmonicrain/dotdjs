@@ -13,6 +13,9 @@ export interface ISpawnAIContext {
     visualManager: VisualManager;
 }
 
+const SPAWN_UNDERGROUND_Y = -3.5; // Y position while zombie waits underground (BREAKING_LID)
+const SPAWN_START_Y = -1.5;       // Y position when emergence begins after lid is cleared
+
 /**
  * ZombieSpawnSystem
  *
@@ -48,7 +51,7 @@ export const createZombieSpawnSystem = (ctx: ISpawnAIContext): System => {
                         }
                     }
                 } else if (z.state === ZombieState.BREAKING_LID) {
-                    z.mesh.position.y = -3.5;
+                    z.mesh.position.y = SPAWN_UNDERGROUND_Y;
 
                     if (z.targetLidId) {
                         const gs = ctx.groundSpawns.find(g => g.id === z.targetLidId);
@@ -84,7 +87,7 @@ export const createZombieSpawnSystem = (ctx: ISpawnAIContext): System => {
 
                     // Once the lid is gone, begin emergence
                     if (!z.targetLidId) {
-                        z.mesh.position.y = -1.5;
+                        z.mesh.position.y = SPAWN_START_Y;
                         z.state = ZombieState.SPAWNING;
                     }
                 }

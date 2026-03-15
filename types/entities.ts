@@ -32,6 +32,11 @@ export type Zombie = {
     mesh: BABYLON.AbstractMesh;
     headMesh: BABYLON.AbstractMesh;
     torsoMesh?: BABYLON.AbstractMesh; // Added for crawling mechanics
+    /**
+     * Limb references.
+     * For zombies: armL/armR = arms, legL/legR = legs.
+     * For hellhounds: armL/armR = FRONT legs, legL/legR = BACK legs.
+     */
     limbs?: {
         armL: BABYLON.AbstractMesh;
         armR: BABYLON.AbstractMesh;

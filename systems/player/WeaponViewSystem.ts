@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { GAME_CONFIG } from '../../config';
 import { GameStateData, RemoteGameState } from '../../types/index';
 import { System, RemotePlayerVisuals } from '../../types/systems';
 import { frameIndependentLerp } from '../../engine/MathUtils';
@@ -43,7 +44,7 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
                 const mesh = activeWeapon.mesh;
                 const isAds = ctx.gameState.isAiming && !ctx.gameState.isReloading && !ctx.gameState.isKnifing && !ctx.gameState.isDowned;
                 const targetPos = isAds ? activeWeapon.adsPos : activeWeapon.hipPos;
-                const targetFov = isAds ? 0.6 : 1.1;
+                const targetFov = isAds ? GAME_CONFIG.ADS_FOV : GAME_CONFIG.BASE_FOV;
 
                 let finalTargetX = targetPos.x;
                 let finalTargetY = targetPos.y;

@@ -119,6 +119,9 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         });
     };
 
+    // ── State Handler constants ──────────────────────────────────────────────
+    const ROLL_SINE_FREQ = 0.01; // frequency of glow pulse and weapon bob during rolling
+
     // ── State Handlers ───────────────────────────────────────────────────────
 
     const handleBoxIdle = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>) => {
@@ -154,7 +157,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
     const handleBoxRolling = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>, isAuthority: boolean, weapons: typeof stateManager.configManager.weapons) => {
         box.lidAngle = -Math.PI / 2.5;
-        const glowPulse = 5 + Math.sin(Date.now() * 0.01) * 1.5;
+        const glowPulse = 5 + Math.sin(Date.now() * ROLL_SINE_FREQ) * 1.5;
         updateGlow(activeInstance, glowPulse);
 
         const cycleSpeed = 100;
@@ -163,7 +166,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
         updateWeaponDisplay(activeInstance?.weaponAnchor || null, index, weapons, null, {
             rotSpeed: 0.1,
-            posY: 0.5 + Math.sin(Date.now() * 0.01) * 0.1,
+            posY: 0.5 + Math.sin(Date.now() * ROLL_SINE_FREQ) * 0.1,
             scale: 2
         });
 

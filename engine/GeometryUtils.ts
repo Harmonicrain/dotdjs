@@ -271,16 +271,14 @@ export const createFixture = (
     const noiseOffset = Math.random() * 1000;
 
     const obs = scene.onBeforeRenderObservable.add(() => {
-        if (pl.isDisposed()) {
-            scene.onBeforeRenderObservable.remove(obs);
-            return;
-        }
-
         if (!pl.isEnabled()) {
             bulbMat.emissiveColor.set(0, 0, 0);
         } else {
             bulbMat.emissiveColor.set(1.0, 0.6, 0.2);
         }
+    });
+    pl.onDisposeObservable.addOnce(() => {
+        scene.onBeforeRenderObservable.remove(obs);
     });
 
     lights.push(pl);

@@ -11,6 +11,18 @@ export interface IZombieAnimationContext {
     configManager: MapConfigManager;
 }
 
+// ── Procedural animation constants ───────────────────────────────────────────
+const WALK_ARM_AMPLITUDE = 0.6;     // arm/leg swing amplitude during walk cycle
+const TORSO_BASE_Y = 1.275;         // torso rest position Y
+const TORSO_BOB_AMOUNT = 0.05;      // vertical bob magnitude during walk
+
+const ATTACK_ANIM_FREQ = 0.015;     // time multiplier for attack arm animation
+const ATTACK_ARM_RAISE = -1.5;      // base arm rotation during attack lunge
+const ATTACK_ARM_SWING = 0.5;       // arm oscillation amplitude during attack
+
+const IDLE_BREATHE_FREQ = 0.002;    // time multiplier for idle breathe animation
+const IDLE_ARM_SWING = 0.1;         // arm oscillation amplitude during idle
+
 // ── Fire particle pool constants ─────────────────────────────────────────────
 const FIRE_POOL_SIZE = 4;
 
@@ -152,16 +164,15 @@ export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): Syste
                                 const t = now * vc.ANIM_TIME_FACTOR * speedFactor;
                                 
                                 // Bipedal Walk Cycle (Opposite arm/leg)
-                                const amp = 0.6; // Swing amplitude
-                                z.limbs.armL.rotation.x = Math.sin(t) * amp;
-                                z.limbs.armR.rotation.x = -Math.sin(t) * amp;
-                                z.limbs.legL.rotation.x = -Math.sin(t) * amp;
-                                z.limbs.legR.rotation.x = Math.sin(t) * amp;
-                                
+                                z.limbs.armL.rotation.x = Math.sin(t) * WALK_ARM_AMPLITUDE;
+                                z.limbs.armR.rotation.x = -Math.sin(t) * WALK_ARM_AMPLITUDE;
+                                z.limbs.legL.rotation.x = -Math.sin(t) * WALK_ARM_AMPLITUDE;
+                                z.limbs.legR.rotation.x = Math.sin(t) * WALK_ARM_AMPLITUDE;
+
                                 // Bobbing
                                 if (z.torsoMesh) {
                                      // Bob up and down (2x frequency of steps)
-                                     z.torsoMesh.position.y = 1.275 + Math.abs(Math.sin(t)) * 0.05;
+                                     z.torsoMesh.position.y = TORSO_BASE_Y + Math.abs(Math.sin(t)) * TORSO_BOB_AMOUNT;
                                      // Head follows torso
                                      if (z.headMesh) {
                                          // Head is parented to torso, so no manual update needed if parenting works
@@ -170,14 +181,14 @@ export const createZombieAnimationSystem = (ctx: IZombieAnimationContext): Syste
                                 }
                             } else if (isAttacking) {
                                 // Attack Lunge
-                                const t = now * 0.015;
-                                z.limbs.armL.rotation.x = -1.5 + Math.sin(t) * 0.5;
-                                z.limbs.armR.rotation.x = -1.5 + Math.cos(t) * 0.5;
+                                const t = now * ATTACK_ANIM_FREQ;
+                                z.limbs.armL.rotation.x = ATTACK_ARM_RAISE + Math.sin(t) * ATTACK_ARM_SWING;
+                                z.limbs.armR.rotation.x = ATTACK_ARM_RAISE + Math.cos(t) * ATTACK_ARM_SWING;
                             } else {
                                 // Idle Breathe
-                                const t = now * 0.002;
-                                z.limbs.armL.rotation.x = Math.sin(t) * 0.1;
-                                z.limbs.armR.rotation.x = Math.cos(t) * 0.1;
+                                const t = now * IDLE_BREATHE_FREQ;
+                                z.limbs.armL.rotation.x = Math.sin(t) * IDLE_ARM_SWING;
+                                z.limbs.armR.rotation.x = Math.cos(t) * IDLE_ARM_SWING;
                                 z.limbs.legL.rotation.x = 0;
                                 z.limbs.legR.rotation.x = 0;
                             }

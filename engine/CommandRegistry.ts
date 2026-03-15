@@ -172,8 +172,13 @@ const COMMANDS: Record<string, CommandHandler> = {
     },
     'show_pathfinding': (args, sm) => {
         sm.showPathfinding.isActive = !sm.showPathfinding.isActive;
-        
+
         if (!sm.showPathfinding.isActive) {
+            // Remove the render observer before clearing state
+            if (sm.showPathfinding.observer) {
+                sm.scene.onBeforeRenderObservable.remove(sm.showPathfinding.observer);
+                sm.showPathfinding.observer = null;
+            }
             for (const mesh of sm.showPathfinding.pathMeshes) {
                 mesh.dispose();
             }
@@ -182,14 +187,15 @@ const COMMANDS: Record<string, CommandHandler> = {
             return "Pathfinding visualization: OFF";
         }
 
+        // Remove any lingering observer from a previous toggle before creating a new one
+        if (sm.showPathfinding.observer) {
+            sm.scene.onBeforeRenderObservable.remove(sm.showPathfinding.observer);
+            sm.showPathfinding.observer = null;
+        }
+
         sm.showPathfinding.lastUpdate = 0;
 
-        const observer = sm.scene.onBeforeRenderObservable.add(() => {
-            if (!sm.showPathfinding.isActive) {
-                sm.scene.onBeforeRenderObservable.remove(observer);
-                return;
-            }
-
+        sm.showPathfinding.observer = sm.scene.onBeforeRenderObservable.add(() => {
             // Only update every 10 frames to reduce flicker and improve performance
             sm.showPathfinding.lastUpdate++;
             if (sm.showPathfinding.lastUpdate < 10) return;

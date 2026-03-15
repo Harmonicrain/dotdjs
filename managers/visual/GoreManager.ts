@@ -76,8 +76,9 @@ export class GoreManager {
     private initGoreFadeObserver() {
         const FADE_MS = 30000;
         this.goreFadeObserver = this.scene.onBeforeRenderObservable.add(() => {
-            const now = Date.now();
             const arr = this.activeGoreDiscs;
+            if (arr.length === 0) return; // no-op when nothing active (e.g. after reset())
+            const now = Date.now();
             for (let i = arr.length - 1; i >= 0; i--) {
                 const entry = arr[i];
                 const elapsed = now - entry.startTime;

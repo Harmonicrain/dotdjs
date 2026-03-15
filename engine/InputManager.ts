@@ -684,7 +684,7 @@ export class InputManager {
     const lsX = gp.axes[0] || 0;
     const lsY = gp.axes[1] || 0;
     const mag = Math.sqrt(lsX * lsX + lsY * lsY);
-    const moveDz = 0.2;
+    const moveDz = this.settings.controllerDeadzone;
     if (mag < moveDz) {
       this._movementVector.x = 0;
       this._movementVector.y = 0;

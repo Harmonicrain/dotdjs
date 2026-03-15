@@ -237,12 +237,14 @@ export class Game {
             (amt) => sm.addPoints(sm.hasDoublePoints() ? amt * 2 : amt),
             this.sendNetworkData,
             (kills) => sm.setKills(kills),
+            (event) => sm.pushKillEvent(event),
         );
         hellhoundManager.setDependencies(
             (pos, type) => powerUpManager.spawnPowerUp(pos, type),
             (amt) => sm.addPoints(sm.hasDoublePoints() ? amt * 2 : amt),
             this.sendNetworkData,
             (kills) => sm.setKills(kills),
+            (event) => sm.pushKillEvent(event),
         );
         powerUpManager.setZombieKiller(
             (z, pos, k) => {
@@ -576,6 +578,7 @@ export class Game {
 
         sm.gameState.kills = 0;
         sm.setKills(0);
+        sm.ui.clearKillEvents();
 
         sm.gameState.shots = 0;
         sm.setShotsFired(0);

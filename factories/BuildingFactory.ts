@@ -1,15 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-
-export interface BuildingDefinition {
-    id: string;
-    model: string;  // Path to GLB file
-    pos: [number, number, number];
-    rotation?: [number, number, number];
-    scaling?: [number, number, number];
-    checkCollisions?: boolean;
-    receiveShadows?: boolean;
-    castShadows?: boolean;
-}
+import { BuildingDefinition } from '../types/world';
 
 export interface BuildingOptions {
     onLoaded?: (meshes: BABYLON.Mesh[]) => void;

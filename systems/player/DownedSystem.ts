@@ -22,9 +22,14 @@ export interface IDownedContext {
     setIsGameOver(v: boolean): void;
     setPerks(v: Record<string, boolean>): void;
     setInteractionMsg(v: string | null): void;
+    restoreWeaponsAfterRevive(): void;
 }
 
 // DownedSystem
+const CAMERA_REVIVE_LERP = 0.12;            // lerp speed for camera rising after revive
+const CAMERA_REVIVE_SNAP_THRESHOLD = 0.02;  // snap to eye height when within this distance
+const CAMERA_DOWNED_LERP = 0.1;             // lerp speed for camera sinking when downed
+const CAMERA_REVIVE_START_THRESHOLD = 0.01; // begin lerp only when this far below eye height
 
 /**
  * Runs every frame while the local player is in the "downed" (DBNO) state.
@@ -53,12 +58,12 @@ export const createDownedSystem = (ctx: IDownedContext): System => {
                 ctx.setIsBeingRevived(false);
                 
                 // Smooth camera rise after revive
-                if (camera && camera.position.y < GAME_CONFIG.PLAYER_EYE_HEIGHT - 0.01) {
-                    const lerpFactor = frameIndependentLerp(0.12, dt);
+                if (camera && camera.position.y < GAME_CONFIG.PLAYER_EYE_HEIGHT - CAMERA_REVIVE_START_THRESHOLD) {
+                    const lerpFactor = frameIndependentLerp(CAMERA_REVIVE_LERP, dt);
                     camera.position.y = BABYLON.Scalar.Lerp(camera.position.y, GAME_CONFIG.PLAYER_EYE_HEIGHT, lerpFactor);
-                    
+
                     // Snap to final position when close enough to prevent endless micro-adjustments
-                    if (Math.abs(camera.position.y - GAME_CONFIG.PLAYER_EYE_HEIGHT) < 0.02) {
+                    if (Math.abs(camera.position.y - GAME_CONFIG.PLAYER_EYE_HEIGHT) < CAMERA_REVIVE_SNAP_THRESHOLD) {
                         camera.position.y = GAME_CONFIG.PLAYER_EYE_HEIGHT;
                     }
                 }
@@ -70,7 +75,7 @@ export const createDownedSystem = (ctx: IDownedContext): System => {
 
             // Lerp camera down to crawl height (frame-rate independent)
             if (camera) {
-                const lerpFactor = frameIndependentLerp(0.1, dt);
+                const lerpFactor = frameIndependentLerp(CAMERA_DOWNED_LERP, dt);
                 camera.position.y = BABYLON.Scalar.Lerp(camera.position.y, GAME_CONFIG.PLAYER_DOWNED_HEIGHT, lerpFactor);
             }
 
@@ -103,6 +108,7 @@ export const createDownedSystem = (ctx: IDownedContext): System => {
                     gameState.perkStates['quickRevive'] = false;
                     gameState.quickRevivesRemaining--;
 
+                    ctx.restoreWeaponsAfterRevive();
                     ctx.setHealth(gameState.health);
                     ctx.setIsDowned(false);
                     ctx.setIsBeingRevived(false);

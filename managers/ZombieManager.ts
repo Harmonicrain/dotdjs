@@ -28,6 +28,7 @@ export class ZombieManager {
     private addPointsCallback: ((amount: number) => void) | null = null;
     private sendNetworkMessage: ((msg: GameMessage) => void) | null = null;
     private setKillsCallback: ((kills: number) => void) | null = null;
+    private pushKillEventCallback: ((event: import('../store/useGameStore').KillEvent) => void) | null = null;
     private lastSpawnSoundTime: number = 0;
     private pendingSpawnQueue: { round: number }[] = [];
 
@@ -90,12 +91,14 @@ export class ZombieManager {
         spawnPowerUp: (pos: BABYLON.Vector3) => void,
         addPoints: (amount: number) => void,
         send: (msg: GameMessage) => void,
-        setKills: (kills: number) => void
+        setKills: (kills: number) => void,
+        pushKillEvent?: (event: import('../store/useGameStore').KillEvent) => void
     ) {
         this.spawnPowerUpCallback = spawnPowerUp;
         this.addPointsCallback = addPoints;
         this.sendNetworkMessage = send;
         this.setKillsCallback = setKills;
+        this.pushKillEventCallback = pushKillEvent ?? null;
     }
 
     /**
@@ -141,6 +144,15 @@ export class ZombieManager {
             this.gameState.kills++;
             if (this.setKillsCallback) this.setKillsCallback(this.gameState.kills);
             if (this.addPointsCallback) this.addPointsCallback(baseKillPts);
+            if (this.pushKillEventCallback) {
+                this.pushKillEventCallback({
+                    id: z.id,
+                    enemyType: 'zombie',
+                    isHeadshot,
+                    points: baseKillPts + (isHeadshot ? this.configManager.gameplay.POINTS_HEADSHOT : 0),
+                    timestamp: Date.now(),
+                });
+            }
         } else if (this.sendNetworkMessage) {
             this.sendNetworkMessage({ type: 'HIT_CONFIRM', amount: baseKillPts });
         }
@@ -302,7 +314,7 @@ export class ZombieManager {
             const newZ = createZombieMesh(scene, spawnPos, this.resourceManager);
 
             const baseSpeed = zs.WALKER + (currentRound * rc.ZOMBIE_SPEED_INC);
-            const speedVariation = 0.9 + (Math.random() * 0.2); // 90% to 110% of base speed
+            const speedVariation = zc.SPEED_VARIATION_MIN + (Math.random() * zc.SPEED_VARIATION_RANGE); // 90%–110% of base speed
 
             const zEntity: Zombie = {
                 id: id,
@@ -373,7 +385,7 @@ export class ZombieManager {
         const newZ = createZombieMesh(this.scene, spawnPos, this.resourceManager);
 
         const baseSpeed = zs.WALKER + (round * rc.ZOMBIE_SPEED_INC);
-        const speedVariation = 0.9 + (Math.random() * 0.2);
+        const speedVariation = zc.SPEED_VARIATION_MIN + (Math.random() * zc.SPEED_VARIATION_RANGE);
 
         const zEntity: Zombie = {
             id: id,

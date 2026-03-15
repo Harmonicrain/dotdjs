@@ -1,6 +1,6 @@
 
 import { GameStateData, PowerUpType, DebugInfo } from '../types/index';
-import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, useGameStore } from '../store/useGameStore';
+import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, KillEvent, useGameStore } from '../store/useGameStore';
 
 type UpdatePlayer = (updates: Partial<PlayerFields>) => void;
 type UpdateGame = (updates: Partial<GameFields>) => void;
@@ -156,6 +156,17 @@ export class UIBridge {
             this.uiCache.kills = v;
             this._updatePlayer({ kills: v });
         }
+    }
+
+    public pushKillEvent(event: KillEvent) {
+        const current = useGameStore.getState().killEvents;
+        // Keep only the last 5 events to avoid unbounded growth
+        const updated = [...current.slice(-4), event];
+        this._updatePlayer({ killEvents: updated });
+    }
+
+    public clearKillEvents() {
+        this._updatePlayer({ killEvents: [] });
     }
 
     public setShotsFired(v: number) {
