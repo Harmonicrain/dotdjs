@@ -7,6 +7,7 @@ export interface WeaponConfig {
     clipSize: number;
     maxReserve: number;
     fireRate: number;
+    /** Hold-to-fire (true) vs single-shot-per-press (false). Not a weapon class label. */
     automatic: boolean;
     damage: number;
     scale: number;
