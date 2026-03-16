@@ -68,6 +68,9 @@ export async function createGameEngine(canvas: HTMLCanvasElement): Promise<{ eng
                 audioEngine: true,
                 antialiasing: true,
             });
+            // Disable UBOs BEFORE initAsync so bind group layouts respect the limit.
+            // WebGPU allows max 12 uniform buffers per stage; our scene needs 16+.
+            gpuEngine.disableUniformBuffers = true;
             await gpuEngine.initAsync();
             console.warn = originalWarn;
             console.log('✓ Using WebGPU renderer');
@@ -123,11 +126,9 @@ export class Game {
         this.engine = engine;
         this.rendererType = rendererType;
 
-        // Disable UBOs to prevent "VERTEX shader uniform block count exceeds GL_MAX_VERTEX_UNIFORM_BUFFERS"
-        // error when using many lights/PBR materials on some drivers (WebGL only).
-        if (rendererType === 'WebGL') {
-            this.engine.disableUniformBuffers = true;
-        }
+        // Safety net: ensure UBOs are disabled for WebGL too (WebGPU sets this
+        // before initAsync in createGameEngine; WebGL doesn't need early init).
+        this.engine.disableUniformBuffers = true;
 
         this.scene = new BABYLON.Scene(this.engine);
         this.resourceManager = new ResourceManager(this.scene);

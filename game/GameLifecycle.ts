@@ -41,6 +41,7 @@ export class GameLifecycle {
     private callbacks: LifecycleCallbacks | null = null;
     private playerNameRef = { current: 'Survivor' };
     private engineInitPromise: Promise<void> | null = null;
+    private disposed = false;
 
     // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -59,6 +60,13 @@ export class GameLifecycle {
 
         // Engine creation is async (WebGPU probe), so kick it off and store the promise.
         this.engineInitPromise = createGameEngine(canvas).then(async ({ engine, rendererType }) => {
+            // If dispose() was called while we were awaiting engine creation
+            // (e.g. React StrictMode double-mount), tear down immediately.
+            if (this.disposed) {
+                engine.dispose();
+                return;
+            }
+
             const game = new Game(canvas, engine, rendererType, send, updatePlayer, updateGame);
             this.game = game;
 
@@ -89,6 +97,7 @@ export class GameLifecycle {
 
             // Boot the engine (including navPlugin initialization) and wait for it.
             await game.initializeEngine();
+            if (this.disposed) return;
             game.initializeSystems();
             game.beginRenderLoop();
         });
@@ -335,6 +344,7 @@ export class GameLifecycle {
      * Tear down the engine entirely. Call from React's cleanup function.
      */
     public dispose(): void {
+        this.disposed = true;
         this.game?.inputManager.detachListeners();
         this.game?.dispose();
         this.game = null;
