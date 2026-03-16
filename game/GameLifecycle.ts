@@ -1,6 +1,6 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { Game } from './Game';
+import { Game, createGameEngine } from './Game';
 import { MapLoader } from '../managers/MapLoader';
 import { GameMessage, MysteryBox, createDefaultMysteryBox } from '../types/index';
 import { MAP_DEFINITIONS } from '../managers/MapRegistry';
@@ -57,40 +57,38 @@ export class GameLifecycle {
     ): void {
         this.callbacks = callbacks;
 
-        const game = new Game(canvas, send, updatePlayer, updateGame);
-        this.game = game;
+        // Engine creation is async (WebGPU probe), so kick it off and store the promise.
+        this.engineInitPromise = createGameEngine(canvas).then(async ({ engine, rendererType }) => {
+            const game = new Game(canvas, engine, rendererType, send, updatePlayer, updateGame);
+            this.game = game;
 
-        // Wire input listeners — InputManager reads game state via a live proxy.
-        const stateProxy = {
-            get hasStarted()   { return game.stateManager?.gameState.hasStarted   ?? false; },
-            get isPaused()     { return game.stateManager?.gameState.isPaused     ?? false; },
-            get isSpectating() { return game.stateManager?.gameState.isSpectating ?? false; },
-            get isGameOver()   { return game.stateManager?.gameState.isGameOver   ?? false; },
-            get isConsoleOpen() { return game.stateManager?.isConsoleOpen ?? false; },
-            get isDebugActive() { return game.stateManager?.debugSelection.isActive ?? false; },
-            get isInternalPointerRelease() { return game.stateManager?.isInternalPointerRelease ?? false; }
-        };
+            // Wire input listeners — InputManager reads game state via a live proxy.
+            const stateProxy = {
+                get hasStarted()   { return game.stateManager?.gameState.hasStarted   ?? false; },
+                get isPaused()     { return game.stateManager?.gameState.isPaused     ?? false; },
+                get isSpectating() { return game.stateManager?.gameState.isSpectating ?? false; },
+                get isGameOver()   { return game.stateManager?.gameState.isGameOver   ?? false; },
+                get isConsoleOpen() { return game.stateManager?.isConsoleOpen ?? false; },
+                get isDebugActive() { return game.stateManager?.debugSelection.isActive ?? false; },
+                get isInternalPointerRelease() { return game.stateManager?.isInternalPointerRelease ?? false; }
+            };
 
-        game.inputManager.attachListeners(canvas, stateProxy, (paused) => {
-            this._setPaused(paused);
-        });
+            game.inputManager.attachListeners(canvas, stateProxy, (paused) => {
+                this._setPaused(paused);
+            });
 
-        // Handle respawn requests emitted by RoundSystem / NetworkMessageHandler.
-        // Respawn lives here because it needs to manipulate weapon meshes and camera —
-        // things that belong at the lifecycle/engine layer, not inside StateManager.
-        game.stateManager?.eventBus.on('RESPAWN_REQUEST', (data: { round: number; points: number }) => {
-            this._respawnPlayer(data.round, data.points);
-        });
+            // Handle respawn requests emitted by RoundSystem / NetworkMessageHandler.
+            game.stateManager?.eventBus.on('RESPAWN_REQUEST', (data: { round: number; points: number }) => {
+                this._respawnPlayer(data.round, data.points);
+            });
 
-        // Release pointer lock when the game ends — keeps DOM access out of ECS systems.
-        game.stateManager?.eventBus.on('GAME_OVER', () => {
-            if (document.pointerLockElement) document.exitPointerLock();
-        });
+            // Release pointer lock when the game ends — keeps DOM access out of ECS systems.
+            game.stateManager?.eventBus.on('GAME_OVER', () => {
+                if (document.pointerLockElement) document.exitPointerLock();
+            });
 
-        // Boot the engine (including navPlugin initialization) and wait for it.
-        // Systems like ZombieAI need navPlugin to be available.
-        this.engineInitPromise = game.initializeEngine().then(() => {
-            // Only register systems AFTER engine is fully initialized so navPlugin exists
+            // Boot the engine (including navPlugin initialization) and wait for it.
+            await game.initializeEngine();
             game.initializeSystems();
             game.beginRenderLoop();
         });

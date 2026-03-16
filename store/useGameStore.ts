@@ -51,6 +51,7 @@ export interface DebugControlsData {
 
 export interface RenderStatsData {
   isActive: boolean;
+  rendererType: 'WebGPU' | 'WebGL';
   drawCalls: number;
   activeMeshes: number;
   totalMeshes: number;
@@ -189,6 +190,7 @@ export const useGameStore = create<GameStore>((set) => ({
   },
   renderStats: {
     isActive: false,
+    rendererType: 'WebGL',
     drawCalls: 0,
     activeMeshes: 0,
     totalMeshes: 0,

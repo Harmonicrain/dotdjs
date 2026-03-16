@@ -73,6 +73,15 @@ export const RenderStatsOverlay: React.FC = () => {
                     Render Stats
                 </div>
 
+                {/* Renderer type */}
+                <div className="mb-2">
+                    <StatRow
+                        label="Renderer"
+                        value={stats.rendererType ?? 'WebGL'}
+                        colorClass={stats.rendererType === 'WebGPU' ? 'text-green-400' : 'text-blue-400'}
+                    />
+                </div>
+
                 {/* Draw Calls — the #1 GPU performance metric */}
                 <StatBar label="Draw Calls" value={stats.drawCalls} max={500} thresholds={[100, 250]} />
 
