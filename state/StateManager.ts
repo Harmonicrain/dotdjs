@@ -1,7 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
-import { GAME_CONFIG, WEAPON_CONFIGS, UPGRADED_WEAPON_CONFIGS, POWERUP_CONFIG, SYNC_CONFIG } from '../config';
-import { GameStateData, WeaponState, MysteryBox, MysteryBoxState, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorState, WindowBarrierState, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
+import { GAME_CONFIG, WEAPON_CONFIGS } from '../config';
+import { GameStateData, WeaponState, MysteryBox, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
 import { MysteryBoxSystem } from '../types/systems';
+import { DebugSelectionState, ShowPathfindingState, ScaleWeaponModeState, DebugControlsModeState, RenderStatsModeState, DEFAULT_DEBUG_SELECTION, DEFAULT_SHOW_PATHFINDING, DEFAULT_SCALE_WEAPON_MODE, DEFAULT_DEBUG_CONTROLS_MODE, DEFAULT_RENDER_STATS_MODE } from '../types/debug';
 import { GameEngine } from '../game/GameEngine';
 import { TimerManager } from '../engine/TimerManager';
 import { ZoneSystem } from '../systems/ZoneSystem';
@@ -18,6 +19,7 @@ import { RemotePlayerState } from './RemotePlayerState';
 
 import { MapConfigManager } from '../managers/MapConfigManager';
 import { executeCommand } from '../engine/CommandRegistry';
+import { applyDamageToLocalPlayer as _applyDamage } from '../systems/player/playerDamageUtils';
 
 import { PlayerFields, GameFields } from '../store/useGameStore';
 
@@ -54,37 +56,14 @@ export class StateManager {
         return this.inputManager?.getInputDevice() ?? 'KM';
     }
 
-    // Debug State
-    public debugSelection: {
-        isActive: boolean;
-        selectedMesh: BABYLON.AbstractMesh | null;
-    } = { isActive: false, selectedMesh: null };
-    public showPathfinding: {
-        isActive: boolean;
-        pathMeshes: BABYLON.AbstractMesh[];
-        lastUpdate: number;
-        observer: BABYLON.Observer<BABYLON.Scene> | null;
-    } = { isActive: false, pathMeshes: [], lastUpdate: 0, observer: null };
+    // Debug State (types defined in types/debug.ts)
+    public debugSelection: DebugSelectionState = { ...DEFAULT_DEBUG_SELECTION };
+    public showPathfinding: ShowPathfindingState = { ...DEFAULT_SHOW_PATHFINDING };
     public isConsoleOpen: boolean = false;
     public isInternalPointerRelease: boolean = false;
-
-    // Scale Weapon Tool State
-    public scaleWeaponMode: {
-        isActive: boolean;
-        weaponId: string;
-        scale: { x: number; y: number; z: number };
-        originalScale: { x: number; y: number; z: number } | null;
-        step: number;
-        axis: 'all' | 'x' | 'y' | 'z';
-    } = { isActive: false, weaponId: '', scale: { x: 1, y: 1, z: 1 }, originalScale: null, step: 0.01, axis: 'all' };
-
-    // Debug Controls State (for debugging camera/input jitter)
-    public debugControlsMode: {
-        isActive: boolean;
-        lastFpsUpdate: number;
-        frameCount: number;
-        fps: number;
-    } = { isActive: false, lastFpsUpdate: 0, frameCount: 0, fps: 0 };
+    public scaleWeaponMode: ScaleWeaponModeState = { ...DEFAULT_SCALE_WEAPON_MODE };
+    public debugControlsMode: DebugControlsModeState = { ...DEFAULT_DEBUG_CONTROLS_MODE };
+    public renderStatsMode: RenderStatsModeState = { ...DEFAULT_RENDER_STATS_MODE };
 
     // Level Data
     public staticLevelMeshes: Set<BABYLON.AbstractMesh> = new Set();
@@ -150,106 +129,6 @@ export class StateManager {
     public getConnectionStatus(): string { return this.ui.getConnectionStatus(); }
     public getIsSpectating(): boolean { return this.ui.getIsSpectating(); }
 
-    public applyDamageToLocalPlayer(amount: number, flashColor: string): void {
-        const isAuthority = this.gameModeRef.current === 'SOLO' || this.gameModeRef.current === 'HOST';
-        if (!isAuthority || this.gameState.isGodMode) return;
-        if (this.gameState.health <= 0 || this.gameState.isDowned) return;
-
-        this.gameState.lastDamageTime = Date.now();
-        this.gameState.health = Math.max(0, this.gameState.health - amount);
-        this.setHealth(this.gameState.health);
-        this.setFlashColor(flashColor);
-
-        if (this.gameState.health <= 0 && !this.gameState.isDowned) {
-            const isSolo = this.gameModeRef.current === 'SOLO';
-            const hasQuickRevive = this.gameState.perkStates['quickRevive'];
-
-            if (isSolo && !hasQuickRevive) {
-                this.setHealth(0);
-                this.setIsGameOver(true);
-            } else {
-                this.gameState.isDowned = true;
-                this.gameState.downedStartTime = Date.now();
-                this.gameState.downedTimeLimit = this.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
-                this.setIsDowned(true);
-
-                // CoD-style: save current weapons and swap to M1911 with limited ammo
-                this.swapToDownedWeapon();
-
-                if (!isSolo) {
-                    this.send({
-                        type: 'PLAYER_DOWNED',
-                        playerName: this.gameState.playerName || "Survivor",
-                        position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z }
-                    });
-
-                    // In multiplayer, if both players are now downed, trigger game over
-                    if (this.remote.gameState.isDowned) {
-                        this.setIsGameOver(true);
-                    }
-                }
-            }
-        }
-    }
-
-    /** Save current weapons and switch to M1911 with limited ammo while downed */
-    private swapToDownedWeapon(): void {
-        const gs = this.gameState;
-
-        // Save current weapon loadout
-        gs.savedWeapons = gs.weapons.map(w => ({ ...w }));
-        gs.savedActiveWeaponIndex = gs.activeWeaponIndex;
-
-        // Find M1911 base config
-        const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');
-        if (!pistolConfig) return;
-
-        // Replace weapons array with a single M1911
-        gs.weapons = [{
-            ...pistolConfig,
-            currentAmmo: pistolConfig.clipSize,
-            currentReserve: GAME_CONFIG.DOWNED_PISTOL_RESERVE,
-            isPacked: false,
-            mesh: gs.weaponMeshes['pistol'] || null,
-        }];
-        gs.activeWeaponIndex = 0;
-        gs.isReloading = false;
-        gs.isFiring = false;
-        gs.isAiming = false;
-
-        // Sync HUD
-        this.setActiveWeaponIndex(0);
-        this.setWeaponName(pistolConfig.name);
-        this.setAmmo(pistolConfig.clipSize);
-        this.setReserveAmmo(GAME_CONFIG.DOWNED_PISTOL_RESERVE);
-        this.setMaxClip(pistolConfig.clipSize);
-    }
-
-    /** Restore the weapons the player had before going downed */
-    public restoreWeaponsAfterRevive(): void {
-        const gs = this.gameState;
-        if (!gs.savedWeapons) return;
-
-        gs.weapons = gs.savedWeapons;
-        gs.activeWeaponIndex = gs.savedActiveWeaponIndex;
-        gs.savedWeapons = null;
-
-        // Re-link weapon meshes
-        for (const w of gs.weapons) {
-            w.mesh = gs.weaponMeshes[w.id] || null;
-        }
-
-        // Sync HUD with restored weapon
-        const active = gs.weapons[gs.activeWeaponIndex];
-        if (active) {
-            this.setActiveWeaponIndex(gs.activeWeaponIndex);
-            this.setWeaponName(active.name);
-            this.setAmmo(active.currentAmmo);
-            this.setReserveAmmo(active.currentReserve);
-            this.setMaxClip(active.clipSize);
-        }
-    }
-
     constructor(
         public scene: BABYLON.Scene,
         public camera: BABYLON.UniversalCamera,
@@ -275,7 +154,7 @@ export class StateManager {
 
         // Player Damage Event
         this.eventBus.on('PLAYER_DAMAGE', (data: { amount: number; source: string }) => {
-            this.applyDamageToLocalPlayer(data.amount, "rgba(200, 50, 0, 0.4)");
+            _applyDamage(this, data.amount, "rgba(200, 50, 0, 0.4)");
         });
 
         // Some commands (e.g. /scaleweapon) need to close the console and return to gameplay

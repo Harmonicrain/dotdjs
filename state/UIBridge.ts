@@ -1,6 +1,6 @@
 
 import { GameStateData, PowerUpType, DebugInfo } from '../types/index';
-import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, KillEvent, useGameStore } from '../store/useGameStore';
+import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, RenderStatsData, KillEvent, useGameStore } from '../store/useGameStore';
 
 type UpdatePlayer = (updates: Partial<PlayerFields>) => void;
 type UpdateGame = (updates: Partial<GameFields>) => void;
@@ -346,6 +346,30 @@ export class UIBridge {
                     cameraRotation: data.cameraRotation ?? { x: 0, y: 0 },
                     rawMouseDelta: data.rawMouseDelta ?? { x: 0, y: 0 },
                     rawControllerLook: data.rawControllerLook ?? { x: 0, y: 0 },
+                }
+            });
+        }
+    }
+
+    public setRenderStats(data: Partial<RenderStatsData>) {
+        const isToggle = data.isActive !== undefined;
+        if (isToggle || this.checkThrottle('renderStats')) {
+            this._updateGame({
+                renderStats: {
+                    isActive: data.isActive ?? false,
+                    drawCalls: data.drawCalls ?? 0,
+                    activeMeshes: data.activeMeshes ?? 0,
+                    totalMeshes: data.totalMeshes ?? 0,
+                    totalVertices: data.totalVertices ?? 0,
+                    totalFaces: data.totalFaces ?? 0,
+                    activeLights: data.activeLights ?? 0,
+                    totalLights: data.totalLights ?? 0,
+                    pbrMaterials: data.pbrMaterials ?? 0,
+                    totalMaterials: data.totalMaterials ?? 0,
+                    shadowGenerators: data.shadowGenerators ?? 0,
+                    shadowMapSize: data.shadowMapSize ?? 0,
+                    textures: data.textures ?? 0,
+                    particleSystems: data.particleSystems ?? 0,
                 }
             });
         }

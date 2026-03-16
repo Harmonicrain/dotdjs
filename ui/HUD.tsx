@@ -22,6 +22,7 @@ import { DeveloperStats } from './components/DeveloperStats';
 import { HitMarker } from './components/HitMarker';
 import { KillFeed } from './components/KillFeed';
 import { FPSCounter } from './components/FPSCounter';
+import { RenderStatsOverlay } from './components/RenderStatsOverlay';
 
 interface HUDProps {
     onResume?: () => void;
@@ -186,6 +187,7 @@ export const HUD: React.FC<HUDProps> = ({ onResume, onQuit, onCommand }) => {
             <DebugInfoWindow />
             <DebugControlsOverlay />
             <ScaleWeaponOverlay />
+            <RenderStatsOverlay />
             <DeveloperStats />
 
             {/* Spectating overlay */}

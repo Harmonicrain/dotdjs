@@ -57,9 +57,8 @@ export const DeveloperStats: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex justify-between text-[8px] text-gray-500 italic pt-1">
+                <div className="text-[8px] text-gray-500 italic pt-1">
                     <span>Signal: {connection}</span>
-                    <span>FPS: {Math.round(1000/16)}</span>
                 </div>
             </div>
         </div>

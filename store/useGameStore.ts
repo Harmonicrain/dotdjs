@@ -49,6 +49,23 @@ export interface DebugControlsData {
   rawControllerLook: { x: number; y: number };
 }
 
+export interface RenderStatsData {
+  isActive: boolean;
+  drawCalls: number;
+  activeMeshes: number;
+  totalMeshes: number;
+  totalVertices: number;
+  totalFaces: number;
+  activeLights: number;
+  totalLights: number;
+  pbrMaterials: number;
+  totalMaterials: number;
+  shadowGenerators: number;
+  shadowMapSize: number;
+  textures: number;
+  particleSystems: number;
+}
+
 export interface GameFields {
   round: number;
   showRoundIntro: boolean;
@@ -78,6 +95,7 @@ export interface GameFields {
   currentZone: number;
   playerPosition: { x: number, y: number, z: number, rot: number };
   debugControls: DebugControlsData;
+  renderStats: RenderStatsData;
   settings: {
     inputDevice: 'KM' | 'CONTROLLER';
     mouseSensitivity: number;
@@ -168,6 +186,22 @@ export const useGameStore = create<GameStore>((set) => ({
     cameraRotation: { x: 0, y: 0 },
     rawMouseDelta: { x: 0, y: 0 },
     rawControllerLook: { x: 0, y: 0 },
+  },
+  renderStats: {
+    isActive: false,
+    drawCalls: 0,
+    activeMeshes: 0,
+    totalMeshes: 0,
+    totalVertices: 0,
+    totalFaces: 0,
+    activeLights: 0,
+    totalLights: 0,
+    pbrMaterials: 0,
+    totalMaterials: 0,
+    shadowGenerators: 0,
+    shadowMapSize: 0,
+    textures: 0,
+    particleSystems: 0,
   },
   settings: getSavedSettings() || DEFAULT_SETTINGS,
 

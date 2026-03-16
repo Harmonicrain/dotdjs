@@ -6,6 +6,8 @@ import { TimerManager } from '../../engine/TimerManager';
 import { MapConfigManager } from '../../managers/MapConfigManager';
 import { EventBus } from '../../engine/EventBus';
 import { getHorizontalDist } from '../../engine/GeometryUtils';
+import { applyDamageToLocalPlayer } from '../player/playerDamageUtils';
+import { StateManager } from '../../state/StateManager';
 
 export interface IZombieDamageContext {
     gameState: GameStateData;
@@ -25,7 +27,6 @@ export interface IZombieDamageContext {
     setIsDowned(v: boolean): void;
     setIsGameOver(v: boolean): void;
     setFlashColor(v: string | null): void;
-    applyDamageToLocalPlayer(amount: number, flashColor: string): void;
     addPoints(amount: number): void;
     hasDoublePoints(): boolean;
 }
@@ -105,7 +106,7 @@ export const createZombieDamageSystem = (ctx: IZombieDamageContext): System => {
                         const isHellhound = z.type === 'HELLHOUND';
                         const damage = isHellhound ? hc.DAMAGE : gc.ZOMBIE_DAMAGE;
 
-                        ctx.applyDamageToLocalPlayer(damage, isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
+                        applyDamageToLocalPlayer(ctx as StateManager, damage, isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
                         ctx.timerManager.schedule('dmg_flash', visuals.HIT_FLASH_DURATION * 2, () => ctx.setFlashColor(null));
 
                         // Apply knockback — subtractToRef + normalizeToRef avoid 2 allocations

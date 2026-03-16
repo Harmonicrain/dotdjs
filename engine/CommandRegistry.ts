@@ -414,8 +414,18 @@ const COMMANDS: Record<string, CommandHandler> = {
             return `Debug Controls: OFF`;
         }
     },
+    'render_stats': (args, sm) => {
+        sm.renderStatsMode.isActive = !sm.renderStatsMode.isActive;
+
+        if (sm.renderStatsMode.isActive) {
+            return `Render Stats: ON — Showing draw calls, materials, shadows, lights`;
+        } else {
+            sm.ui.setRenderStats({ isActive: false });
+            return `Render Stats: OFF`;
+        }
+    },
     'help': () => {
-        return `Commands: /debug, /debug_controls, /pos, /tp, /points, /give, /ammo, /round, /kill_all, /show_zones, /show_navmesh, /show_pathfinding, /wireframe, /god, /noclip, /powerup, /scaleweapon [weapon_id], /debug_pbr`;
+        return `Commands: /debug, /debug_controls, /render_stats, /pos, /tp, /points, /give, /ammo, /round, /kill_all, /show_zones, /show_navmesh, /show_pathfinding, /wireframe, /god, /noclip, /powerup, /scaleweapon [weapon_id], /debug_pbr`;
     }
 };
 

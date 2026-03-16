@@ -51,5 +51,4 @@ export interface RemotePlayerVisuals {
 export interface IInteractionSystem extends System {
     interact(isContinuous?: boolean): boolean;
     checkHover(): string | null;
-    handleWeaponPickup(weaponId: string): void;
 }

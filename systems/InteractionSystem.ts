@@ -1,5 +1,4 @@
-import * as BABYLON from '@babylonjs/core';
-import { WeaponState, InteractableMetadata } from '../types/index';
+import { InteractableMetadata } from '../types/index';
 import { GameAction } from '../engine/InputManager';
 import { IInteractionSystem } from '../types/systems';
 
@@ -13,6 +12,11 @@ import { PackAPunchHandler } from './interaction/handlers/PackAPunchHandler';
 import { MysteryBoxHandler } from './interaction/handlers/MysteryBoxHandler';
 import { WindowHandler } from './interaction/handlers/WindowHandler';
 import { SpawnHoleLidHandler } from './interaction/handlers/SpawnHoleLidHandler';
+
+// Extracted action utilities
+import { openDoor } from './interaction/doorUtils';
+import { activatePower } from './interaction/powerUtils';
+import { handleWeaponPickup } from './interaction/weaponPickupUtils';
 
 import { StateManager } from '../state/StateManager';
 
@@ -31,135 +35,6 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         'POWER': PowerHandler,
         'PAP': PackAPunchHandler,
         'MYSTERY_BOX': MysteryBoxHandler
-    };
-
-    // ── Helper Actions (Animations) ──────────────────────────────────
-
-    /**
-     * Animates a door mesh to a target Y position.
-     * @param mesh - The mesh to animate
-     * @param targetY - Target Y position
-     * @param trackObserver - If true, stores observer reference for cleanup (used by regular doors)
-     * @param doorId - Optional door ID for observer tracking and special handling
-     */
-    const animateDoorMeshToY = (
-        mesh: BABYLON.AbstractMesh,
-        targetY: number,
-        trackObserver: boolean = false,
-        doorId?: string
-    ) => {
-        // Handle special door cases that should be disposed instead of animated
-        if (doorId === 'door1' || doorId === 'door2') {
-            if (mesh) mesh.dispose();
-            ctx.mapVisuals.doorMeshes.delete(doorId);
-            return;
-        }
-
-        // Clean up existing observer if tracked
-        if (trackObserver && doorId) {
-            const entry = ctx.mapVisuals.doorMeshes.get(doorId);
-            if (entry?.observer) {
-                ctx.scene.onBeforeRenderObservable.remove(entry.observer);
-                entry.observer = null;
-            }
-        }
-
-        const observer = ctx.scene.onBeforeRenderObservable.add(() => {
-            if (!mesh) return;
-            const diff = targetY - mesh.position.y;
-            if (Math.abs(diff) < 0.05) {
-                mesh.position.y = targetY;
-                ctx.scene.onBeforeRenderObservable.remove(observer);
-                if (trackObserver && doorId) {
-                    const entry = ctx.mapVisuals.doorMeshes.get(doorId);
-                    if (entry) entry.observer = null;
-                }
-            } else {
-                mesh.position.y += diff * 0.1;
-            }
-        });
-
-        // Track observer reference if needed
-        if (trackObserver && doorId) {
-            const entry = ctx.mapVisuals.doorMeshes.get(doorId);
-            if (entry) entry.observer = observer;
-        }
-    };
-
-    const actionOpenDoor = (doorId: string) => {
-        const entry = ctx.mapVisuals.doorMeshes.get(doorId);
-        if (!entry) return;
-        animateDoorMeshToY(entry.mesh, entry.openY, true, doorId);
-    };
-
-    const actionTurnOnPower = () => {
-        ctx.gameState.powerOn = true;
-        if (ctx.mapVisuals.powerSwitchActivate) {
-            ctx.mapVisuals.powerSwitchActivate();
-        } else if (ctx.mapVisuals.powerSwitchHandle) {
-            ctx.mapVisuals.powerSwitchHandle.rotation.x = -Math.PI / 4;
-        }
-        if (ctx.mapVisuals.powerDoor) {
-            animateDoorMeshToY(ctx.mapVisuals.powerDoor,
-                ctx.mapVisuals.powerDoorOpenY ?? 8);
-        }
-        // Open the power door (zone 1 <-> zone 4 connection)
-        if (ctx.gameState.doorStates["powerDoor"]) {
-            ctx.gameState.doorStates["powerDoor"].isOpen = true;
-        }
-        ctx.setInteractionMsg("POWER ACTIVATED!");
-        ctx.timerManager.schedule('power_msg', ctx.configManager.visuals.POWER_HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
-
-        // Play power on sound
-        ctx.soundManager?.play('power');
-    };
-
-    const handleWeaponPickup = (weaponId: string) => {
-        const weaponConfig = ctx.configManager.weapons.find(w => w.id === weaponId)!;
-        const weapons = ctx.gameState.weapons;
-        const existingSlot = weapons.findIndex((w: WeaponState) => w.id === weaponId);
-
-        if (existingSlot !== -1) {
-            const w = weapons[existingSlot];
-            w.currentAmmo = w.clipSize;
-            w.currentReserve = w.maxReserve;
-            if (ctx.gameState.activeWeaponIndex === existingSlot) {
-                ctx.setAmmo(w.currentAmmo);
-                ctx.setReserveAmmo(w.currentReserve);
-            }
-            ctx.setInteractionMsg("AMMO REFILLED!");
-        } else {
-            const activeIdx = ctx.gameState.activeWeaponIndex;
-            const currentWeapon = weapons[activeIdx];
-            const newMesh = ctx.gameState.weaponMeshes[weaponId];
-
-            const newWeaponState = {
-                ...weaponConfig,
-                currentAmmo: weaponConfig.clipSize,
-                currentReserve: weaponConfig.maxReserve,
-                mesh: newMesh,
-                isPacked: false
-            };
-
-            if (currentWeapon.mesh) currentWeapon.mesh.setEnabled(false);
-
-            if (weapons.length < 2) {
-                weapons.push(newWeaponState);
-                const newIndex = weapons.length - 1;
-                ctx.gameState.activeWeaponIndex = newIndex;
-                ctx.setActiveWeaponIndex(newIndex);
-                ctx.setWeaponName(newWeaponState.name);
-            } else {
-                weapons[activeIdx] = newWeaponState;
-                ctx.setWeaponName(newWeaponState.name);
-            }
-
-            if (newWeaponState.mesh) newWeaponState.mesh.setEnabled(true);
-            ctx.setAmmo(newWeaponState.currentAmmo);
-            ctx.setReserveAmmo(newWeaponState.currentReserve);
-            ctx.setInteractionMsg(`ACQUIRED ${weaponConfig.name}!`);
-        }
-        ctx.timerManager.schedule('clear_pickup_msg', ctx.configManager.visuals.HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
     };
 
     // ── Proximity Detection ──────────────────────────────────────────
@@ -235,11 +110,18 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
     let cachedHoverMsg: string | null = null;
     const HOVER_CHECK_INTERVAL = 100; // ms
 
+    // Throttle continuous interact raycasts (matches existing 200ms success cooldown)
+    let lastContinuousInteractCheck = 0;
+    const CONTINUOUS_INTERACT_INTERVAL = 200; // ms
+
     const update = (dt: number, now: number) => {
         if (ctx.inputManager?.justPressed(GameAction.INTERACT)) {
             interact(false);
         } else if (ctx.inputManager?.isDown(GameAction.INTERACT)) {
-            interact(true);
+            if (now - lastContinuousInteractCheck >= CONTINUOUS_INTERACT_INTERVAL) {
+                lastContinuousInteractCheck = now;
+                interact(true);
+            }
         }
 
         // Throttle hover check to reduce raycast frequency
@@ -250,7 +132,7 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         ctx.setHoverMsg(cachedHoverMsg);
     };
 
-    const handlers = {
+    const eventHandlers = {
         doorOpen: (doorId: string) => {
             if (ctx.gameState.doorStates[doorId]) {
                 ctx.gameState.doorStates[doorId].isOpen = true;
@@ -267,26 +149,26 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
                 }
             }
 
-            actionOpenDoor(doorId);
+            openDoor(ctx, doorId);
         },
         powerOn: () => {
-            actionTurnOnPower();
+            activatePower(ctx);
         },
         weaponPickup: (weaponId: string) => {
-            handleWeaponPickup(weaponId);
+            handleWeaponPickup(ctx, weaponId);
         }
     };
 
     const init = () => {
-        ctx.eventBus.on('DOOR_OPEN_REQUEST', handlers.doorOpen);
-        ctx.eventBus.on('POWER_ON_REQUEST', handlers.powerOn);
-        ctx.eventBus.on('WEAPON_PICKUP_REQUEST', handlers.weaponPickup);
+        ctx.eventBus.on('DOOR_OPEN_REQUEST', eventHandlers.doorOpen);
+        ctx.eventBus.on('POWER_ON_REQUEST', eventHandlers.powerOn);
+        ctx.eventBus.on('WEAPON_PICKUP_REQUEST', eventHandlers.weaponPickup);
     };
 
     const dispose = () => {
-        ctx.eventBus.off('DOOR_OPEN_REQUEST', handlers.doorOpen);
-        ctx.eventBus.off('POWER_ON_REQUEST', handlers.powerOn);
-        ctx.eventBus.off('WEAPON_PICKUP_REQUEST', handlers.weaponPickup);
+        ctx.eventBus.off('DOOR_OPEN_REQUEST', eventHandlers.doorOpen);
+        ctx.eventBus.off('POWER_ON_REQUEST', eventHandlers.powerOn);
+        ctx.eventBus.off('WEAPON_PICKUP_REQUEST', eventHandlers.weaponPickup);
     };
 
     return {
@@ -295,7 +177,6 @@ export const createInteractionSystem = (ctx: StateManager): IInteractionSystem =
         update,
         interact,
         checkHover,
-        handleWeaponPickup,
         dispose
     };
 };

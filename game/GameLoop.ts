@@ -33,8 +33,11 @@ export interface GameLoopDeps {
  *   6. Health regeneration (outside systems to run after damage this frame).
  */
 export const createGameLoop = (deps: GameLoopDeps) => {
-    let frameCount = 0;
     const { stateManager: sm, systemManager, gameModeRef, inputManager } = deps;
+    let lastSettingsSync = 0;
+    let lastDevStatsUpdate = 0;
+    let lastZombieCountUpdate = 0;
+    let lastDrawCallCount = 0;
 
     // ── Scale Weapon scroll handler ──────────────────────────────────────
     const onWheel = (e: WheelEvent) => {
@@ -134,10 +137,10 @@ export const createGameLoop = (deps: GameLoopDeps) => {
         loop: (dt: number) => {
             const currentGameMode = gameModeRef.current;
             const now = Date.now();
-            frameCount++;
 
             // Sync settings to InputManager (throttled - settings don't change often)
-            if (frameCount % 30 === 0) { // ~2x per second at 60fps
+            if (now - lastSettingsSync >= 500) {
+                lastSettingsSync = now;
                 inputManager.updateSettings(useGameStore.getState().settings);
             }
 
@@ -178,6 +181,71 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                 inputManager.setDebugControlsActive(false);
             }
 
+            // ── Render Stats Update ───────────────────────────────────────────
+            if (sm.renderStatsMode.isActive) {
+                const scene = sm.scene;
+                const engine = scene.getEngine();
+
+                let shadowGenCount = 0;
+                let shadowMapSize = 0;
+                const totalLights = scene.lights.length;
+                let activeLights = 0;
+                for (let i = 0; i < totalLights; i++) {
+                    const light = scene.lights[i];
+                    if (light.isEnabled()) {
+                        activeLights++;
+                        const sgs = light.getShadowGenerators();
+                        if (sgs) {
+                            sgs.forEach(sg => {
+                                if (sg) {
+                                    shadowGenCount++;
+                                    const map = sg.getShadowMap();
+                                    if (map) {
+                                        const size = map.getRenderSize() as number;
+                                        shadowMapSize = Math.max(shadowMapSize, size);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+
+                let pbrCount = 0;
+                for (let i = 0; i < scene.materials.length; i++) {
+                    if (scene.materials[i] instanceof BABYLON.PBRMaterial) pbrCount++;
+                }
+
+                const activeMeshes = scene.getActiveMeshes().length;
+                let totalVerts = 0;
+                let totalFaces = 0;
+                const meshList = scene.getActiveMeshes();
+                for (let i = 0; i < meshList.length; i++) {
+                    totalVerts += meshList.data[i].getTotalVertices();
+                    totalFaces += meshList.data[i].getTotalIndices() / 3;
+                }
+
+                const currentDrawCalls = (engine as any)._drawCalls?.current ?? 0;
+                const perFrameDrawCalls = currentDrawCalls - lastDrawCallCount;
+                lastDrawCallCount = currentDrawCalls;
+
+                sm.ui.setRenderStats({
+                    isActive: true,
+                    drawCalls: perFrameDrawCalls,
+                    activeMeshes,
+                    totalMeshes: scene.meshes.length,
+                    totalVertices: totalVerts,
+                    totalFaces: Math.round(totalFaces),
+                    activeLights,
+                    totalLights,
+                    pbrMaterials: pbrCount,
+                    totalMaterials: scene.materials.length,
+                    shadowGenerators: shadowGenCount,
+                    shadowMapSize,
+                    textures: scene.textures.length,
+                    particleSystems: scene.particleSystems.length,
+                });
+            }
+
             // Console Toggle (Works even when paused)
             if (inputManager.justPressed(GameAction.TOGGLE_CONSOLE)) {
                 sm.isConsoleOpen = !sm.isConsoleOpen;
@@ -196,7 +264,8 @@ export const createGameLoop = (deps: GameLoopDeps) => {
             }
 
             // Update Developer Stats (Zone & Position) — Throttled & Debug Only
-            if (sm.gameState.hasStarted && frameCount % 10 === 0) {
+            if (sm.gameState.hasStarted && now - lastDevStatsUpdate >= 167) {
+                lastDevStatsUpdate = now;
                 if (sm.ui.getIsDebugActive() || sm.isConsoleOpen) {
                     const cam = sm.camera;
                     if (cam) {
@@ -242,9 +311,10 @@ export const createGameLoop = (deps: GameLoopDeps) => {
 
                 sm.mysteryBoxSystem?.update(dt);
 
-                // Zombie count HUD — throttled to every 30 frames, HOST/SOLO only
+                // Zombie count HUD — throttled to ~2x/sec, HOST/SOLO only
                 // (CLIENT receives counts via the STATE delta from the host).
-                if (frameCount % 30 === 0 && currentGameMode !== 'CLIENT') {
+                if (now - lastZombieCountUpdate >= 500 && currentGameMode !== 'CLIENT') {
+                    lastZombieCountUpdate = now;
                     sm.setActiveZombiesCount(sm.zombies.length);
                     sm.setTotalRoundZombies(sm.gameState.totalZombiesInRound);
                 }

@@ -4,6 +4,7 @@ import * as BABYLON from '@babylonjs/core';
 import { StateManager } from '../../state/StateManager';
 import { GameEngine } from '../../game/GameEngine';
 import { ResourceManager } from '../../managers/ResourceManager';
+import { applyDamageToLocalPlayer } from '../../systems/player/playerDamageUtils';
 
 describe('StateManager', () => {
     let stateManager: StateManager;
@@ -51,7 +52,7 @@ describe('StateManager', () => {
     it('should handle damage to local player', () => {
         stateManager.gameModeRef.current = 'SOLO';
         stateManager.gameState.health = 100;
-        stateManager.applyDamageToLocalPlayer(30, 'red');
+        applyDamageToLocalPlayer(stateManager, 30, 'red');
         expect(stateManager.gameState.health).toBe(70);
     });
 
@@ -59,9 +60,9 @@ describe('StateManager', () => {
         stateManager.gameModeRef.current = 'SOLO';
         stateManager.gameState.health = 10;
         stateManager.gameState.perkStates['quickRevive'] = false;
-        
-        stateManager.applyDamageToLocalPlayer(20, 'red');
-        
+
+        applyDamageToLocalPlayer(stateManager, 20, 'red');
+
         expect(stateManager.gameState.health).toBe(0);
         expect(stateManager.gameState.isGameOver).toBe(true);
     });
@@ -70,9 +71,9 @@ describe('StateManager', () => {
         stateManager.gameModeRef.current = 'SOLO';
         stateManager.gameState.health = 10;
         stateManager.gameState.perkStates['quickRevive'] = true;
-        
-        stateManager.applyDamageToLocalPlayer(20, 'red');
-        
+
+        applyDamageToLocalPlayer(stateManager, 20, 'red');
+
         expect(stateManager.gameState.health).toBe(0);
         expect(stateManager.gameState.isDowned).toBe(true);
         expect(stateManager.gameState.isGameOver).toBe(false);

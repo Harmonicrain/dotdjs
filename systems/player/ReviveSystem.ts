@@ -5,6 +5,8 @@ import { GameStateData, GameMessage, RemoteGameState } from '../../types/index';
 import { System, ReviveEvent } from '../../types/systems';
 import { EventBus } from '../../engine/EventBus';
 import { TimerManager } from '../../engine/TimerManager';
+import { restoreWeaponsAfterRevive } from './playerDamageUtils';
+import { StateManager } from '../../state/StateManager';
 
 export interface IReviveContext {
     gameState: GameStateData;
@@ -25,7 +27,6 @@ export interface IReviveContext {
     setInteractionMsg(v: string | null): void;
     setHoverMsg(v: string | null): void;
     setPerks(v: Record<string, boolean>): void;
-    restoreWeaponsAfterRevive(): void;
 }
 
 /**
@@ -64,7 +65,7 @@ export const createReviveSystem = (
                 gameState.health            = GAME_CONFIG.REVIVE_HEALTH;
                 gameState.isBeingRevived    = false;
                 gameState.perkStates        = {};
-                ctx.restoreWeaponsAfterRevive();
+                restoreWeaponsAfterRevive(ctx as StateManager);
                 ctx.setPerks({});
                 ctx.setHealth(GAME_CONFIG.REVIVE_HEALTH);
                 ctx.setIsDowned(false);

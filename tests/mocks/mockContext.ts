@@ -140,7 +140,6 @@ export const createMockContext = (overrides: Partial<GameStateData> = {}) => {
         addPoints: vi.fn(),
         hasDoublePoints: vi.fn(() => false),
         setDebugInfo: vi.fn(),
-        applyDamageToLocalPlayer: vi.fn(),
         setActivePowerUps: vi.fn(),
         setInteractionMsg: vi.fn(),
         setHealth: vi.fn(),

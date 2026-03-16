@@ -8,6 +8,8 @@ import { frameIndependentLerp } from '../../engine/MathUtils';
 
 
 import { MapConfigManager } from '../../managers/MapConfigManager';
+import { restoreWeaponsAfterRevive } from './playerDamageUtils';
+import { StateManager } from '../../state/StateManager';
 
 export interface IDownedContext {
     gameState: GameStateData;
@@ -22,7 +24,6 @@ export interface IDownedContext {
     setIsGameOver(v: boolean): void;
     setPerks(v: Record<string, boolean>): void;
     setInteractionMsg(v: string | null): void;
-    restoreWeaponsAfterRevive(): void;
 }
 
 // DownedSystem
@@ -108,7 +109,7 @@ export const createDownedSystem = (ctx: IDownedContext): System => {
                     gameState.perkStates['quickRevive'] = false;
                     gameState.quickRevivesRemaining--;
 
-                    ctx.restoreWeaponsAfterRevive();
+                    restoreWeaponsAfterRevive(ctx as StateManager);
                     ctx.setHealth(gameState.health);
                     ctx.setIsDowned(false);
                     ctx.setIsBeingRevived(false);

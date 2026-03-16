@@ -34,6 +34,7 @@ import {
     createMysteryBoxSystem, createZombieSyncSystem,
     createPackAPunchSystem
 } from '../systems';
+import { applyDamageToLocalPlayer } from '../systems/player/playerDamageUtils';
 
 /** Plain ref-like object so Game.ts stays React-free. */
 interface Ref<T> { current: T; }
@@ -305,7 +306,7 @@ export class Game {
             setHealth: (v) => sm.setHealth(v),
             setIsDowned: (v) => sm.setIsDowned(v),
             setIsGameOver: (v) => sm.setIsGameOver(v),
-            applyDamageToLocalPlayer: (amount: number, flashColor: string) => sm.applyDamageToLocalPlayer(amount, flashColor),
+            applyDamageToLocalPlayer: (amount: number, flashColor: string) => applyDamageToLocalPlayer(sm, amount, flashColor),
             staticLevelMeshes: sm.staticLevelMeshes
         }));
 
@@ -875,16 +876,7 @@ export class Game {
     }
 
     public startLoop(onTick: (dt: number) => void) {
-        const TARGET_FPS = 60;
-        const FRAME_TIME = 1000 / TARGET_FPS;
-        let lastFrameTime = performance.now();
-
         this.engine.runRenderLoop(() => {
-            const now = performance.now();
-            const elapsed = now - lastFrameTime;
-            if (elapsed < FRAME_TIME) return; // skip — too soon
-            lastFrameTime = now - (elapsed % FRAME_TIME); // preserve remainder for smooth timing
-
             const dt = this.engine.getDeltaTime() / 1000;
             onTick(dt);
             if (this.scene) {

@@ -15,6 +15,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const transition = (newState: MysteryBoxState, duration: number = 0) => {
         stateManager.mysteryBox.state = newState;
         stateManager.mysteryBox.stateTimer = duration;
+        _idleSettled = false;
     };
 
     const getActiveInstance = () => {
@@ -25,6 +26,9 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
     // Cache to skip redundant setEnabled calls when nothing relevant has changed
     let _visCache = { isFireSale: false, activeIdx: -1, boxState: '' as MysteryBoxState | '' };
+
+    // When true, handleBoxIdle skips all per-frame work (values have converged)
+    let _idleSettled = false;
 
     const updateBoxVisibility = (isFireSale: boolean) => {
         const box = stateManager.mysteryBox;
@@ -73,16 +77,31 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const updateGlow = (activeInstance: ReturnType<typeof getActiveInstance>, intensity: number) => {
         if (!activeInstance) return;
         if (activeInstance.glowLight) {
-            activeInstance.glowLight.intensity = BABYLON.Scalar.Lerp(activeInstance.glowLight.intensity, intensity, 0.1);
+            if (intensity === 0 && activeInstance.glowLight.intensity < 0.001) {
+                activeInstance.glowLight.intensity = 0;
+            } else {
+                activeInstance.glowLight.intensity = BABYLON.Scalar.Lerp(activeInstance.glowLight.intensity, intensity, 0.1);
+            }
         }
         if (activeInstance.beamMesh && activeInstance.beamMesh.material) {
             const mat = activeInstance.beamMesh.material as BABYLON.StandardMaterial;
-            activeInstance.beamMesh.visibility = intensity > 0.1 ? 1 : 0;
-            mat.alpha = BABYLON.Scalar.Lerp(mat.alpha, Math.min(intensity * 0.1, 0.3), 0.1);
+            const targetAlpha = Math.min(intensity * 0.1, 0.3);
+            if (targetAlpha === 0 && mat.alpha < 0.001) {
+                activeInstance.beamMesh.visibility = 0;
+                mat.alpha = 0;
+            } else {
+                activeInstance.beamMesh.visibility = intensity > 0.1 ? 1 : 0;
+                mat.alpha = BABYLON.Scalar.Lerp(mat.alpha, targetAlpha, 0.1);
+            }
         }
         if (activeInstance.glowPlaneMesh && activeInstance.glowPlaneMesh.material) {
             const mat = activeInstance.glowPlaneMesh.material as BABYLON.StandardMaterial;
-            mat.alpha = BABYLON.Scalar.Lerp(mat.alpha, Math.min(intensity * 0.2, 0.8), 0.1);
+            const targetAlpha = Math.min(intensity * 0.2, 0.8);
+            if (targetAlpha === 0 && mat.alpha < 0.001) {
+                mat.alpha = 0;
+            } else {
+                mat.alpha = BABYLON.Scalar.Lerp(mat.alpha, targetAlpha, 0.1);
+            }
         }
     };
 
@@ -125,25 +144,55 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     // ── State Handlers ───────────────────────────────────────────────────────
 
     const handleBoxIdle = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>) => {
-        box.lidAngle = BABYLON.Scalar.Lerp(box.lidAngle, 0, 0.1);
-        updateGlow(activeInstance, 0);
+        if (_idleSettled) return;
 
-        // Ensure all instances are fully reset to idle state
-        // This acts as a fallback for clients who might miss the instantaneous BOX_RELOCATING state sync
+        // Lerp lid closed — snap once converged
+        if (Math.abs(box.lidAngle) > 0.001) {
+            box.lidAngle = BABYLON.Scalar.Lerp(box.lidAngle, 0, 0.1);
+        } else {
+            box.lidAngle = 0;
+        }
+
+        // Lerp glow off (only if not already zero)
+        const needsGlow = activeInstance != null && (
+            (activeInstance.glowLight && activeInstance.glowLight.intensity > 0.001) ||
+            (activeInstance.beamMesh?.material && (activeInstance.beamMesh.material as BABYLON.StandardMaterial).alpha > 0.001) ||
+            (activeInstance.glowPlaneMesh?.material && (activeInstance.glowPlaneMesh.material as BABYLON.StandardMaterial).alpha > 0.001)
+        );
+        if (needsGlow) {
+            updateGlow(activeInstance, 0);
+        }
+
+        // Ensure all instances are fully reset to idle state.
+        // Fallback for clients who might miss the instantaneous BOX_RELOCATING state sync.
+        // Runs until fully converged, then _idleSettled skips future frames.
+        let allClean = box.lidAngle === 0 && !needsGlow;
         for (let i = 0; i < box.instances.length; i++) {
             const inst = box.instances[i];
             if (inst.weaponAnchor) {
-                inst.weaponAnchor.getChildren().forEach(c => {
-                    const child = c as BABYLON.TransformNode;
+                const children = inst.weaponAnchor.getChildren();
+                for (let j = 0; j < children.length; j++) {
+                    const child = children[j] as BABYLON.TransformNode;
                     if (child.isEnabled()) {
                         child.setEnabled(false);
+                        allClean = false;
                     }
-                });
+                }
             }
             if (i !== box.activeLocationIndex) {
-                if (inst.lidMesh && inst.lidMesh.rotation.x !== 0) inst.lidMesh.rotation.x = 0;
-                if (inst.glowLight && inst.glowLight.intensity > 0) inst.glowLight.intensity = 0;
+                if (inst.lidMesh && inst.lidMesh.rotation.x !== 0) {
+                    inst.lidMesh.rotation.x = 0;
+                    allClean = false;
+                }
+                if (inst.glowLight && inst.glowLight.intensity > 0) {
+                    inst.glowLight.intensity = 0;
+                    allClean = false;
+                }
             }
+        }
+
+        if (allClean) {
+            _idleSettled = true;
         }
     };
 
