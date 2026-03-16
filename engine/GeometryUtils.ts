@@ -144,7 +144,6 @@ export const createWindow = (
     zone: number,
     windowsRef: WindowBarrier[],
     plankMat: BABYLON.Material,
-    metalMat: BABYLON.Material,
     voidMat: BABYLON.Material,
     xOverride?: number,
     isRotated: boolean = false
@@ -171,17 +170,6 @@ export const createWindow = (
         plank.material = plankMat;
         plank.checkCollisions = false;
         boards.push(plank);
-        if (!isRotated) {
-            const nail1 = BABYLON.MeshBuilder.CreateCylinder(id + "_nail_" + i + "_1", { diameter: 0.08, height: 0.15 }, scene);
-            nail1.rotation.z = Math.PI / 2; nail1.parent = plank; nail1.position = new BABYLON.Vector3(-0.05, 0, 1.8); nail1.material = metalMat;
-            const nail2 = BABYLON.MeshBuilder.CreateCylinder(id + "_nail_" + i + "_2", { diameter: 0.08, height: 0.15 }, scene);
-            nail2.rotation.z = Math.PI / 2; nail2.parent = plank; nail2.position = new BABYLON.Vector3(-0.05, 0, -1.8); nail2.material = metalMat;
-        } else {
-            const nail1 = BABYLON.MeshBuilder.CreateCylinder(id + "_nail_" + i + "_1", { diameter: 0.08, height: 0.15 }, scene);
-            nail1.rotation.x = Math.PI / 2; nail1.parent = plank; nail1.position = new BABYLON.Vector3(1.8, 0, -0.05); nail1.material = metalMat;
-            const nail2 = BABYLON.MeshBuilder.CreateCylinder(id + "_nail_" + i + "_2", { diameter: 0.08, height: 0.15 }, scene);
-            nail2.rotation.x = Math.PI / 2; nail2.parent = plank; nail2.position = new BABYLON.Vector3(-1.8, 0, -0.05); nail2.material = metalMat;
-        }
     });
     let voidW = 10, voidD = width + 2;
     let trigW = 2, trigD = width;

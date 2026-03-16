@@ -88,10 +88,8 @@ export const WarehouseMapDefinition: MapDefinition = {
     fixtures: [
         { pos: [0, -15], zone: 1 },
         { pos: [0, 5], zone: 2 },
-        { pos: [0, 20], zone: 2 },
         { pos: [0, 35], zone: 2 },
-        { pos: [20, 2], zone: 3 },
-        { pos: [25, -2], zone: 3 },
+        { pos: [22, 0], zone: 3 },
         { pos: [-13, -5], zone: 4, intensity: 2.0, range: 10 }
     ],
     

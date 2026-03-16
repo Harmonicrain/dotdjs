@@ -486,7 +486,6 @@ export class LevelBuilder {
     private buildWindows(windows: MapDefinition['interactables']['windows']) {
         if (!windows) return;
         const plankMat = this.materials.get('plank') as BABYLON.PBRMaterial;
-        const metalMat = this.materials.get('metal') as BABYLON.PBRMaterial;
         const voidMat = this.materials.get('void') as BABYLON.PBRMaterial;
 
         windows.forEach(w => {
@@ -498,7 +497,6 @@ export class LevelBuilder {
                 w.zone,
                 this.windowsRef,
                 plankMat,
-                metalMat,
                 voidMat,
                 w.pos[0],
                 isRotated
