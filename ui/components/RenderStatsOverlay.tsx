@@ -69,15 +69,17 @@ export const RenderStatsOverlay: React.FC = () => {
     return (
         <div className="absolute top-4 left-4 z-[1000] font-mono text-xs select-none pointer-events-none">
             <div className="bg-black/90 border border-orange-500/50 p-3 rounded min-w-[260px]">
-                <div className="flex justify-between items-center border-b border-orange-500/30 pb-1 mb-2">
-                    <span className="text-orange-400 font-bold text-[10px] uppercase tracking-wider">
-                        Render Stats
-                    </span>
-                    <span className={`font-bold text-[10px] uppercase tracking-wider ${
-                        stats.rendererType === 'WebGPU' ? 'text-green-400' : 'text-blue-400'
-                    }`}>
-                        {stats.rendererType}
-                    </span>
+                <div className="text-orange-400 font-bold border-b border-orange-500/30 pb-1 mb-2 text-[10px] uppercase tracking-wider">
+                    Render Stats
+                </div>
+
+                {/* Renderer type */}
+                <div className="mb-2">
+                    <StatRow
+                        label="Renderer"
+                        value={stats.rendererType ?? 'WebGL'}
+                        colorClass={stats.rendererType === 'WebGPU' ? 'text-green-400' : 'text-blue-400'}
+                    />
                 </div>
 
                 {/* Draw Calls — the #1 GPU performance metric */}
