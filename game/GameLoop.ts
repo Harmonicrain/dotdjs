@@ -230,7 +230,6 @@ export const createGameLoop = (deps: GameLoopDeps) => {
 
                 sm.ui.setRenderStats({
                     isActive: true,
-                    rendererType: engine.isWebGPU ? 'WebGPU' : 'WebGL',
                     drawCalls: perFrameDrawCalls,
                     activeMeshes,
                     totalMeshes: scene.meshes.length,

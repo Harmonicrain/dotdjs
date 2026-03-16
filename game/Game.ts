@@ -42,58 +42,8 @@ interface Ref<T> { current: T; }
 const COLOR_PROJ_NORMAL = new BABYLON.Color3(0.72, 0.45, 0.2);   // Brass/copper bullet color
 const COLOR_PROJ_PACKED = new BABYLON.Color3(0.6, 0.1, 1); // Ray Gun Purple (keep for special weapons)
 
-export type RendererType = 'WebGPU' | 'WebGL';
-
-/**
- * Try to create a WebGPU engine; fall back to WebGL if unsupported.
- * Returns the engine and which renderer is active.
- */
-export async function createGameEngine(canvas: HTMLCanvasElement): Promise<{ engine: BABYLON.Engine; rendererType: RendererType }> {
-    // Suppress audio context warnings during engine creation
-    const originalWarn = console.warn;
-    const suppressedWarn = (msg: string, ...args: any[]) => {
-        if (typeof msg === 'string' && (msg.includes('context') || msg.includes('GainNode') || msg.includes('Connecting'))) {
-            return;
-        }
-        originalWarn(msg, args);
-    };
-    console.warn = suppressedWarn;
-
-    try {
-        const webGPUSupported = await BABYLON.WebGPUEngine.IsSupportedAsync;
-        if (webGPUSupported) {
-            const gpuEngine = new BABYLON.WebGPUEngine(canvas, {
-                preserveDrawingBuffer: true,
-                stencil: true,
-                audioEngine: true,
-                antialiasing: true,
-            });
-            // Disable UBOs BEFORE initAsync so bind group layouts respect the limit.
-            // WebGPU allows max 12 uniform buffers per stage; our scene needs 16+.
-            gpuEngine.disableUniformBuffers = true;
-            await gpuEngine.initAsync();
-            console.warn = originalWarn;
-            console.log('✓ Using WebGPU renderer');
-            return { engine: gpuEngine, rendererType: 'WebGPU' };
-        }
-    } catch (e) {
-        console.warn = originalWarn;
-        console.warn('WebGPU init failed, falling back to WebGL:', e);
-    }
-
-    const glEngine = new BABYLON.Engine(canvas, true, {
-        preserveDrawingBuffer: true,
-        stencil: true,
-        audioEngine: true,
-    });
-    console.warn = originalWarn;
-    console.log('✓ Using WebGL renderer');
-    return { engine: glEngine, rendererType: 'WebGL' };
-}
-
 export class Game {
     public engine: BABYLON.Engine;
-    public rendererType: RendererType;
     public scene: BABYLON.Scene;
     public camera: BABYLON.UniversalCamera;
     public canvas: HTMLCanvasElement;
@@ -121,13 +71,30 @@ export class Game {
     // Game loop cleanup
     private gameLoopDispose: (() => void) | null = null;
 
-    constructor(canvas: HTMLCanvasElement, engine: BABYLON.Engine, rendererType: RendererType, private sendNetworkData: (data: GameMessage) => void, updatePlayer: (updates: Partial<PlayerFields>) => void, updateGame: (updates: Partial<GameFields>) => void) {
+    constructor(canvas: HTMLCanvasElement, private sendNetworkData: (data: GameMessage) => void, updatePlayer: (updates: Partial<PlayerFields>) => void, updateGame: (updates: Partial<GameFields>) => void) {
         this.canvas = canvas;
-        this.engine = engine;
-        this.rendererType = rendererType;
 
-        // Safety net: ensure UBOs are disabled for WebGL too (WebGPU sets this
-        // before initAsync in createGameEngine; WebGL doesn't need early init).
+        // Suppress audio context warnings during engine creation - these are expected
+        // because the AudioContext starts suspended until user interaction
+        const originalWarn = console.warn;
+        const suppressedWarn = (msg: string, ...args: any[]) => {
+            if (typeof msg === 'string' && (msg.includes('context') || msg.includes('GainNode') || msg.includes('Connecting'))) {
+                return;
+            }
+            originalWarn(msg, args);
+        };
+        console.warn = suppressedWarn;
+
+        this.engine = new BABYLON.Engine(canvas, true, {
+            preserveDrawingBuffer: true,
+            stencil: true,
+            audioEngine: true
+        });
+
+        console.warn = originalWarn; // Restore
+
+        // Disable UBOs to prevent "VERTEX shader uniform block count exceeds GL_MAX_VERTEX_UNIFORM_BUFFERS"
+        // error when using many lights/PBR materials on some drivers.
         this.engine.disableUniformBuffers = true;
 
         this.scene = new BABYLON.Scene(this.engine);

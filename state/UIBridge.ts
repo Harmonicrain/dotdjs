@@ -357,7 +357,6 @@ export class UIBridge {
             this._updateGame({
                 renderStats: {
                     isActive: data.isActive ?? false,
-                    rendererType: data.rendererType ?? 'WebGL',
                     drawCalls: data.drawCalls ?? 0,
                     activeMeshes: data.activeMeshes ?? 0,
                     totalMeshes: data.totalMeshes ?? 0,
