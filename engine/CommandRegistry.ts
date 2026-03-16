@@ -418,7 +418,8 @@ const COMMANDS: Record<string, CommandHandler> = {
         sm.renderStatsMode.isActive = !sm.renderStatsMode.isActive;
 
         if (sm.renderStatsMode.isActive) {
-            return `Render Stats: ON — Showing draw calls, materials, shadows, lights`;
+            const renderer = sm.scene.getEngine().isWebGPU ? 'WebGPU' : 'WebGL';
+            return `Render Stats: ON (${renderer}) — Showing draw calls, materials, shadows, lights`;
         } else {
             sm.ui.setRenderStats({ isActive: false });
             return `Render Stats: OFF`;
