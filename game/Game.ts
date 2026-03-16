@@ -123,11 +123,9 @@ export class Game {
         this.engine = engine;
         this.rendererType = rendererType;
 
-        // Disable UBOs to prevent "VERTEX shader uniform block count exceeds GL_MAX_VERTEX_UNIFORM_BUFFERS"
-        // error when using many lights/PBR materials on some drivers (WebGL only).
-        if (rendererType === 'WebGL') {
-            this.engine.disableUniformBuffers = true;
-        }
+        // Disable UBOs to prevent uniform buffer count exceeding per-stage limits
+        // when using many lights/PBR materials. Affects both WebGL and WebGPU.
+        this.engine.disableUniformBuffers = true;
 
         this.scene = new BABYLON.Scene(this.engine);
         this.resourceManager = new ResourceManager(this.scene);
