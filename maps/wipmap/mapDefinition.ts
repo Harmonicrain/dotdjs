@@ -197,8 +197,8 @@ export const WipmapDefinition: MapDefinition = {
         },
     ],
     spawns: {
-        host: { pos: [0, 2.2, 0], rot: 0 },
-        client: { pos: [3, 2.2, 0], rot: 0 }
+        host: { pos: [-11.29, 1.85, 0.16], rot: Math.PI / 2 },
+        client: { pos: [-11.29, 1.85, 1.16], rot: Math.PI / 2 }
     },
 
     navigation: {
