@@ -35,6 +35,8 @@ export class UIBridge {
         kills: -1,
         shotsFired: -1,
         playerName: '',
+        isAiming: false,
+        weaponId: '',
         debugInfo: null as DebugInfo | null,
         flashColor: null as string | null,
         zombiesSpawned: -1,
@@ -129,6 +131,20 @@ export class UIBridge {
         if (this.uiCache.weaponName !== v) {
             this.uiCache.weaponName = v;
             this._updatePlayer({ weaponName: v });
+        }
+    }
+
+    public setIsAiming(v: boolean) {
+        if (this.uiCache.isAiming !== v) {
+            this.uiCache.isAiming = v;
+            this._updatePlayer({ isAiming: v });
+        }
+    }
+
+    public setWeaponId(v: string) {
+        if (this.uiCache.weaponId !== v) {
+            this.uiCache.weaponId = v;
+            this._updatePlayer({ weaponId: v });
         }
     }
 

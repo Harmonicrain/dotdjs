@@ -79,6 +79,7 @@ const COMMANDS: Record<string, CommandHandler> = {
         
         sm.setActiveWeaponIndex(sm.gameState.activeWeaponIndex);
         sm.setWeaponName(config.name);
+        sm.setWeaponId(config.id);
         sm.setAmmo(config.clipSize);
         sm.setReserveAmmo(config.maxReserve);
         

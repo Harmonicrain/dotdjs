@@ -297,11 +297,21 @@ export class ZombieManager {
                 return; // ground path is fully handled (queued or created)
             }
         } else {
-            // FALLBACK: If no windows or holes, use zone spawn bounds (e.g. for open test maps)
+            // FALLBACK: If no windows or holes in accessible zones, try spawn bounds
+            // from ANY accessible zone (not just the player's current zone),
+            // preferring zones other than the player's zone so zombies path in
+            // through doors rather than appearing on top of the player.
             const playerZone = this.getZone(this.camera.position);
-            const randomPoint = this.zoneSystem.getRandomSpawnPoint(playerZone);
+            const accessibleZones = this.zoneSystem.getAccessibleZones(playerZone, this.gameState.doorStates);
+
+            // Try non-player zones first, then player zone as last resort
+            const otherZones = accessibleZones.filter(z => z !== playerZone);
+            const zoneOrder = otherZones.length > 0 ? otherZones : accessibleZones;
+            const picked = zoneOrder[Math.floor(Math.random() * zoneOrder.length)];
+            const randomPoint = this.zoneSystem.getRandomSpawnPoint(picked);
             if (randomPoint) {
                 spawnPos.copyFrom(randomPoint);
+                spawnPos.y = 0; // Ensure ground level
                 validSpawnFound = true;
                 selectedWindow = null;
                 spawnSourceType = 'window'; // Treat as window/default so it doesn't start underground

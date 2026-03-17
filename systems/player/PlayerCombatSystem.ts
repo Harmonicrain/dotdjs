@@ -32,6 +32,8 @@ export interface ICombatContext {
     setReserveAmmo(v: number): void;
     setMaxClip(v: number): void;
     setShotsFired(v: number): void;
+    setIsAiming(v: boolean): void;
+    setWeaponId(v: string): void;
     soundManager?: { play: (name: string) => void } | null;
 }
 
@@ -75,6 +77,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
             ctx.setActiveWeaponIndex(idx);
             const w = ctx.gameState.weapons[idx];
             ctx.setWeaponName(w.name);
+            ctx.setWeaponId(w.id);
             ctx.setAmmo(w.currentAmmo);
             ctx.setReserveAmmo(w.currentReserve);
             ctx.setMaxClip(w.clipSize);
@@ -347,6 +350,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                 // Allow shooting while downed (M1911 with limited ammo, semi-auto only)
                 ctx.gameState.isFiring = inputManager.isDown(GameAction.FIRE);
                 ctx.gameState.isAiming = inputManager.isDown(GameAction.AIM);
+                ctx.setIsAiming(ctx.gameState.isAiming);
 
                 if (ctx.gameState.isFiring) {
                     performShoot(now);
@@ -392,6 +396,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                 ctx.gameState.isFiring = inputManager.isDown(GameAction.FIRE);
             }
             ctx.gameState.isAiming = inputManager.isDown(GameAction.AIM);
+            ctx.setIsAiming(ctx.gameState.isAiming);
 
             // Reset semi-auto lock if trigger released
             if (!ctx.gameState.isFiring) {

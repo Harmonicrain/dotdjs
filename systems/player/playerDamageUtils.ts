@@ -86,6 +86,7 @@ export const swapToDownedWeapon = (ctx: StateManager): void => {
     // Sync HUD
     ctx.setActiveWeaponIndex(0);
     ctx.setWeaponName(pistolConfig.name);
+    ctx.setWeaponId(pistolConfig.id);
     ctx.setAmmo(pistolConfig.clipSize);
     ctx.setReserveAmmo(GAME_CONFIG.DOWNED_PISTOL_RESERVE);
     ctx.setMaxClip(pistolConfig.clipSize);
@@ -110,6 +111,7 @@ export const restoreWeaponsAfterRevive = (ctx: StateManager): void => {
     if (active) {
         ctx.setActiveWeaponIndex(gs.activeWeaponIndex);
         ctx.setWeaponName(active.name);
+        ctx.setWeaponId(active.id);
         ctx.setAmmo(active.currentAmmo);
         ctx.setReserveAmmo(active.currentReserve);
         ctx.setMaxClip(active.clipSize);

@@ -31,6 +31,8 @@ export interface PlayerFields {
   playerName: string;
   reviveProgress: number;
   killEvents: KillEvent[];
+  isAiming: boolean;
+  weaponId: string;
 }
 
 export interface ScaleWeaponModeData {
@@ -150,6 +152,8 @@ export const useGameStore = create<GameStore>((set) => ({
   playerName: 'Unknown',
   reviveProgress: 0,
   killEvents: [],
+  isAiming: false,
+  weaponId: startWeapon.id,
 
   // Game Defaults
   round: 1,

@@ -52,9 +52,11 @@ export const handleWeaponPickup = (ctx: StateManager, weaponId: string) => {
             ctx.gameState.activeWeaponIndex = newIndex;
             ctx.setActiveWeaponIndex(newIndex);
             ctx.setWeaponName(newWeaponState.name);
+            ctx.setWeaponId(newWeaponState.id);
         } else {
             weapons[activeIdx] = newWeaponState;
             ctx.setWeaponName(newWeaponState.name);
+            ctx.setWeaponId(newWeaponState.id);
         }
 
         if (newWeaponState.mesh) newWeaponState.mesh.setEnabled(true);

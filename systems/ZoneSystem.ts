@@ -51,6 +51,7 @@ export class ZoneSystem {
         }
     }
 
+
     /**
      * Returns the zone ID that contains `pos`, or `1` (the default starting
      * zone) when the position falls outside all defined zone bounds.
@@ -72,17 +73,55 @@ export class ZoneSystem {
     }
 
     /**
-     * Returns all zone IDs reachable from `currentZone` through currently
-     * open doors (including `currentZone` itself).
+     * Returns all zone IDs reachable from `currentZone` by BFS through
+     * open doors only (including `currentZone` itself).
+     *
+     * Zones are connected exclusively through doors — physical boundary
+     * adjacency alone does NOT grant access. Zones that share a wall
+     * (e.g. zone 1 and 3 in Warehouse) stay isolated until the
+     * connecting door chain is opened.
      */
     public getAccessibleZones(currentZone: number, doorStates: Record<string, DoorState>): number[] {
         const accessible = new Set<number>([currentZone]);
-        for (const d of this.doors) {
-            if (!doorStates[d.doorId]?.isOpen) continue;
-            if (d.fromZone === currentZone) accessible.add(d.toZone);
-            if (d.toZone   === currentZone) accessible.add(d.fromZone);
+        const queue = [currentZone];
+
+        while (queue.length > 0) {
+            const zone = queue.shift()!;
+
+            for (const d of this.doors) {
+                if (!doorStates[d.doorId]?.isOpen) continue;
+                const neighbor = d.fromZone === zone ? d.toZone : d.toZone === zone ? d.fromZone : -1;
+                if (neighbor === -1 || accessible.has(neighbor)) continue;
+                accessible.add(neighbor);
+                queue.push(neighbor);
+            }
         }
+
         return Array.from(accessible);
+    }
+
+    /** Check if two zones share a boundary edge (touching on X or Z axis). */
+    private zonesShareBoundary(za: ZoneDefinition, zb: ZoneDefinition): boolean {
+        const a = this.getZoneBounds(za);
+        const b = this.getZoneBounds(zb);
+
+        // Check X-axis adjacency (share a Z-overlapping edge)
+        const xAdj = Math.abs(a.maxX - b.minX) < 0.01 || Math.abs(b.maxX - a.minX) < 0.01;
+        const zOverlap = a.minZ < b.maxZ && b.minZ < a.maxZ;
+
+        // Check Z-axis adjacency (share an X-overlapping edge)
+        const zAdj = Math.abs(a.maxZ - b.minZ) < 0.01 || Math.abs(b.maxZ - a.minZ) < 0.01;
+        const xOverlap = a.minX < b.maxX && b.minX < a.maxX;
+
+        return (xAdj && zOverlap) || (zAdj && xOverlap);
+    }
+
+    private getZoneBounds(zone: ZoneDefinition): { minX: number; maxX: number; minZ: number; maxZ: number } {
+        const b = zone.bounds as any;
+        if (b.min && Array.isArray(b.min)) {
+            return { minX: b.min[0], maxX: b.max[0], minZ: b.min[2], maxZ: b.max[2] };
+        }
+        return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ };
     }
 
     /**

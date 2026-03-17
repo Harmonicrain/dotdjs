@@ -604,6 +604,7 @@ export class Game {
         sm.gameState.activeWeaponIndex = 0;
         sm.setActiveWeaponIndex(0);
         sm.setWeaponName(sm.gameState.weapons[0].name);
+        sm.setWeaponId(sm.gameState.weapons[0].id);
         sm.setAmmo(sm.gameState.weapons[0].currentAmmo);
         sm.setReserveAmmo(sm.gameState.weapons[0].currentReserve);
     }

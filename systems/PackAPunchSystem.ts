@@ -282,6 +282,7 @@ export const createPackAPunchSystem = (ctx: StateManager) => {
             ctx.setAmmo(weapon.currentAmmo);
             ctx.setReserveAmmo(weapon.currentReserve);
             ctx.setWeaponName(weapon.name);
+            ctx.setWeaponId(weapon.id);
 
             ctx.gameState.isPackAPunching = false;
             ctx.setInteractionMsg("WEAPON UPGRADED!");

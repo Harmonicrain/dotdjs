@@ -106,6 +106,8 @@ export class StateManager {
     public setMaxClip(v: number) { this.ui.setMaxClip(v); }
     public setActiveWeaponIndex(v: number) { this.ui.setActiveWeaponIndex(v); }
     public setWeaponName(v: string) { this.ui.setWeaponName(v); }
+    public setIsAiming(v: boolean) { this.ui.setIsAiming(v); }
+    public setWeaponId(v: string) { this.ui.setWeaponId(v); }
     public setPerks(v: Record<string, boolean>) { this.ui.setPerks(v); }
     public setIsSpectating(v: boolean) { this.ui.setIsSpectating(v); }
     public setIsGameOver(v: boolean) { this.ui.setIsGameOver(v); }

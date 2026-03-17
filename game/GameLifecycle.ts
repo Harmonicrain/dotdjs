@@ -257,6 +257,7 @@ export class GameLifecycle {
             }];
             sm.setActiveWeaponIndex(0);
             sm.setWeaponName(pistolConfig.name);
+            sm.setWeaponId(pistolConfig.id);
             sm.setAmmo(pistolConfig.clipSize);
             sm.setReserveAmmo(pistolConfig.maxReserve);
         }
@@ -396,6 +397,7 @@ export class GameLifecycle {
 
         sm.setActiveWeaponIndex(0);
         sm.setWeaponName(gs.weapons[0].name);
+        sm.setWeaponId(gs.weapons[0].id);
         sm.setAmmo(gs.weapons[0].currentAmmo);
         sm.setReserveAmmo(gs.weapons[0].currentReserve);
 

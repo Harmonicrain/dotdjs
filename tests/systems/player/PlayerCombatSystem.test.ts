@@ -17,6 +17,8 @@ describe('PlayerCombatSystem', () => {
         ctx.setReserveAmmo = vi.fn();
         ctx.setMaxClip = vi.fn();
         ctx.setShotsFired = vi.fn();
+        ctx.setIsAiming = vi.fn();
+        ctx.setWeaponId = vi.fn();
         
         // Mock camera directions
         ctx.camera.getDirectionToRef = vi.fn((dir, ref) => ref.copyFrom(dir));
