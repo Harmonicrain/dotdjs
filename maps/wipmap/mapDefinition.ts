@@ -168,7 +168,11 @@ export const WipmapDefinition: MapDefinition = {
         ],
         perks: [],
         wallbuys: [],
-        mysteryBoxes: [],
+        mysteryBoxes: [
+            { pos: [-11.5, 0, -8], rotation: Math.PI / 2 },
+            { pos: [36.5, 0, 32], rotation: -Math.PI / 2 },
+            { pos: [36.5, 0, -32], rotation: -Math.PI / 2 }
+        ],
         buildings: []
     },
 
