@@ -62,27 +62,11 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
             if (inst.trigger && inst.trigger.isEnabled() !== triggerShow) {
                 inst.trigger.setEnabled(triggerShow);
             }
-
-            // Prevent EXTREME LAG: Ensure we don't enable multiple PointLights at once during Fire Sale
-            // Enabling multiple lights suddenly forces BabylonJS to recompile all PBR materials
-            if (inst.glowLight) {
-                const lightShow = i === activeIdx && box.state !== MysteryBoxState.BOX_IDLE;
-                if (inst.glowLight.isEnabled() !== lightShow) {
-                    inst.glowLight.setEnabled(lightShow);
-                }
-            }
         }
     };
 
     const updateGlow = (activeInstance: ReturnType<typeof getActiveInstance>, intensity: number) => {
         if (!activeInstance) return;
-        if (activeInstance.glowLight) {
-            if (intensity === 0 && activeInstance.glowLight.intensity < 0.001) {
-                activeInstance.glowLight.intensity = 0;
-            } else {
-                activeInstance.glowLight.intensity = BABYLON.Scalar.Lerp(activeInstance.glowLight.intensity, intensity, 0.1);
-            }
-        }
         if (activeInstance.beamMesh && activeInstance.beamMesh.material) {
             const mat = activeInstance.beamMesh.material as BABYLON.StandardMaterial;
             const targetAlpha = Math.min(intensity * 0.1, 0.3);
@@ -155,7 +139,6 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
         // Lerp glow off (only if not already zero)
         const needsGlow = activeInstance != null && (
-            (activeInstance.glowLight && activeInstance.glowLight.intensity > 0.001) ||
             (activeInstance.beamMesh?.material && (activeInstance.beamMesh.material as BABYLON.StandardMaterial).alpha > 0.001) ||
             (activeInstance.glowPlaneMesh?.material && (activeInstance.glowPlaneMesh.material as BABYLON.StandardMaterial).alpha > 0.001)
         );
@@ -182,10 +165,6 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
             if (i !== box.activeLocationIndex) {
                 if (inst.lidMesh && inst.lidMesh.rotation.x !== 0) {
                     inst.lidMesh.rotation.x = 0;
-                    allClean = false;
-                }
-                if (inst.glowLight && inst.glowLight.intensity > 0) {
-                    inst.glowLight.intensity = 0;
                     allClean = false;
                 }
             }
@@ -354,7 +333,6 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                     if (child.isEnabled()) child.setEnabled(false);
                 });
             }
-            if (inst.glowLight) inst.glowLight.intensity = 0;
             if (inst.beamMesh && inst.beamMesh.material) {
                 inst.beamMesh.visibility = 0;
                 (inst.beamMesh.material as BABYLON.StandardMaterial).alpha = 0;

@@ -15,7 +15,7 @@ export interface ZombieMeshResult {
 }
 
 // ── MESH TEMPLATES & POOLS ─────────────────────────────────────────────────
-// We create "master" versions of the meshes once. Subsequent spawns use 
+// We create "master" versions of the meshes once. Subsequent spawns use
 // the object pools which internally clone from the master template.
 let masterZombie: ZombieMeshResult | null = null;
 let masterHellhound: ZombieMeshResult | null = null;
@@ -23,11 +23,21 @@ let masterHellhound: ZombieMeshResult | null = null;
 let zombiePool: ObjectPool<ZombieMeshResult> | null = null;
 let hellhoundPool: ObjectPool<ZombieMeshResult> | null = null;
 
+// Track which scene the templates were built against so we can detect
+// stale pools after a Game/scene recreation (e.g. React remount).
+let templateScene: BABYLON.Scene | null = null;
+
 /**
  * Builds the master templates used for cloning.
  * Should be called during map load/pre-warm.
  */
 export const preWarmTemplates = (scene: BABYLON.Scene, resourceManager: ResourceManager) => {
+    // If the scene changed (new Game instance), dispose stale pools first
+    if (templateScene && templateScene !== scene) {
+        disposeZombiePools();
+    }
+    templateScene = scene;
+
     if (!masterZombie) {
         masterZombie = buildZombieTemplate(scene, resourceManager);
         masterZombie.mesh.setEnabled(false); // Hide the template
@@ -279,77 +289,65 @@ const buildZombieTemplate = (scene: BABYLON.Scene, resourceManager: ResourceMana
         return mat;
     });
 
-    // Legs — tapered cylinders, height 0.85 so tops sit at y=0.85 flush with torso bottom
-    const legL = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_l", {
+    // Legs — build parts at origin, merge, then parent/position
+    const legLBase = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_l_base", {
         diameterTop: 0.22, diameterBottom: 0.13, height: 0.85, tessellation: 8
     }, scene);
-    legL.parent = root;
-    legL.setPivotPoint(new BABYLON.Vector3(0, 0.425, 0));
-    legL.position = new BABYLON.Vector3(-0.11, 0.425, 0);
-    legL.material = bodyMat;
-
-    // Pants overlay on left leg
+    legLBase.material = bodyMat;
     const pantsL = BABYLON.MeshBuilder.CreateCylinder("pants_l", {
         diameterTop: 0.25, diameterBottom: 0.18, height: 0.48, tessellation: 8
     }, scene);
-    pantsL.parent = legL; pantsL.position.y = 0.20; pantsL.material = clothesMat;
-
-    // Left foot
+    pantsL.position.y = 0.20; pantsL.material = clothesMat;
     const footL = BABYLON.MeshBuilder.CreateBox("foot_l", { width: 0.16, height: 0.06, depth: 0.22 }, scene);
-    footL.parent = legL;
-    footL.position = new BABYLON.Vector3(0, -0.425, 0.04);
-    footL.material = bodyMat;
+    footL.position = new BABYLON.Vector3(0, -0.425, 0.04); footL.material = bodyMat;
+    legLBase.computeWorldMatrix(true); pantsL.computeWorldMatrix(true); footL.computeWorldMatrix(true);
+    const legL = BABYLON.Mesh.MergeMeshes([legLBase, pantsL, footL], true, true, undefined, false, true) as BABYLON.Mesh;
+    legL.name = "zombie_leg_l";
+    legL.parent = root;
+    legL.setPivotPoint(new BABYLON.Vector3(0, 0.425, 0));
+    legL.position = new BABYLON.Vector3(-0.11, 0.425, 0);
 
-    const legR = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_r", {
+    const legRBase = BABYLON.MeshBuilder.CreateCylinder("zombie_leg_r_base", {
         diameterTop: 0.22, diameterBottom: 0.13, height: 0.85, tessellation: 8
     }, scene);
-    legR.parent = root;
-    legR.setPivotPoint(new BABYLON.Vector3(0, 0.425, 0));
-    legR.position = new BABYLON.Vector3(0.11, 0.425, 0);
-    legR.material = bodyMat;
-
-    // Pants overlay on right leg
+    legRBase.material = bodyMat;
     const pantsR = BABYLON.MeshBuilder.CreateCylinder("pants_r", {
         diameterTop: 0.25, diameterBottom: 0.18, height: 0.48, tessellation: 8
     }, scene);
-    pantsR.parent = legR; pantsR.position.y = 0.20; pantsR.material = clothesMat;
-
-    // Right foot
+    pantsR.position.y = 0.20; pantsR.material = clothesMat;
     const footR = BABYLON.MeshBuilder.CreateBox("foot_r", { width: 0.16, height: 0.06, depth: 0.22 }, scene);
-    footR.parent = legR;
-    footR.position = new BABYLON.Vector3(0, -0.425, 0.04);
-    footR.material = bodyMat;
+    footR.position = new BABYLON.Vector3(0, -0.425, 0.04); footR.material = bodyMat;
+    legRBase.computeWorldMatrix(true); pantsR.computeWorldMatrix(true); footR.computeWorldMatrix(true);
+    const legR = BABYLON.Mesh.MergeMeshes([legRBase, pantsR, footR], true, true, undefined, false, true) as BABYLON.Mesh;
+    legR.name = "zombie_leg_r";
+    legR.parent = root;
+    legR.setPivotPoint(new BABYLON.Vector3(0, 0.425, 0));
+    legR.position = new BABYLON.Vector3(0.11, 0.425, 0);
 
-    // Torso — tapered cylinder, bottom diameter wide enough to cover leg tops
-    const torso = BABYLON.MeshBuilder.CreateCylinder("zombie_body", {
+    // Torso — build all parts in torso-local space (no parent), merge, then parent/position/rotation
+    const torsoBase = BABYLON.MeshBuilder.CreateCylinder("zombie_body_base", {
         diameterTop: 0.48, diameterBottom: 0.38, height: 0.85, tessellation: 10
     }, scene);
+    torsoBase.material = clothesMat;
+    const hipL = BABYLON.MeshBuilder.CreateSphere("hipL", { diameter: 0.20, segments: 6 }, scene);
+    hipL.position = new BABYLON.Vector3(-0.10, -0.44, 0); hipL.material = clothesMat;
+    const hipR = BABYLON.MeshBuilder.CreateSphere("hipR", { diameter: 0.20, segments: 6 }, scene);
+    hipR.position = new BABYLON.Vector3(0.10, -0.44, 0); hipR.material = clothesMat;
+    const fleshPatch = BABYLON.MeshBuilder.CreatePlane("flesh", { size: 0.2 }, scene);
+    fleshPatch.position = new BABYLON.Vector3(0.1, 0.1, 0.16); fleshPatch.material = bodyMat;
+    const rib0 = BABYLON.MeshBuilder.CreateBox("rib_0", { width: 0.12, height: 0.02, depth: 0.02 }, scene);
+    rib0.position = new BABYLON.Vector3(0.08, 0.15, 0.16); rib0.material = boneMat;
+    const rib1 = BABYLON.MeshBuilder.CreateBox("rib_1", { width: 0.12, height: 0.02, depth: 0.02 }, scene);
+    rib1.position = new BABYLON.Vector3(0.08, 0.10, 0.16); rib1.material = boneMat;
+    const rib2 = BABYLON.MeshBuilder.CreateBox("rib_2", { width: 0.12, height: 0.02, depth: 0.02 }, scene);
+    rib2.position = new BABYLON.Vector3(0.08, 0.05, 0.16); rib2.material = boneMat;
+    torsoBase.computeWorldMatrix(true); hipL.computeWorldMatrix(true); hipR.computeWorldMatrix(true);
+    fleshPatch.computeWorldMatrix(true); rib0.computeWorldMatrix(true); rib1.computeWorldMatrix(true); rib2.computeWorldMatrix(true);
+    const torso = BABYLON.Mesh.MergeMeshes([torsoBase, hipL, hipR, fleshPatch, rib0, rib1, rib2], true, true, undefined, false, true) as BABYLON.Mesh;
+    torso.name = "zombie_body";
     torso.parent = root;
     torso.position = new BABYLON.Vector3(0, 1.275, 0);
     torso.rotation.x = Math.PI / 16; // Lean forward
-    torso.material = clothesMat;
-
-    // Hip joints — sit right at the torso-leg junction (torso bottom = -0.425 local)
-    const hipL = BABYLON.MeshBuilder.CreateSphere("hipL", { diameter: 0.20, segments: 6 }, scene);
-    hipL.parent = torso;
-    hipL.position = new BABYLON.Vector3(-0.10, -0.44, 0);
-    hipL.material = clothesMat;
-
-    const hipR = BABYLON.MeshBuilder.CreateSphere("hipR", { diameter: 0.20, segments: 6 }, scene);
-    hipR.parent = torso;
-    hipR.position = new BABYLON.Vector3(0.10, -0.44, 0);
-    hipR.material = clothesMat;
-
-    const fleshPatch = BABYLON.MeshBuilder.CreatePlane("flesh", { size: 0.2 }, scene);
-    fleshPatch.parent = torso; fleshPatch.position = new BABYLON.Vector3(0.1, 0.1, 0.16); // Front of torso
-    fleshPatch.material = bodyMat;
-
-    for (let i = 0; i < 3; i++) {
-        const rib = BABYLON.MeshBuilder.CreateBox("rib_" + i, { width: 0.12, height: 0.02, depth: 0.02 }, scene);
-        rib.parent = torso;
-        rib.position = new BABYLON.Vector3(0.08, 0.15 - i * 0.05, 0.16); // Front of torso
-        rib.material = boneMat;
-    }
 
     // Head
     const headMat = resourceManager.getMaterial("zombieHeadMat", () => {
@@ -605,7 +603,7 @@ export const disposeZombiePools = () => {
         hellhoundPool.dispose();
         hellhoundPool = null;
     }
-    
+
     if (masterZombie) {
         masterZombie.mesh.dispose();
         masterZombie = null;
@@ -614,4 +612,5 @@ export const disposeZombiePools = () => {
         masterHellhound.mesh.dispose();
         masterHellhound = null;
     }
+    templateScene = null;
 }

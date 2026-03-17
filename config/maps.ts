@@ -19,9 +19,9 @@ export const MAPS = [
     name: 'MAP TEST', 
     description: 'A large octagonal stone arena surrounded by gates.' 
   },
-  { 
-    id: 'barn', 
-    name: 'THE BARN', 
-    description: 'An isolated barn in an octagonal arena. No perks, no mercy.' 
+  {
+    id: 'wipmap',
+    name: 'BARN',
+    description: 'Work in progress map.'
   }
 ];

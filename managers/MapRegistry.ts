@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { WindowBarrier, GroundSpawn, MysteryBox, MapDefinition, MutableRefObject } from '../types/index';
 import { WarehouseMapDefinition } from '../maps/warehouse/mapDefinition';
 import { MapTestDefinition } from '../maps/mapTest/mapDefinition';
-import { BarnMapDefinition } from '../maps/barn/mapDefinition';
+import { WipmapDefinition } from '../maps/wipmap/mapDefinition';
 import { resolveTextures } from '../maps/MapTextureResolver';
 import { LevelBuilder } from '../engine/LevelBuilder';
 import { DEFAULT_MAP_ID } from '../config';
@@ -32,7 +32,7 @@ import { DEFAULT_MAP_ID } from '../config';
 export const MAP_DEFINITIONS: Record<string, MapDefinition> = {
     'warehouse': WarehouseMapDefinition,
     'map_test':  MapTestDefinition,
-    'barn':      BarnMapDefinition,
+    'wipmap':    WipmapDefinition,
 };
 
 /** Get a map definition by id, falling back to default */

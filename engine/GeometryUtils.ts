@@ -126,8 +126,6 @@ export const createWallBuy = (
 
     gunPlane.material = gunMat;
 
-    const glowLight = new BABYLON.PointLight(name + "_glow", new BABYLON.Vector3(0, 0, -0.5), scene);
-    glowLight.parent = root; glowLight.diffuse = new BABYLON.Color3(0.4, 0.8, 1); glowLight.intensity = 0.8; glowLight.range = 4;
     const trigger = BABYLON.MeshBuilder.CreateBox(name + "_trigger", { width: 2.5, height: 2, depth: 1.5 }, scene);
     trigger.parent = root; trigger.visibility = 0; trigger.checkCollisions = false;
 
@@ -159,9 +157,9 @@ export const createWindow = (
         const plank = BABYLON.MeshBuilder.CreateBox(id + "_plank_" + i, { width: pW, height: 0.6, depth: pD }, scene);
         plank.position = new BABYLON.Vector3(xPos, def.y, zPos);
         if (isRotated) {
-            plank.rotation.x = def.rot + ((Math.random() - 0.5) * 0.1);
-            plank.rotation.z = (Math.random() - 0.5) * 0.05;
-            plank.position.z += (Math.random() * 0.05);
+            plank.rotation.z = def.rot + ((Math.random() - 0.5) * 0.1);
+            plank.rotation.y = (Math.random() - 0.5) * 0.05;
+            plank.position.x += (Math.random() * 0.05);
         } else {
             plank.rotation.x = def.rot + ((Math.random() - 0.5) * 0.1);
             plank.rotation.y = (Math.random() - 0.5) * 0.05;
@@ -192,7 +190,7 @@ export const createWindow = (
     const blocker = BABYLON.MeshBuilder.CreateBox(id + "_blocker", { width: blockW, height: 6, depth: blockD }, scene);
     if (isRotated) blocker.position = new BABYLON.Vector3(xPos, 3, zPos);
     else blocker.position = new BABYLON.Vector3(xPos, 3, zPos);
-    blocker.visibility = 0; blocker.checkCollisions = true;
+    blocker.isVisible = false; blocker.checkCollisions = true;
 
     // Spawn / Attack / Entry points
     let spawnP = new BABYLON.Vector3(xPos + 5, 2.5, zPos);

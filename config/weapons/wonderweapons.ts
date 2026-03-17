@@ -13,7 +13,7 @@ export const wonderWeapons: WeaponDefinition[] = [
       scale: 1.0,
       pellets: 1,
       hipPos: { x: 0.25, y: -0.3, z: 0.5 },
-      adsPos: { x: 0, y: -0.15, z: 0.5 },
+      adsPos: { x: -0.001, y: -0.189, z: 0.5 },
       barrelLength: 0.8,
       reloadTime: 2500,
       hipFireOriginCorrection: { up: -0.10, right: 0.15 },
@@ -21,7 +21,6 @@ export const wonderWeapons: WeaponDefinition[] = [
       splashRadius: 6,
       splashDamage: 1000,
       selfDamageMultiplier: 0.5,
-      projectileSpeedOverride: 30,
     },
     upgrade: {
       name: "Porter's X2",
@@ -32,7 +31,6 @@ export const wonderWeapons: WeaponDefinition[] = [
       splashRadius: 8,
       splashDamage: 2000,
       selfDamageMultiplier: 0.5,
-      projectileSpeedOverride: 35,
     }
   }
 ];

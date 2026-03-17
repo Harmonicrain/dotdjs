@@ -40,12 +40,12 @@ export const DEFAULT_MODEL_TRANSFORMS: Record<string, ModelTransform> = {
   m1911_fps: {
     position: [0, 0, 0],
     rotation: [0, Math.PI / 2, 0],
-    scaling: [0.00012, 0.00012, 0.00012],
+    scaling: [0.00020, 0.00020, 0.00020],
   },
   m1911_world: {
     position: [0, 0, 0],
     rotation: [Math.PI / 2, 0, 0],
-    scaling: [0.00012, 0.00012, 0.00012],
+    scaling: [0.00020, 0.00020, 0.00020],
   },
   ray_gun_fps: {
     position: [0, 0, 0],
@@ -56,6 +56,36 @@ export const DEFAULT_MODEL_TRANSFORMS: Record<string, ModelTransform> = {
     position: [0, 0, 0],
     rotation: [Math.PI / 2, Math.PI, 0],
     scaling: [0.482, 0.482, 0.482],
+  },
+  shotgun_fps: {
+    position: [0, 0, 0],
+    rotation: [0, -Math.PI / 2, 0],
+    scaling: [0.3, 0.3, 0.3],
+  },
+  shotgun_world: {
+    position: [0, 0, 0],
+    rotation: [0, -Math.PI / 2, 0],
+    scaling: [0.3, 0.3, 0.3],
+  },
+  stg44_fps: {
+    position: [0, 0, 0],
+    rotation: [0, -Math.PI / 2, 0],
+    scaling: [0.3, 0.3, 0.3],
+  },
+  stg44_world: {
+    position: [0, 0, 0],
+    rotation: [0, -Math.PI / 2, 0],
+    scaling: [0.3, 0.3, 0.3],
+  },
+  famas_fps: {
+    position: [0, 0, 0],
+    rotation: [0, Math.PI, 0],
+    scaling: [0.3, 0.3, 0.3],
+  },
+  famas_world: {
+    position: [0, 0, 0],
+    rotation: [0, Math.PI, 0],
+    scaling: [0.3, 0.3, 0.3],
   },
 };
 

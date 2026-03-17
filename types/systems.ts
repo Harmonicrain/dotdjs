@@ -41,7 +41,6 @@ export interface RemotePlayerVisuals {
     root: BABYLON.TransformNode;
     armsContainer: BABYLON.TransformNode;
     weapons: BABYLON.TransformNode[];
-    muzzleFlash: BABYLON.PointLight;
     updateName: (name: string) => void;
 }
 

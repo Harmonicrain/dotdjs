@@ -7,7 +7,7 @@ export const ScaleWeaponOverlay: React.FC = () => {
 
     if (!mode) return null;
 
-    const fmt = (v: number) => v.toFixed(4);
+    const fmt = (v: number) => parseFloat(v.toPrecision(5)).toString();
     const isAll = mode.axis === 'all';
 
     return (

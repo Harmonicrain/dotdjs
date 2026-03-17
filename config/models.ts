@@ -7,6 +7,9 @@ export const MODELS = {
     PACK_A_PUNCH: "/models/packapunch.glb",
     M1911: "/models/m1911.glb",
     RAY_GUN: "/models/ray_gun.glb",
+    FAMAS: "/models/famas.glb",
+    SHOTGUN: "/models/shotgun.glb",
+    STG44: "/models/stg44.glb",
     POWER_SWITCH: "/models/switch.glb",
     ZOMBIE: "/models/zombie.glb",
 };

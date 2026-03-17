@@ -29,8 +29,6 @@ export const WarehouseMapDefinition: MapDefinition = {
     environment: {
         fog: { mode: 'exp2', density: 0.0, color: [0.3, 0.35, 0.45] },
         skybox: true,
-        ambientLight: { intensity: 0.4, diffuse: [0.3, 0.35, 0.45], ground: [0.15, 0.15, 0.2] },
-        directionalLight: { direction: [-0.3, -1, 0.2], intensity: 0.4 },
     },
     textures: {
         wall:      "/textures/warehouse_walls.png",
@@ -82,15 +80,15 @@ export const WarehouseMapDefinition: MapDefinition = {
             rotation: Math.PI / 2,
             powerDoor: { pos: [-10, 3, -5], size: [0.4, 6, 4], openY: 8, connects: [1, 4] }
         },
-        packAPunch: { pos: [-14.0, 0, -5.5], rotation: Math.PI / 2, zone: 4 }
+        packAPunch: { pos: [-14.0, 0, -2.5], rotation: Math.PI / 2, zone: 4 }
     },
 
     fixtures: [
-        { pos: [0, -15], zone: 1 },
-        { pos: [0, 5], zone: 2 },
-        { pos: [0, 35], zone: 2 },
-        { pos: [22, 0], zone: 3 },
-        { pos: [-13, -5], zone: 4, intensity: 2.0, range: 10 }
+        { pos: [0, -15], zone: 1, intensity: 2.5, range: 25 },
+        { pos: [0, 5], zone: 2, intensity: 2.5, range: 25 },
+        { pos: [0, 35], zone: 2, intensity: 2.5, range: 25 },
+        { pos: [17.5, 2], zone: 3, intensity: 2.5, range: 25 },
+        { pos: [-13, -5], zone: 4, intensity: 2.5, range: 25 }
     ],
     
     zones: [

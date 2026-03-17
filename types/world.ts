@@ -37,7 +37,6 @@ export type MysteryBox = {
     mesh: BABYLON.TransformNode | null;
     lidMesh: BABYLON.TransformNode | null;
     weaponAnchor: BABYLON.TransformNode | null;
-    glowLight: BABYLON.PointLight | null;
     currentWeaponIndex: number;
     resultWeaponId: string | null;
     ownerName: string | null;
@@ -51,7 +50,6 @@ export type MysteryBox = {
         mesh: BABYLON.TransformNode | null;
         lidMesh: BABYLON.TransformNode | null;
         weaponAnchor: BABYLON.TransformNode | null;
-        glowLight: BABYLON.PointLight | null;
         beamMesh: BABYLON.AbstractMesh | null;
         glowPlaneMesh: BABYLON.AbstractMesh | null;
         trigger: BABYLON.AbstractMesh | null;
@@ -68,7 +66,6 @@ export function createDefaultMysteryBox(): MysteryBox {
         mesh: null,
         lidMesh: null,
         weaponAnchor: null,
-        glowLight: null,
         currentWeaponIndex: 0,
         resultWeaponId: null,
         ownerName: null,
@@ -228,6 +225,7 @@ export interface EnvironmentDefinition {
     ambientLight?: { intensity: number; diffuse: [number, number, number]; ground: [number, number, number] };
     directionalLight?: { direction: [number, number, number]; intensity: number };
     shadow?: { resolution?: number; darkness?: number; blurKernel?: number };
+    fillLight?: boolean;
 }
 
 export interface GroundDefinition {

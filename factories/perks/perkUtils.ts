@@ -15,6 +15,9 @@ export const configurePerkModel = (
             m.checkCollisions = false;
             if (m.material) {
                 (m.material as any).maxSimultaneousLights = 4;
+                if (m.material instanceof BABYLON.PBRMaterial) {
+                    m.material.unlit = false;
+                }
             }
         }
     });

@@ -357,8 +357,9 @@ const COMMANDS: Record<string, CommandHandler> = {
             return `Unknown weapon: ${weaponId}. Available: ${available}`;
         }
 
-        // Read current scale from mesh
-        const currentScale = mesh.scaling;
+        // Read current scale from child model mesh (root TransformNode is always 1,1,1)
+        const modelMesh = mesh.getChildren()?.[0] ?? mesh;
+        const currentScale = modelMesh.scaling;
         sm.scaleWeaponMode = {
             isActive: true,
             weaponId,

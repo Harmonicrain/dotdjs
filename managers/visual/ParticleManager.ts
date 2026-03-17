@@ -2,11 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { ResourceManager } from '../ResourceManager';
 
 export class ParticleManager {
-    private static readonly MAX_FLASH_LIGHTS = 2;
-    private flashLightPool: BABYLON.PointLight[] = [];
-    private flashLightCursor = 0;
-    private flashLightFadeStart: number[] = [];
-    private flashLightFadeObserver: BABYLON.Observer<BABYLON.Scene> | null = null;
+    private explosionQueueObserver: BABYLON.Observer<BABYLON.Scene> | null = null;
 
     private static readonly MAX_EXPLOSION_PS = 3;
     private explosionPSPool: BABYLON.ParticleSystem[] = [];
@@ -94,7 +90,7 @@ export class ParticleManager {
     private zombieExplosionFrameCount = 0;
 
     constructor(private scene: BABYLON.Scene, private resourceManager: ResourceManager) {
-        this.initFlashLightPool();
+        this.initExplosionQueueObserver();
         this.initExplosionPSPool();
         this.initTrailPSPool();
         this.initImpactPSPool();
@@ -109,34 +105,13 @@ export class ParticleManager {
         this.initHoleSmokePool();
     }
 
-    private initFlashLightPool() {
-        for (let i = 0; i < ParticleManager.MAX_FLASH_LIGHTS; i++) {
-            const light = new BABYLON.PointLight(`explosionFlash_${i}`, BABYLON.Vector3.Zero(), this.scene);
-            light.intensity = 0;
-            light.range = 15;
-            this.flashLightPool.push(light);
-            this.flashLightFadeStart.push(0);
-        }
-        this.flashLightFadeObserver = this.scene.onBeforeRenderObservable.add(() => {
+    private initExplosionQueueObserver() {
+        this.explosionQueueObserver = this.scene.onBeforeRenderObservable.add(() => {
             // Always reset per-frame explosion budget so the cap is per-frame, not cumulative
             this.zombieExplosionFrameCount = 0;
 
-            // Early exit when nothing is active (e.g. after reset()) — avoids unnecessary work
-            const hasActiveLight = this.flashLightFadeStart.some(s => s !== 0);
-            if (!hasActiveLight && this.zombieExplosionQueue.length === 0) return;
+            if (this.zombieExplosionQueue.length === 0) return;
 
-            const now = Date.now();
-            for (let i = 0; i < this.flashLightPool.length; i++) {
-                const start = this.flashLightFadeStart[i];
-                if (start === 0) continue;
-                const t = (now - start) / 200;
-                if (t >= 1) {
-                    this.flashLightPool[i].intensity = 0;
-                    this.flashLightFadeStart[i] = 0;
-                } else {
-                    this.flashLightPool[i].intensity = 5 * (1 - t);
-                }
-            }
             // Drain the nuke queue
             const toFire = Math.min(this.zombieExplosionQueue.length, ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME);
             for (let j = 0; j < toFire; j++) {
@@ -148,18 +123,6 @@ export class ParticleManager {
                 );
             }
         });
-    }
-
-    private acquireFlashLight(pos: BABYLON.Vector3, r: number, g: number, b: number): void {
-        const idx = this.flashLightCursor % ParticleManager.MAX_FLASH_LIGHTS;
-        this.flashLightCursor++;
-        const light = this.flashLightPool[idx];
-        light.position.copyFrom(pos);
-        light.diffuse.r = r;
-        light.diffuse.g = g;
-        light.diffuse.b = b;
-        light.intensity = 5;
-        this.flashLightFadeStart[idx] = Date.now();
     }
 
     private initExplosionPSPool() {
@@ -604,7 +567,6 @@ export class ParticleManager {
         if (ps.isStarted()) { ps.stop(); ps.reset(); }
         ps.emitter = pos;
         ps.start();
-        this.acquireFlashLight(pos, 1.0, 0.4, 0.1);
     }
 
     public createSpawnEffect(pos: BABYLON.Vector3) {
@@ -679,9 +641,6 @@ export class ParticleManager {
         }
         ps.colorDead = ParticleManager._colorDead;
         ps.start();
-
-        const c = isPacked ? ParticleManager._colorPacked : ParticleManager._colorNormal;
-        this.acquireFlashLight(pos, c.r, c.g, c.b);
     }
 
     public createProjectileTrail(mesh: BABYLON.AbstractMesh, isPacked: boolean = false): BABYLON.ParticleSystem {
@@ -715,8 +674,6 @@ export class ParticleManager {
 
     /** Between-round/between-game cleanup — stops all active effects, manager stays alive. */
     public reset() {
-        this.flashLightPool.forEach(l => l.intensity = 0);
-        this.flashLightFadeStart.fill(0);
         this.explosionPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
         this.trailPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
         this.impactPSPool.forEach(ps => { if (ps.isStarted()) ps.stop(); ps.reset(); });
@@ -737,15 +694,10 @@ export class ParticleManager {
 
     /** Full teardown — manager is destroyed, all GPU resources and observers released. */
     public dispose() {
-        if (this.flashLightFadeObserver) {
-            this.scene.onBeforeRenderObservable.remove(this.flashLightFadeObserver);
-            this.flashLightFadeObserver = null;
+        if (this.explosionQueueObserver) {
+            this.scene.onBeforeRenderObservable.remove(this.explosionQueueObserver);
+            this.explosionQueueObserver = null;
         }
-        for (let i = 0; i < this.flashLightPool.length; i++) {
-            this.flashLightPool[i].dispose();
-        }
-        this.flashLightPool = [];
-        this.flashLightFadeStart = [];
 
         for (const ps of this.explosionPSPool) { ps.dispose(false); }
         this.explosionPSPool = [];

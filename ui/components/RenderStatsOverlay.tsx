@@ -136,7 +136,7 @@ export const RenderStatsOverlay: React.FC = () => {
                         colorClass={statColorInverse(stats.textures, 30, 60)}
                     />
                     <StatRow
-                        label="Particles"
+                        label="Particles (active)"
                         value={stats.particleSystems}
                         colorClass={statColorInverse(stats.particleSystems, 10, 30)}
                     />

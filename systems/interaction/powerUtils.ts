@@ -28,6 +28,16 @@ export const activatePower = (ctx: StateManager) => {
     if (ctx.gameState.doorStates["powerDoor"]) {
         ctx.gameState.doorStates["powerDoor"].isOpen = true;
     }
+    // Remove NavMesh obstacle so zombies can path into zone 4
+    const doorEntry = ctx.mapVisuals.doorMeshes.get("powerDoor");
+    if (doorEntry?.obstacle && ctx.navPlugin) {
+        try {
+            ctx.navPlugin.removeObstacle(doorEntry.obstacle);
+            doorEntry.obstacle = null;
+        } catch (e) {
+            console.error('Failed to remove power door nav obstacle:', e);
+        }
+    }
     ctx.setInteractionMsg("POWER ACTIVATED!");
     ctx.timerManager.schedule('power_msg', ctx.configManager.visuals.POWER_HUD_MSG_DURATION, () => ctx.setInteractionMsg(null));
 

@@ -97,10 +97,6 @@ export const createMysteryBox = (scene: BABYLON.Scene) => {
     const weaponAnchor = new BABYLON.TransformNode("boxWeaponAnchor", scene);
     weaponAnchor.parent = root; weaponAnchor.position = new BABYLON.Vector3(0, 0.8, 0);
 
-    const light = new BABYLON.PointLight("boxLight", new BABYLON.Vector3(0, 1.5, 0), scene);
-    light.parent = root; light.diffuse = new BABYLON.Color3(1.0, 0.8, 0.2); light.intensity = 0; light.range = 5;
-    light.setEnabled(false); // Initially disabled to prevent shader compilation lag
-
     const beam = BABYLON.MeshBuilder.CreateCylinder("boxBeam", {height: 20, diameterTop: 0.5, diameterBottom: 0.5}, scene);
     beam.parent = root; beam.position.y = 10; 
     const beamMat = new BABYLON.PBRMaterial("boxBeamMat", scene);
@@ -135,5 +131,5 @@ export const createMysteryBox = (scene: BABYLON.Scene) => {
     const teddy = createTeddyBear(scene, weaponAnchor);
     teddy.setEnabled(false); teddy.name = "box_teddy";
 
-    return { root, lidPivot, weaponAnchor, light, trigger, teddy, beam, glowPlane };
+    return { root, lidPivot, weaponAnchor, trigger, teddy, beam, glowPlane };
 };

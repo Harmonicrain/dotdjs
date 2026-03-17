@@ -81,14 +81,10 @@ export const createRemotePlayer = (scene: BABYLON.Scene): RemotePlayerVisuals =>
         else if (w.id === 'ray_gun') displayOverride = { rotation: [0, Math.PI, 0] };
         
         const weaponMesh = createWorldWeapon(scene, w.id, weaponAnchor, displayOverride);
-        weaponMesh.setEnabled(false);
-        weaponMesh.scaling = new BABYLON.Vector3(2, 2, 2);
-        weapons.push(weaponMesh);
+    weaponMesh.setEnabled(false);
+    weaponMesh.scaling = new BABYLON.Vector3(2, 2, 2);
+    weapons.push(weaponMesh);
     });
-
-    const muzzleFlash = new BABYLON.PointLight("remoteMuzzleFlash", new BABYLON.Vector3(0, 0, 0.5), scene);
-    muzzleFlash.parent = weaponAnchor;
-    muzzleFlash.intensity = 0;
     
     const namePlane = BABYLON.MeshBuilder.CreatePlane("remoteNameTag", { width: 2, height: 0.5 }, scene);
     namePlane.parent = root;
@@ -119,5 +115,5 @@ export const createRemotePlayer = (scene: BABYLON.Scene): RemotePlayerVisuals =>
     nameMat.useAlphaFromDiffuseTexture = true;
     namePlane.material = nameMat;
 
-    return { root, armsContainer, weapons, muzzleFlash, updateName };
+    return { root, armsContainer, weapons, updateName };
 };

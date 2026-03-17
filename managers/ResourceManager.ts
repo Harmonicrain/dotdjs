@@ -56,36 +56,22 @@ export class ResourceManager {
 
     /**
      * Returns the cached `Texture` for `url`, loading it from the network on
-     * first access.
-     * 
-     * IMPORTANT: If the cached texture is not yet ready (still loading), this
-     * returns a NEW texture instance rather than the incomplete cached one.
-     * This prevents black materials when cached textures resolve before the
-     * PBR environment texture is ready.
+     * first access. If the texture is already cached but still loading, the
+     * existing instance is returned — Babylon materials auto-update when
+     * their textures become ready, and GameLifecycle's texture-ready wait
+     * ensures everything is loaded before gameplay begins.
      */
     public getTexture(url: string, factory?: () => BABYLON.Texture): BABYLON.Texture {
         const cached = this.textures.get(url);
-        if (cached && cached.isReady()) {
+        if (cached) {
             return cached;
         }
-        
-        // Cached texture exists but isn't ready - don't use it, create fresh
-        if (cached) {
-            console.warn(`[ResourceManager] Cached texture "${url}" not ready, creating new instance`);
-        }
-        
+
         const tex = factory ? factory() : new BABYLON.Texture(url, this.scene);
-        
-        // Only cache if it's already ready (won't work for fresh loads anyway)
-        if (tex.isReady()) {
-            this.textures.set(url, tex);
-        } else {
-            // Hook to cache once ready
-            tex.onLoadObservable.addOnce(() => {
-                this.textures.set(url, tex);
-            });
-        }
-        
+
+        // Cache immediately to prevent duplicate creations from concurrent calls
+        this.textures.set(url, tex);
+
         return tex;
     }
 

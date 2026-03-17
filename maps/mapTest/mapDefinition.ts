@@ -24,6 +24,7 @@ export const MapTestDefinition: MapDefinition = {
         skybox: true,
         ambientLight: { intensity: 0.65, diffuse: [0.3, 0.35, 0.45], ground: [0.15, 0.15, 0.2] },
         directionalLight: { direction: [-0.3, -1, 0.2], intensity: 0.4 },
+        fillLight: true,
     },
     textures: {
         wall:      "/textures/wall_bricks.jpg",

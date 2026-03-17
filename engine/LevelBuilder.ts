@@ -140,6 +140,14 @@ export class LevelBuilder {
             this.scene.clearColor = new BABYLON.Color4(c[0], c[1], c[2], 1);
         }
 
+        if (env.fillLight) {
+            const fl = new BABYLON.HemisphericLight("fillLight", new BABYLON.Vector3(0, 1, 0), this.scene);
+            fl.intensity = 0.15;
+            fl.diffuse = new BABYLON.Color3(1, 1, 1);
+            fl.groundColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+            fl.parent = this.root;
+        }
+
         if (env.ambientLight) {
             const h = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), this.scene);
             h.intensity = env.ambientLight.intensity;
@@ -199,10 +207,14 @@ export class LevelBuilder {
         this.materials.set('wood_small', createMaterial(this.scene, "woodSmallMat", textures.floor, new BABYLON.Color3(0.5, 0.5, 0.5), 1.0666, 1.2, 0.8));
         this.materials.set('wood_large', createMaterial(this.scene, "woodLargeMat", textures.floor, new BABYLON.Color3(1, 1, 1), 0.5, 0.15, 0.8));
 
-        // PBR materials using helper
-        const pbrColor = new BABYLON.Color3(0.6, 0.6, 0.6);
-        this.materials.set('door', createPBRMaterialWithTexture(this.scene, "doorMat", textures.door, pbrColor, 0, 0.6, 0.6));
-        this.materials.set('powerDoor', createPBRMaterialWithTexture(this.scene, "powerDoorMat", textures.powerDoor, pbrColor, 0, 0.6, 0.6));
+        // Door materials - StandardMaterial for consistent point light response
+        const doorMat = new BABYLON.StandardMaterial("doorMat", this.scene);
+        doorMat.diffuseTexture = new BABYLON.Texture(textures.door, this.scene);
+        this.materials.set('door', doorMat);
+
+        const powerDoorMat = new BABYLON.StandardMaterial("powerDoorMat", this.scene);
+        powerDoorMat.diffuseTexture = new BABYLON.Texture(textures.powerDoor, this.scene);
+        this.materials.set('powerDoor', powerDoorMat);
 
         // Metal material
         const metalMat = new BABYLON.PBRMaterial("metalMat", this.scene);
@@ -401,7 +413,7 @@ export class LevelBuilder {
                 ground.material = mat;
                 ground.visibility = 1;
             } else {
-                ground.visibility = 0;
+                ground.isVisible = false;
             }
 
             ground.computeWorldMatrix(true);
@@ -420,7 +432,7 @@ export class LevelBuilder {
                     const merged = BABYLON.Mesh.MergeMeshes(navFloorMeshes, true, true);
                     if (merged) {
                         merged.name = "merged_navfloors";
-                        merged.visibility = 0;
+                        merged.isVisible = false;
                         merged.isPickable = false;
                         merged.checkCollisions = false;
                         merged.parent = this.root;
@@ -791,7 +803,6 @@ export class LevelBuilder {
                     mesh: box.root,
                     lidMesh: box.lidPivot,
                     weaponAnchor: box.weaponAnchor,
-                    glowLight: box.light,
                     teddyMesh: box.teddy,
                     beamMesh: box.beam,
                     glowPlaneMesh: box.glowPlane,

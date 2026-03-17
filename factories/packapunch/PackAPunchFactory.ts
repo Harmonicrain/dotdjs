@@ -49,6 +49,9 @@ export const createPackAPunchMachine = (scene: BABYLON.Scene, position: BABYLON.
                     // Limit lights to prevent shader overflow
                     if (m.material) {
                         (m.material as any).maxSimultaneousLights = 4;
+                        if (m.material instanceof BABYLON.PBRMaterial) {
+                            m.material.unlit = false;
+                        }
                     }
                 }
             });

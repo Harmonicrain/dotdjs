@@ -38,29 +38,67 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
         if (promises) promises.push(p);
     } 
     else if (weaponId === 'rifle') {
-        const rBody = BABYLON.MeshBuilder.CreateBox("w_rifleBody", { width: 0.06, height: 0.08, depth: 0.4 }, scene);
-        rBody.parent = root; rBody.material = gunMat;
-        const rBarrel = BABYLON.MeshBuilder.CreateCylinder("w_rifleBarrel", { diameter: 0.025, height: 0.3 }, scene);
-        rBarrel.parent = root; rBarrel.rotation.x = Math.PI / 2; rBarrel.position = new BABYLON.Vector3(0, 0.02, 0.35); rBarrel.material = gunMat;
+        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.STG44, scene).then((result) => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            const model = result.meshes[0];
+            model.parent = root;
+
+            const tx = resolveModelTransform('stg44_world', modelOverride);
+            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
+            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+
+            result.meshes.forEach(m => {
+                m.checkCollisions = false;
+                m.isPickable = false;
+            });
+        }).catch(e => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            console.warn("STG-44 world load failed", e);
+        });
+        if (promises) promises.push(p);
     }
     else if (weaponId === 'shotgun') {
-        const sBarrel1 = BABYLON.MeshBuilder.CreateCylinder("w_sBarrel1", { diameter: 0.035, height: 0.6 }, scene);
-        sBarrel1.parent = root; sBarrel1.rotation.x = Math.PI / 2; sBarrel1.position = new BABYLON.Vector3(-0.02, 0.02, 0.3); sBarrel1.material = gunMat;
-        const sBarrel2 = BABYLON.MeshBuilder.CreateCylinder("w_sBarrel2", { diameter: 0.035, height: 0.6 }, scene);
-        sBarrel2.parent = root; sBarrel2.rotation.x = Math.PI / 2; sBarrel2.position = new BABYLON.Vector3(0.02, 0.02, 0.3); sBarrel2.material = gunMat;
+        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SHOTGUN, scene).then((result) => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            const model = result.meshes[0];
+            model.parent = root;
+
+            const tx = resolveModelTransform('shotgun_world', modelOverride);
+            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
+            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+
+            result.meshes.forEach(m => {
+                m.checkCollisions = false;
+                m.isPickable = false;
+            });
+        }).catch(e => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            console.warn("Shotgun world load failed", e);
+        });
+        if (promises) promises.push(p);
     }
     else if (weaponId === 'famas') {
-        const body = BABYLON.MeshBuilder.CreateBox("w_famasBody", { width: 0.055, height: 0.09, depth: 0.45 }, scene);
-        body.parent = root; body.material = gunMat;
-        
-        const carryHandle = BABYLON.MeshBuilder.CreateBox("w_famasCarry", { width: 0.04, height: 0.04, depth: 0.35 }, scene);
-        carryHandle.parent = root; carryHandle.position = new BABYLON.Vector3(0, 0.09, 0); carryHandle.material = gunMat;
-        
-        const grip = BABYLON.MeshBuilder.CreateBox("w_famasGrip", { width: 0.04, height: 0.1, depth: 0.06 }, scene);
-        grip.parent = root; grip.position = new BABYLON.Vector3(0, -0.09, 0.05); grip.rotation.x = 0.2; grip.material = gunMat;
-        
-        const barrel = BABYLON.MeshBuilder.CreateCylinder("w_famasBarrel", { diameter: 0.025, height: 0.15 }, scene);
-        barrel.parent = root; barrel.rotation.x = Math.PI / 2; barrel.position = new BABYLON.Vector3(0, 0.02, 0.28); barrel.material = gunMat;
+        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.FAMAS, scene).then((result) => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            const model = result.meshes[0];
+            model.parent = root;
+
+            const tx = resolveModelTransform('famas_world', modelOverride);
+            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
+            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+
+            result.meshes.forEach(m => {
+                m.checkCollisions = false;
+                m.isPickable = false;
+            });
+        }).catch(e => {
+            if (scene.isDisposed || root.isDisposed()) return;
+            console.warn("FAMAS load failed", e);
+        });
+        if (promises) promises.push(p);
     }
     else if (weaponId === 'ray_gun') {
         const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
@@ -141,23 +179,40 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     
     weaponMap['pistol'] = pistolRoot;
 
-    // Rifle
+    // Rifle (STG-44)
     const rifleRoot = new BABYLON.TransformNode("fps_rifle", scene);
     rifleRoot.parent = camera;
     rifleRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     rifleRoot.setEnabled(false);
-    
-    const rBody = BABYLON.MeshBuilder.CreateBox("fps_rBody", {width: 0.06, height: 0.08, depth: 0.5}, scene);
-    rBody.parent = rifleRoot; rBody.material = gunMat;
-    rBody.metadata = { originalMaterial: gunMat };
 
-    const rMag = BABYLON.MeshBuilder.CreateBox("fps_rMag", {width: 0.04, height: 0.2, depth: 0.08}, scene);
-    rMag.parent = rifleRoot; rMag.position = new BABYLON.Vector3(0, -0.1, 0.05); rMag.rotation.x = 0.2; rMag.material = gunMat;
-    rMag.metadata = { originalMaterial: gunMat };
+    const pRifle = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.STG44, scene).then((result) => {
+        if (scene.isDisposed || rifleRoot.isDisposed()) return;
+        const model = result.meshes[0];
+        model.parent = rifleRoot;
 
-    const rBarrel = BABYLON.MeshBuilder.CreateCylinder("fps_rBarrel", {diameter: 0.02, height: 0.4}, scene);
-    rBarrel.parent = rifleRoot; rBarrel.rotation.x = Math.PI/2; rBarrel.position = new BABYLON.Vector3(0, 0.02, 0.45); rBarrel.material = gunMat;
-    rBarrel.metadata = { originalMaterial: gunMat };
+        const tx = resolveModelTransform('stg44_fps', modelOverride);
+        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
+
+        result.meshes.forEach(m => {
+            m.renderingGroupId = 1;
+            m.isPickable = false;
+            m.checkCollisions = false;
+            if (m.material) {
+                m.metadata = { ...m.metadata, originalMaterial: m.material };
+            }
+        });
+
+        if (result.animationGroups && result.animationGroups.length > 0) {
+            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
+            rifleRoot.metadata = { ...rifleRoot.metadata, animationGroups: result.animationGroups };
+        }
+    }).catch(e => {
+        if (scene.isDisposed || rifleRoot.isDisposed()) return;
+        console.warn("FPS STG-44 load failed", e);
+    });
+    if (promises) promises.push(pRifle);
 
     weaponMap['rifle'] = rifleRoot;
 
@@ -167,17 +222,34 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     shotRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     shotRoot.setEnabled(false);
 
-    const sBody = BABYLON.MeshBuilder.CreateBox("fps_sBody", {width: 0.07, height: 0.07, depth: 0.4}, scene);
-    sBody.parent = shotRoot; sBody.material = gunMat;
-    sBody.metadata = { originalMaterial: gunMat };
+    const pShot = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SHOTGUN, scene).then((result) => {
+        if (scene.isDisposed || shotRoot.isDisposed()) return;
+        const model = result.meshes[0];
+        model.parent = shotRoot;
 
-    const sBarrelL = BABYLON.MeshBuilder.CreateCylinder("fps_sBarrelL", {diameter: 0.025, height: 0.6}, scene);
-    sBarrelL.parent = shotRoot; sBarrelL.rotation.x = Math.PI/2; sBarrelL.position = new BABYLON.Vector3(-0.018, 0.01, 0.5); sBarrelL.material = gunMat;
-    sBarrelL.metadata = { originalMaterial: gunMat };
+        const tx = resolveModelTransform('shotgun_fps', modelOverride);
+        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
 
-    const sBarrelR = BABYLON.MeshBuilder.CreateCylinder("fps_sBarrelR", {diameter: 0.025, height: 0.6}, scene);
-    sBarrelR.parent = shotRoot; sBarrelR.rotation.x = Math.PI/2; sBarrelR.position = new BABYLON.Vector3(0.018, 0.01, 0.5); sBarrelR.material = gunMat;
-    sBarrelR.metadata = { originalMaterial: gunMat };
+        result.meshes.forEach(m => {
+            m.renderingGroupId = 1;
+            m.isPickable = false;
+            m.checkCollisions = false;
+            if (m.material) {
+                m.metadata = { ...m.metadata, originalMaterial: m.material };
+            }
+        });
+
+        if (result.animationGroups && result.animationGroups.length > 0) {
+            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
+            shotRoot.metadata = { ...shotRoot.metadata, animationGroups: result.animationGroups };
+        }
+    }).catch(e => {
+        if (scene.isDisposed || shotRoot.isDisposed()) return;
+        console.warn("FPS Shotgun load failed", e);
+    });
+    if (promises) promises.push(pShot);
 
     weaponMap['shotgun'] = shotRoot;
 
@@ -187,32 +259,34 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     famasRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     famasRoot.setEnabled(false);
 
-    const fBody = BABYLON.MeshBuilder.CreateBox("fps_fBody", { width: 0.055, height: 0.09, depth: 0.45 }, scene);
-    fBody.parent = famasRoot; fBody.material = gunMat;
+    const pFamas = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.FAMAS, scene).then((result) => {
+        if (scene.isDisposed || famasRoot.isDisposed()) return;
+        const model = result.meshes[0];
+        model.parent = famasRoot;
 
-    const fStock = BABYLON.MeshBuilder.CreateBox("fps_fStock", { width: 0.06, height: 0.13, depth: 0.15 }, scene);
-    fStock.parent = famasRoot; fStock.position = new BABYLON.Vector3(0, -0.02, -0.15); fStock.material = gunMat;
+        const tx = resolveModelTransform('famas_fps', modelOverride);
+        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
 
-    const fGrip = BABYLON.MeshBuilder.CreateBox("fps_fGrip", { width: 0.04, height: 0.12, depth: 0.06 }, scene);
-    fGrip.parent = famasRoot; fGrip.position = new BABYLON.Vector3(0, -0.11, 0.05); fGrip.rotation.x = 0.2; fGrip.material = gunMat;
+        result.meshes.forEach(m => {
+            m.renderingGroupId = 1;
+            m.isPickable = false;
+            m.checkCollisions = false;
+            if (m.material) {
+                m.metadata = { ...m.metadata, originalMaterial: m.material };
+            }
+        });
 
-    const fGuard = BABYLON.MeshBuilder.CreateTorus("fps_fGuard", { diameter: 0.05, thickness: 0.005, tessellation: 16 }, scene);
-    fGuard.parent = famasRoot; fGuard.position = new BABYLON.Vector3(0, -0.06, 0.02); fGuard.rotation.y = Math.PI / 2; fGuard.material = gunMat;
-
-    const fHandle = BABYLON.MeshBuilder.CreateBox("fps_fHandle", { width: 0.04, height: 0.04, depth: 0.35 }, scene);
-    fHandle.parent = famasRoot; fHandle.position = new BABYLON.Vector3(0, 0.09, 0); fHandle.material = gunMat;
-
-    const fHandleFront = BABYLON.MeshBuilder.CreateBox("fps_fHFront", { width: 0.03, height: 0.06, depth: 0.04 }, scene);
-    fHandleFront.parent = famasRoot; fHandleFront.position = new BABYLON.Vector3(0, 0.05, 0.15); fHandleFront.rotation.x = -0.3; fHandleFront.material = gunMat;
-    
-    const fHandleRear = BABYLON.MeshBuilder.CreateBox("fps_fHRear", { width: 0.03, height: 0.06, depth: 0.04 }, scene);
-    fHandleRear.parent = famasRoot; fHandleRear.position = new BABYLON.Vector3(0, 0.05, -0.15); fHandleRear.rotation.x = 0.3; fHandleRear.material = gunMat;
-
-    const fBarrel = BABYLON.MeshBuilder.CreateCylinder("fps_fBarrel", { diameter: 0.025, height: 0.2 }, scene);
-    fBarrel.parent = famasRoot; fBarrel.rotation.x = Math.PI / 2; fBarrel.position = new BABYLON.Vector3(0, 0.02, 0.28); fBarrel.material = gunMat;
-
-    const fMag = BABYLON.MeshBuilder.CreateBox("fps_fMag", { width: 0.045, height: 0.15, depth: 0.07 }, scene);
-    fMag.parent = famasRoot; fMag.position = new BABYLON.Vector3(0, -0.1, -0.1); fMag.rotation.x = -0.1; fMag.material = gunMat;
+        if (result.animationGroups && result.animationGroups.length > 0) {
+            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
+            famasRoot.metadata = { ...famasRoot.metadata, animationGroups: result.animationGroups };
+        }
+    }).catch(e => {
+        if (scene.isDisposed || famasRoot.isDisposed()) return;
+        console.warn("FPS FAMAS load failed", e);
+    });
+    if (promises) promises.push(pFamas);
 
     weaponMap['famas'] = famasRoot;
 

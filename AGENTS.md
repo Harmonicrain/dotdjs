@@ -146,7 +146,7 @@ maps/                      # Data-driven map definitions
 ├── _template/             # Starter template for new maps
 ├── warehouse/             # Warehouse 115 map
 ├── mapTest/               # Test arena map
-├── barn/                  # The Barn map
+├── wipmap/                # Barn (WIP map)
 ├── ADDING_MAPS.md         # Step-by-step guide for adding maps
 ├── MapTextureResolver.ts  # Texture loading for maps
 ├── types.ts               # MapConfiguration, MapGameplayConfig, etc.

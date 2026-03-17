@@ -123,6 +123,10 @@ export class GameLifecycle {
                 requestAnimationFrame(() => setTimeout(resolve, 50)),
             );
 
+            // Reset mystery box state for the new level to avoid stale references
+            this.mysteryBox = createDefaultMysteryBox();
+            this.mysteryBoxRef.current = this.mysteryBox;
+
             // Load / reload the selected level
             await game.loadLevel(mapId, this.mysteryBoxRef);
             
@@ -140,10 +144,17 @@ export class GameLifecycle {
             // albedo textures to be fully uploaded to GPU before compilation
             // produces correct shaders. Without this, cached reloads render black.
             await new Promise<void>((resolve) => {
+                let resolved = false;
+                const done = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    clearTimeout(timeout);
+                    resolve();
+                };
                 const checkReady = () => {
                     const allReady = game.scene.textures.every(t => t.isReady());
                     if (allReady) {
-                        resolve();
+                        done();
                     } else {
                         setTimeout(checkReady, 50);
                     }
@@ -151,7 +162,7 @@ export class GameLifecycle {
                 // Timeout safety net
                 const timeout = setTimeout(() => {
                     console.warn("Texture ready-wait timed out — forcing material refresh");
-                    resolve();
+                    done();
                 }, 8000);
                 checkReady();
             });
@@ -256,16 +267,18 @@ export class GameLifecycle {
             sm.send({ type: 'HOST_LOADED' });
         } else if (mode === 'CLIENT' && !sm.gameState.isHostLoaded) {
             await new Promise<void>((resolve) => {
-                const onHostLoaded = () => {
+                let resolved = false;
+                const done = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    clearTimeout(safetyTimeout);
                     sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
                     resolve();
                 };
+                const onHostLoaded = () => done();
                 sm.eventBus.on('HOST_LOADED_RECEIVED', onHostLoaded);
                 // 15s safety timeout
-                setTimeout(() => {
-                    sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
-                    resolve();
-                }, 15000);
+                const safetyTimeout = setTimeout(done, 15000);
             });
         }
 

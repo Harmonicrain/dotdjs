@@ -38,6 +38,7 @@ export const createGameLoop = (deps: GameLoopDeps) => {
     let lastDevStatsUpdate = 0;
     let lastZombieCountUpdate = 0;
     let lastDrawCallCount = 0;
+    let consoleToggleTimeout: ReturnType<typeof setTimeout> | null = null;
 
     // ── Scale Weapon scroll handler ──────────────────────────────────────
     const onWheel = (e: WheelEvent) => {
@@ -58,10 +59,11 @@ export const createGameLoop = (deps: GameLoopDeps) => {
             mode.scale[mode.axis] = Math.max(0.001, +(mode.scale[mode.axis] + delta).toFixed(4));
         }
 
-        // Apply to mesh
+        // Apply to child model mesh (root TransformNode is always 1,1,1)
         const mesh = sm.gameState.weaponMeshes[mode.weaponId];
         if (mesh) {
-            mesh.scaling.set(mode.scale.x, mode.scale.y, mode.scale.z);
+            const modelMesh = mesh.getChildren()?.[0] ?? mesh;
+            modelMesh.scaling.set(mode.scale.x, mode.scale.y, mode.scale.z);
         }
 
         // Push to UI
@@ -98,7 +100,8 @@ export const createGameLoop = (deps: GameLoopDeps) => {
             case 'Escape':
                 const mesh = sm.gameState.weaponMeshes[mode.weaponId];
                 if (mesh && mode.originalScale) {
-                    mesh.scaling.set(mode.originalScale.x, mode.originalScale.y, mode.originalScale.z);
+                    const modelMesh = mesh.getChildren()?.[0] ?? mesh;
+                    modelMesh.scaling.set(mode.originalScale.x, mode.originalScale.y, mode.originalScale.z);
                 }
                 mode.isActive = false;
                 sm.ui.setScaleWeaponMode(null);
@@ -127,9 +130,13 @@ export const createGameLoop = (deps: GameLoopDeps) => {
     }
 
     const dispose = () => {
+        if (consoleToggleTimeout !== null) {
+            clearTimeout(consoleToggleTimeout);
+            consoleToggleTimeout = null;
+        }
         if (canvas) {
-            canvas.removeEventListener('wheel', onWheel);
-            window.removeEventListener('keydown', onScaleKeyDown);
+            canvas.removeEventListener('wheel', onWheel, { capture: true });
+            window.removeEventListener('keydown', onScaleKeyDown, { capture: true });
         }
     };
 
@@ -242,7 +249,7 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                     shadowGenerators: shadowGenCount,
                     shadowMapSize,
                     textures: scene.textures.length,
-                    particleSystems: scene.particleSystems.length,
+                    particleSystems: scene.particleSystems.filter(ps => ps.isStarted()).length,
                 });
             }
 
@@ -255,7 +262,8 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                     sm.isInternalPointerRelease = true;
                     if (document.pointerLockElement) document.exitPointerLock();
                     // Clear the flag after a short delay to ensure InputManager has seen it
-                    setTimeout(() => { sm.isInternalPointerRelease = false; }, 100);
+                    if (consoleToggleTimeout !== null) clearTimeout(consoleToggleTimeout);
+                    consoleToggleTimeout = setTimeout(() => { consoleToggleTimeout = null; sm.isInternalPointerRelease = false; }, 100);
                 } else {
                     if (!sm.gameState.isPaused && !sm.gameState.isGameOver) {
                         sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();

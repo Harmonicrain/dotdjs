@@ -35,8 +35,12 @@ export const createPowerSwitch = (scene: BABYLON.Scene, position: BABYLON.Vector
         model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
 
         result.meshes.forEach(m => {
-            m.checkCollisions = false; 
+            m.checkCollisions = false;
             m.isPickable = false;
+            if (m.material instanceof BABYLON.PBRMaterial) {
+                m.material.unlit = false;
+                (m.material as any).maxSimultaneousLights = 4;
+            }
         });
 
         // Grab the switch animation from the GLB (named "Po_Bo|Level_Down")

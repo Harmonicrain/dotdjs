@@ -61,12 +61,13 @@ export class Game {
     // Game Objects
     public weaponMeshes: { [key: string]: BABYLON.TransformNode } = {};
     public knifeMesh: BABYLON.AbstractMesh | null = null;
-    public remotePlayer: { root: BABYLON.TransformNode, armsContainer: BABYLON.TransformNode, weapons: BABYLON.TransformNode[], muzzleFlash: BABYLON.PointLight, updateName: (n: string) => void } | null = null;
+    public remotePlayer: { root: BABYLON.TransformNode, armsContainer: BABYLON.TransformNode, weapons: BABYLON.TransformNode[], updateName: (n: string) => void } | null = null;
 
     public shadowCasters: BABYLON.AbstractMesh[] = [];
 
     // Handler for visibility change (alt-tab fix for material lighting)
     private visibilityChangeHandler: (() => void) | null = null;
+    private visibilityTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // Game loop cleanup
     private gameLoopDispose: (() => void) | null = null;
@@ -104,12 +105,6 @@ export class Game {
 
         this.scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
         this.scene.collisionsEnabled = true;
-
-        // Subtle fill light — env texture provides the main ambient IBL
-        const fillLight = new BABYLON.HemisphericLight("fillLight", new BABYLON.Vector3(0, 1, 0), this.scene);
-        fillLight.intensity = 0.15;
-        fillLight.diffuse = new BABYLON.Color3(1, 1, 1);
-        fillLight.groundColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 
         // Standard bullet material - brass metallic look
         const pMat = new BABYLON.StandardMaterial("projectileMat", this.scene);
@@ -265,7 +260,9 @@ export class Game {
         this.visibilityChangeHandler = () => {
             if (document.visibilityState === 'visible' && this.scene) {
                 // Small delay to let the WebGL context fully restore
-                setTimeout(() => {
+                if (this.visibilityTimeoutId !== null) clearTimeout(this.visibilityTimeoutId);
+                this.visibilityTimeoutId = setTimeout(() => {
+                    this.visibilityTimeoutId = null;
                     if (this.scene && !this.scene.isDisposed) {
                         this.scene.markAllMaterialsAsDirty(BABYLON.Constants.MATERIAL_AllDirtyFlag);
                     }
@@ -913,6 +910,10 @@ export class Game {
 
     public dispose() {
         window.removeEventListener("resize", this.resize);
+        if (this.visibilityTimeoutId !== null) {
+            clearTimeout(this.visibilityTimeoutId);
+            this.visibilityTimeoutId = null;
+        }
         if (this.visibilityChangeHandler) {
             document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
             this.visibilityChangeHandler = null;

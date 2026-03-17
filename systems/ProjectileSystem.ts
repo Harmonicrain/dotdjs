@@ -152,14 +152,6 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         const scene = ctx.scene;
         const engine = ctx.gameEngine;
 
-        // Muzzle Flash on remote player visual
-        const flash = scene.getLightByName("remoteMuzzleFlash") as BABYLON.PointLight;
-        if (flash) {
-            flash.intensity = 2;
-            ctx.timerManager.schedule('muzzle_flash_remote', 50, () => { flash.intensity = 0; });
-            flash.diffuse = msg.isPacked ? COLOR_FLASH_PACKED : COLOR_FLASH_NORMAL;
-        }
-
         if (msg.origin && msg.dir && engine) {
             _remoteOrigin.set(msg.origin.x, msg.origin.y, msg.origin.z);
             _remoteDir.set(msg.dir.x, msg.dir.y, msg.dir.z);
