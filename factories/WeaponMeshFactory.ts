@@ -3,6 +3,49 @@ import * as BABYLON from '@babylonjs/core';
 import { WEAPON_CONFIGS, MODELS } from '../config';
 import { resolveModelTransform, ModelTransform } from '../config/modelTransforms';
 
+function loadWeaponModel(
+    scene: BABYLON.Scene,
+    parentNode: BABYLON.TransformNode,
+    modelUrl: string,
+    transformKey: string,
+    modelOverride: Partial<ModelTransform> | undefined,
+    isFps: boolean,
+    promises?: Promise<void>[]
+): void {
+    const p = BABYLON.SceneLoader.ImportMeshAsync("", "", modelUrl, scene).then((result) => {
+        if (scene.isDisposed || parentNode.isDisposed()) return;
+        const model = result.meshes[0];
+        model.parent = parentNode;
+        const tx = resolveModelTransform(transformKey, modelOverride);
+        if (tx.rotation) model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
+        if (tx.scaling) model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
+        if (tx.position) model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
+        
+        result.meshes.forEach(m => {
+            m.checkCollisions = false;
+            m.isPickable = false;
+            if (isFps) {
+                m.renderingGroupId = 1;
+                if (m.material) {
+                    m.metadata = { ...m.metadata, originalMaterial: m.material };
+                }
+            }
+        });
+
+        if (isFps && result.animationGroups && result.animationGroups.length > 0) {
+            result.animationGroups.forEach(ag => {
+                ag.stop();
+                ag.loopAnimation = false;
+            });
+            parentNode.metadata = { ...parentNode.metadata, animationGroups: result.animationGroups };
+        }
+    }).catch(e => {
+        if (scene.isDisposed || parentNode.isDisposed()) return;
+        console.warn(`Failed to load weapon model ${transformKey}:`, e);
+    });
+    if (promises) promises.push(p);
+}
+
 export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent: BABYLON.TransformNode, modelOverride?: Partial<ModelTransform>, promises?: Promise<any>[]) => {
     const root = new BABYLON.TransformNode("worldWeapon_" + weaponId, scene);
     root.parent = parent;
@@ -16,110 +59,19 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
     }
 
     if (weaponId === 'pistol') {
-        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            const model = result.meshes[0];
-            model.parent = root;
-            
-            // Align orientation for world pickup (flat)
-            const tx = resolveModelTransform('m1911_world', modelOverride);
-            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-            
-            result.meshes.forEach(m => {
-                m.checkCollisions = false;
-                m.isPickable = false;
-            });
-        }).catch(e => {
-            if (scene.isDisposed || root.isDisposed()) return; // expected during map transitions
-            console.warn("M1911 load failed", e);
-        });
-        if (promises) promises.push(p);
+        loadWeaponModel(scene, root, MODELS.M1911, 'm1911_world', modelOverride, false, promises);
     } 
     else if (weaponId === 'rifle') {
-        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.STG44, scene).then((result) => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            const model = result.meshes[0];
-            model.parent = root;
-
-            const tx = resolveModelTransform('stg44_world', modelOverride);
-            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-
-            result.meshes.forEach(m => {
-                m.checkCollisions = false;
-                m.isPickable = false;
-            });
-        }).catch(e => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            console.warn("STG-44 world load failed", e);
-        });
-        if (promises) promises.push(p);
+        loadWeaponModel(scene, root, MODELS.STG44, 'stg44_world', modelOverride, false, promises);
     }
     else if (weaponId === 'shotgun') {
-        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SHOTGUN, scene).then((result) => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            const model = result.meshes[0];
-            model.parent = root;
-
-            const tx = resolveModelTransform('shotgun_world', modelOverride);
-            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-
-            result.meshes.forEach(m => {
-                m.checkCollisions = false;
-                m.isPickable = false;
-            });
-        }).catch(e => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            console.warn("Shotgun world load failed", e);
-        });
-        if (promises) promises.push(p);
+        loadWeaponModel(scene, root, MODELS.SHOTGUN, 'shotgun_world', modelOverride, false, promises);
     }
     else if (weaponId === 'famas') {
-        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.FAMAS, scene).then((result) => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            const model = result.meshes[0];
-            model.parent = root;
-
-            const tx = resolveModelTransform('famas_world', modelOverride);
-            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-
-            result.meshes.forEach(m => {
-                m.checkCollisions = false;
-                m.isPickable = false;
-            });
-        }).catch(e => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            console.warn("FAMAS load failed", e);
-        });
-        if (promises) promises.push(p);
+        loadWeaponModel(scene, root, MODELS.FAMAS, 'famas_world', modelOverride, false, promises);
     }
     else if (weaponId === 'ray_gun') {
-        const p = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            const model = result.meshes[0];
-            model.parent = root;
-            
-            const tx = resolveModelTransform('ray_gun_world', modelOverride);
-            model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-            model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-            model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-            
-            result.meshes.forEach(m => {
-                m.checkCollisions = false;
-                m.isPickable = false;
-            });
-        }).catch(e => {
-            if (scene.isDisposed || root.isDisposed()) return;
-            console.warn("Ray Gun load failed", e);
-        });
-        if (promises) promises.push(p);
+        loadWeaponModel(scene, root, MODELS.RAY_GUN, 'ray_gun_world', modelOverride, false, promises);
     }
 
     return root;
@@ -143,40 +95,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     pistolRoot.setEnabled(false); 
     
     // Load FPS M1911 Model
-    const p1 = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.M1911, scene).then((result) => {
-        if (scene.isDisposed || pistolRoot.isDisposed()) return;
-        const model = result.meshes[0];
-        model.parent = pistolRoot;
-        
-        const tx = resolveModelTransform('m1911_fps', modelOverride);
-        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-        
-        result.meshes.forEach(m => {
-            m.renderingGroupId = 1; // Render on top of world geometry
-            m.isPickable = false;
-            m.checkCollisions = false;
-            // Store original material for restoration on reset
-            if (m.material) {
-                m.metadata = { ...m.metadata, originalMaterial: m.material };
-            }
-        });
-
-        // Store Animation Groups if present
-        if (result.animationGroups && result.animationGroups.length > 0) {
-            result.animationGroups.forEach(ag => {
-                ag.stop(); // Stop autoplay
-                ag.loopAnimation = false;
-            });
-            pistolRoot.metadata = { ...pistolRoot.metadata, animationGroups: result.animationGroups };
-        }
-    }).catch(e => {
-        if (scene.isDisposed || pistolRoot.isDisposed()) return; // expected during map transitions
-        console.warn("FPS M1911 load failed", e);
-    });
-    if (promises) promises.push(p1);
-    
+    loadWeaponModel(scene, pistolRoot, MODELS.M1911, 'm1911_fps', modelOverride, true, promises);
     weaponMap['pistol'] = pistolRoot;
 
     // Rifle (STG-44)
@@ -185,35 +104,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     rifleRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     rifleRoot.setEnabled(false);
 
-    const pRifle = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.STG44, scene).then((result) => {
-        if (scene.isDisposed || rifleRoot.isDisposed()) return;
-        const model = result.meshes[0];
-        model.parent = rifleRoot;
-
-        const tx = resolveModelTransform('stg44_fps', modelOverride);
-        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-
-        result.meshes.forEach(m => {
-            m.renderingGroupId = 1;
-            m.isPickable = false;
-            m.checkCollisions = false;
-            if (m.material) {
-                m.metadata = { ...m.metadata, originalMaterial: m.material };
-            }
-        });
-
-        if (result.animationGroups && result.animationGroups.length > 0) {
-            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
-            rifleRoot.metadata = { ...rifleRoot.metadata, animationGroups: result.animationGroups };
-        }
-    }).catch(e => {
-        if (scene.isDisposed || rifleRoot.isDisposed()) return;
-        console.warn("FPS STG-44 load failed", e);
-    });
-    if (promises) promises.push(pRifle);
-
+    loadWeaponModel(scene, rifleRoot, MODELS.STG44, 'stg44_fps', modelOverride, true, promises);
     weaponMap['rifle'] = rifleRoot;
 
     // Shotgun
@@ -222,35 +113,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     shotRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     shotRoot.setEnabled(false);
 
-    const pShot = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.SHOTGUN, scene).then((result) => {
-        if (scene.isDisposed || shotRoot.isDisposed()) return;
-        const model = result.meshes[0];
-        model.parent = shotRoot;
-
-        const tx = resolveModelTransform('shotgun_fps', modelOverride);
-        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-
-        result.meshes.forEach(m => {
-            m.renderingGroupId = 1;
-            m.isPickable = false;
-            m.checkCollisions = false;
-            if (m.material) {
-                m.metadata = { ...m.metadata, originalMaterial: m.material };
-            }
-        });
-
-        if (result.animationGroups && result.animationGroups.length > 0) {
-            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
-            shotRoot.metadata = { ...shotRoot.metadata, animationGroups: result.animationGroups };
-        }
-    }).catch(e => {
-        if (scene.isDisposed || shotRoot.isDisposed()) return;
-        console.warn("FPS Shotgun load failed", e);
-    });
-    if (promises) promises.push(pShot);
-
+    loadWeaponModel(scene, shotRoot, MODELS.SHOTGUN, 'shotgun_fps', modelOverride, true, promises);
     weaponMap['shotgun'] = shotRoot;
 
     // Famas
@@ -259,35 +122,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     famasRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
     famasRoot.setEnabled(false);
 
-    const pFamas = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.FAMAS, scene).then((result) => {
-        if (scene.isDisposed || famasRoot.isDisposed()) return;
-        const model = result.meshes[0];
-        model.parent = famasRoot;
-
-        const tx = resolveModelTransform('famas_fps', modelOverride);
-        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-
-        result.meshes.forEach(m => {
-            m.renderingGroupId = 1;
-            m.isPickable = false;
-            m.checkCollisions = false;
-            if (m.material) {
-                m.metadata = { ...m.metadata, originalMaterial: m.material };
-            }
-        });
-
-        if (result.animationGroups && result.animationGroups.length > 0) {
-            result.animationGroups.forEach(ag => { ag.stop(); ag.loopAnimation = false; });
-            famasRoot.metadata = { ...famasRoot.metadata, animationGroups: result.animationGroups };
-        }
-    }).catch(e => {
-        if (scene.isDisposed || famasRoot.isDisposed()) return;
-        console.warn("FPS FAMAS load failed", e);
-    });
-    if (promises) promises.push(pFamas);
-
+    loadWeaponModel(scene, famasRoot, MODELS.FAMAS, 'famas_fps', modelOverride, true, promises);
     weaponMap['famas'] = famasRoot;
 
     // Ray Gun
@@ -298,39 +133,7 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
     rayGunRoot.setEnabled(false);
     
     // Load Ray Gun Model
-    const p2 = BABYLON.SceneLoader.ImportMeshAsync("", "", MODELS.RAY_GUN, scene).then((result) => {
-        if (scene.isDisposed || rayGunRoot.isDisposed()) return;
-        const model = result.meshes[0];
-        model.parent = rayGunRoot;
-        
-        const tx = resolveModelTransform('ray_gun_fps', modelOverride);
-        model.position = new BABYLON.Vector3(tx.position[0], tx.position[1], tx.position[2]);
-        model.rotation = new BABYLON.Vector3(tx.rotation[0], tx.rotation[1], tx.rotation[2]);
-        model.scaling = new BABYLON.Vector3(tx.scaling[0], tx.scaling[1], tx.scaling[2]);
-        
-        result.meshes.forEach(m => {
-            m.renderingGroupId = 1;
-            m.isPickable = false;
-            m.checkCollisions = false;
-            // Store original material for restoration on reset
-            if (m.material) {
-                m.metadata = { ...m.metadata, originalMaterial: m.material };
-            }
-        });
-        
-        if (result.animationGroups && result.animationGroups.length > 0) {
-            result.animationGroups.forEach(ag => {
-                ag.stop();
-                ag.loopAnimation = false;
-            });
-            rayGunRoot.metadata = { ...rayGunRoot.metadata, animationGroups: result.animationGroups };
-        }
-    }).catch(e => {
-        if (scene.isDisposed || rayGunRoot.isDisposed()) return;
-        console.warn("FPS Ray Gun load failed", e);
-    });
-    if (promises) promises.push(p2);
-    
+    loadWeaponModel(scene, rayGunRoot, MODELS.RAY_GUN, 'ray_gun_fps', modelOverride, true, promises);
     weaponMap['ray_gun'] = rayGunRoot;
 
     // Knife
