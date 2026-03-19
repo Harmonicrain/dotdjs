@@ -15,6 +15,11 @@ export interface ISpawnAIContext {
 
 const SPAWN_UNDERGROUND_Y = -3.5; // Y position while zombie waits underground (BREAKING_LID)
 const SPAWN_START_Y = -1.5;       // Y position when emergence begins after lid is cleared
+const EMERGE_SPEED = 0.5;
+const BREAK_DURATION = 4.0;
+const TOTAL_BOUNCES = 5;
+const BOUNCE_HEIGHT_MULTIPLIER = 0.15;
+const LID_OFFSET = 0.04;
 
 /**
  * ZombieSpawnSystem
@@ -37,8 +42,7 @@ export const createZombieSpawnSystem = (ctx: ISpawnAIContext): System => {
                 if (z.state !== ZombieState.SPAWNING && z.state !== ZombieState.BREAKING_LID) continue;
 
                 if (z.state === ZombieState.SPAWNING) {
-                    const emergeSpeed = 0.5;
-                    z.mesh.position.y += emergeSpeed * dt;
+                    z.mesh.position.y += EMERGE_SPEED * dt;
 
                     if (z.mesh.position.y >= 0) {
                         z.mesh.position.y = 0;
@@ -61,16 +65,13 @@ export const createZombieSpawnSystem = (ctx: ISpawnAIContext): System => {
                             }
                             z.lidBreakTimer += dt;
 
-                            // 5 slow bounces over 4 seconds
-                            const breakDuration = 4.0;
-                            const totalBounces = 5;
-                            const progress = z.lidBreakTimer / breakDuration;
-                            const bounceHeight = 0.15 * Math.abs(Math.sin(progress * Math.PI * totalBounces));
-                            gs.lidMesh.position.y = gs.position.y + 0.04 + bounceHeight;
+                            const progress = z.lidBreakTimer / BREAK_DURATION;
+                            const bounceHeight = BOUNCE_HEIGHT_MULTIPLIER * Math.abs(Math.sin(progress * Math.PI * TOTAL_BOUNCES));
+                            gs.lidMesh.position.y = gs.position.y + LID_OFFSET + bounceHeight;
 
-                            if (z.lidBreakTimer >= breakDuration) {
+                            if (z.lidBreakTimer >= BREAK_DURATION) {
                                 gs.hasLid = false;
-                                gs.lidMesh.position.y = gs.position.y + 0.04;
+                                gs.lidMesh.position.y = gs.position.y + LID_OFFSET;
                                 gs.lidMesh.setEnabled(false);
                                 z.targetLidId = undefined;
                                 z.lidBreakTimer = undefined;

@@ -6,7 +6,16 @@ import { EventBus } from '../../engine/EventBus';
 import { VisualManager } from '../../managers/VisualManager';
 import { MapConfigManager } from '../../managers/MapConfigManager';
 import { getHorizontalDistSq } from '../../engine/GeometryUtils';
-import { _tempMoveResult, _tempLookAt, _tempDirectDir } from './zombieAIUtils';
+import {
+    _tempMoveResult, _tempLookAt, _tempDirectDir,
+    isZombieSystemActive, applyGravityAndMove, clampZombieY,
+} from './zombieAIUtils';
+
+const APPROACH_THRESHOLD = 4.0;
+const FAR_DISTANCE = 25.0;
+const STUCK_TIMER_THRESHOLD = 0.5;
+const SHAKE_AMPLITUDE = 0.15;
+const ENTRY_THRESHOLD = 0.25;
 
 export interface IWindowAIContext {
     gameState: GameStateData;
@@ -74,13 +83,13 @@ export const createZombieWindowAISystem = (ctx: IWindowAIContext): System => {
             _tempMoveResult.copyFrom(_tempDirectDir);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
 
-            if (distSq < 4.0) {
+            if (distSq < APPROACH_THRESHOLD) {
                 z.state = ZombieState.ATTACKING_BARRIER;
-            } else if (distSq < 25.0) {
+            } else if (distSq < FAR_DISTANCE) {
                 if (!z.lastPosition) { z.lastPosition = new BABYLON.Vector3(); z.lastPosition.copyFrom(z.mesh.position); }
                 if (!z.stuckTimer) z.stuckTimer = 0;
                 z.stuckTimer += dt;
-                if (z.stuckTimer > 0.5) {
+                if (z.stuckTimer > STUCK_TIMER_THRESHOLD) {
                     const moveDistSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lastPosition);
                     if (moveDistSq < 0.01) z.state = ZombieState.ATTACKING_BARRIER;
                     z.lastPosition.copyFrom(z.mesh.position);
@@ -98,7 +107,7 @@ export const createZombieWindowAISystem = (ctx: IWindowAIContext): System => {
                     ctx.eventBus.emit('BOARD_STATE_CHANGE', { windowId: targetWindow.id });
                     ctx.visualManager.createWoodDebris(b.position);
                 }
-                z.mesh.rotation.z = Math.sin(now * 0.01) * 0.15;
+                z.mesh.rotation.z = Math.sin(now * 0.01) * SHAKE_AMPLITUDE;
             } else {
                 z.state = ZombieState.ENTERING;
             }
@@ -110,7 +119,7 @@ export const createZombieWindowAISystem = (ctx: IWindowAIContext): System => {
             _tempMoveResult.copyFrom(_tempDirectDir);
             _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             z.mesh.position.addInPlace(_tempMoveResult);
-            if (getHorizontalDistSq(z.mesh.position, targetWindow.entryPoint) < 0.25) {
+            if (getHorizontalDistSq(z.mesh.position, targetWindow.entryPoint) < ENTRY_THRESHOLD) {
                 z.state = ZombieState.CHASING;
             }
         }
@@ -119,9 +128,7 @@ export const createZombieWindowAISystem = (ctx: IWindowAIContext): System => {
     return {
         name: 'zombieWindowAI',
         update: (dt: number, now: number) => {
-            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
-            const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-            if (!isAuthority) return;
+            if (!isZombieSystemActive(ctx)) return;
 
             const gc = ctx.configManager.gameplay;
             const frameFactor = dt * 60;
@@ -145,9 +152,8 @@ export const createZombieWindowAISystem = (ctx: IWindowAIContext): System => {
                 // APPROACHING_WINDOW and ATTACKING_BARRIER accumulate into _tempMoveResult
                 // and need gravity + moveWithCollisions applied here.
                 if (stateBeforeUpdate !== ZombieState.ENTERING) {
-                    _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-                    z.mesh.moveWithCollisions(_tempMoveResult);
-                    if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
+                    applyGravityAndMove(z, gc.GRAVITY, frameFactor, _tempMoveResult);
+                    clampZombieY(z);
                 }
             }
         }

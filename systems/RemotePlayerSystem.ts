@@ -26,7 +26,7 @@ export const createRemotePlayerSystem = (ctx: IRemoteContext): System => {
         name: 'remotePlayer',
 
         update: (_dt: number, now: number) => {
-            if (!ctx.gameState.hasStarted) return;
+            if (!ctx.gameState.hasStarted || ctx.gameState.isPaused) return;
 
             const remoteVisual = ctx.remote.visuals;
             if (!remoteVisual) return;
@@ -60,5 +60,8 @@ export const createRemotePlayerSystem = (ctx: IRemoteContext): System => {
             remoteVisual.root.rotation.y          = pose.rotY;
             remoteVisual.armsContainer.rotation.x = pose.pitch;
         },
+        dispose: () => {
+            // No EventBus handlers currently
+        }
     };
 };

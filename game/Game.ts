@@ -22,6 +22,7 @@ import { SystemManager } from '../engine/SystemManager';
 import { loadTextureConfig } from '../maps/MapTextureResolver';
 import { createGameLoop } from './GameLoop';
 import type { PlayerFields, GameFields } from '../store/useGameStore';
+import { resetPlayerWeapons } from '../engine/weaponResetUtils';
 
 // Systems
 import {
@@ -593,20 +594,7 @@ export class Game {
         sm.setHoverMsg(null);
 
         // Reset weapons to starting state (pistol)
-        sm.gameState.weapons = WEAPON_CONFIGS.filter(w => w.id === 'pistol').map(w => ({
-            ...w,
-            currentAmmo: w.clipSize,
-            currentReserve: w.maxReserve,
-            isPacked: false,
-            mesh: sm.gameState.weaponMeshes[w.id] || null
-        })) as WeaponState[];
-
-        sm.gameState.activeWeaponIndex = 0;
-        sm.setActiveWeaponIndex(0);
-        sm.setWeaponName(sm.gameState.weapons[0].name);
-        sm.setWeaponId(sm.gameState.weapons[0].id);
-        sm.setAmmo(sm.gameState.weapons[0].currentAmmo);
-        sm.setReserveAmmo(sm.gameState.weapons[0].currentReserve);
+        resetPlayerWeapons(sm);
     }
 
     /** Reset mystery box state */

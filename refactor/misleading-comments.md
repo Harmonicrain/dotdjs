@@ -1,76 +1,87 @@
 # Misleading Comments
 
-> Comments that don't match the code they describe. These are especially dangerous for LLMs — we trust comments as ground truth when reasoning about code, and incorrect comments lead to incorrect implementations.
+Comments that don't match the code. These actively harm LLM code generation because LLMs trust comments as ground truth.
 
 ---
 
-## Actively Wrong
+## 1. `MAX_CONCURRENT_ZOMBIES` — "unused directly" but IS used
 
-### `managers/HellhoundManager.ts` ~line 256-257
-```typescript
-// Intentional: hellhounds use a flat speed (no round scaling).
-```
-**Reality**: A `speedVariation` factor IS applied at line 260, so the speed is NOT flat. The comment should say something like:
-```typescript
-// Hellhounds use a base speed with random variation, but no round-based scaling.
-```
+**File:** `config/gameplay.ts` ~line 121
 
-### `game/Game.ts` ~line 82
-```typescript
-// Suppress audio context warnings during engine creation
-originalWarn(msg, args);  // passes args as array, not spread
-```
-**Reality**: The suppression function has a bug where non-suppressed warnings are forwarded incorrectly (`args` as a single array argument instead of `...args`). The comment describes the intent but hides the bug.
-
-### `engine/LevelBuilder.ts` ~line 269-270
-```typescript
-// Temp array
-const shadowCasters: BABYLON.AbstractMesh[] = [];
-const navMeshes: BABYLON.Mesh[] = [];
-```
-**Reality**: These arrays are built up across the entire level build process and passed to downstream systems. They are not temporary — they persist for the lifetime of the level. Better:
-```typescript
-// Accumulated during level build, passed to shadow/nav systems
-```
+The comment (or surrounding context) implies this value isn't used directly, but `RoundSystem.ts` uses it in `Math.min(rc.MAX_CONCURRENT_ZOMBIES, 3 + gs.round * 2)`. The comment should say it's the cap in the concurrent zombie formula.
 
 ---
 
-## Incomplete / Misleading
+## 2. HellhoundManager — "flat speed (no round scaling)" then applies variation
 
-### `managers/ZombieManager.ts` ~line 307
-```typescript
-// Treat as window/default so it doesn't start underground
-```
-**Reality**: This is a fallback case for when spawn type is unknown, not specifically "treat as window". The comment implies intentional window-like behavior when it's actually a safety default.
-```typescript
-// Fallback: use above-ground spawn position for unknown spawn types
-```
+**File:** `managers/HellhoundManager.ts` ~lines 256-260
 
-### `systems/zombie/ZombieAnimationSystem.ts` ~line 178
-```typescript
-// Head is parented to torso, so no manual update needed if parenting works
-```
-**Reality**: This comment exists next to a conditional check that does nothing. It should either explain WHY the check exists (defensive guard) or be removed along with the dead branch.
-
-### `systems/player/PlayerCombatSystem.ts` ~line 93
-```typescript
-// Ideally we should have names in metadata
-```
-**Reality**: This TODO-style comment provides no context about what "names in metadata" means or why it would be better. An LLM reading this will wonder if it's an active TODO or a resolved note. Rewrite as:
-```typescript
-// Reload animation is selected by index rather than name — fragile if animation order changes
-```
-
-### `game/Game.ts` ~lines 513-515
-```typescript
-// Dispose the cloned PaP material to release memory and remove observers
-```
-**Reality**: At this point `papMat` refers to the PREVIOUS material (before reassignment), not necessarily a "cloned PaP material". The comment should clarify the sequencing.
+Comment says "Intentional: hellhounds use a flat speed (no round scaling)" but line 260 immediately applies `speedVariation`, contradicting the "flat speed" claim. The comment should say "no round-based scaling, but per-entity variation is applied."
 
 ---
 
-## Refactoring Strategy
+## 3. UIBridge — "Points must always flush immediately"
 
-1. **Fix factually wrong comments first** — HellhoundManager speed, LevelBuilder "temp array"
-2. **Clarify incomplete comments** — add context to TODOs or convert to proper issue tracking
-3. **Remove comments that restate the obvious** — focus on WHY, not WHAT
+**File:** `state/UIBridge.ts` ~lines 69-73
+
+Comment claims points always flush immediately, but the throttling architecture means some paths may still batch. The comment should clarify which specific method bypasses throttling and why.
+
+---
+
+## 4. ZombieManager — "same-map reload produces new GroundSpawn instances with the same IDs"
+
+**File:** `managers/ZombieManager.ts` ~lines 241-242
+
+Comment describes ID-based equality check, but the actual code uses reference inequality (`!==`), checking object identity rather than ID matching. Comment describes intent but not actual behavior.
+
+---
+
+## 5. LevelBuilder — `DEBUG_SHOW_NAVFLOORS` comment
+
+**File:** `engine/LevelBuilder.ts` ~line 388-392
+
+Comment makes it sound like a toggleable flag, but it's a compile-time constant hardcoded to `false`. Should either say "dead code — remove or wire to debug command" or actually be made toggleable.
+
+---
+
+## 6. InputManager — document-level mouseup handler
+
+**File:** `engine/InputManager.ts` ~lines 161-164
+
+Comment says "Additional mouseup handler that catches events at document level" but doesn't explain the actual purpose: working around pointer lock edge cases where `mouseup` events fire outside the canvas. The "why" is missing.
+
+---
+
+## 7. DownedOverlay.tsx — duplicate bleed-out constant
+
+**File:** `ui/components/DownedOverlay.tsx` ~line 30
+
+```ts
+const maxTime = 45; // Approximate max bleed out time
+```
+
+This duplicates `GAME_CONFIG.DOWNED_BLEED_OUT_TIME / 1000` but calls itself "approximate." If it drifts from the config value, the urgency indicator will be wrong. Should reference the config directly.
+
+---
+
+## 8. Game.ts collision ellipsoid
+
+**File:** `game/Game.ts` ~lines 148-149
+
+Comment mentions "collision ellipsoid" but doesn't explain why the specific dimensions (0.25, 0.6, 0.25) were chosen, or that 0.6 represents the camera height offset. New contributors will change these blindly.
+
+---
+
+## 9. WeaponConfig `hipFireOriginCorrection`
+
+**File:** `config/weapons/` — various weapon files
+
+The field is present on some weapons with no comment, and absent on others. No comment explains what this correction does (offsets projectile origin to prevent shooting through walls at close range). LLMs will omit it when adding new weapons.
+
+---
+
+## 10. ParticleManager — scalar decomposition comment
+
+**File:** `managers/visual/ParticleManager.ts` ~lines 87-89
+
+The explosion queue stores `x, y, z` as separate numbers "to avoid stale mesh refs" but this is extremely non-obvious. A comment exists but doesn't explain that mesh `.position` vectors can be recycled/mutated by Babylon.js pool reuse, which is the actual reason for decomposition.

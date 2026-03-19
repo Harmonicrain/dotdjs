@@ -12,6 +12,8 @@ import { StateManager } from '../state/StateManager';
  */
 export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSystem => {
 
+    let _cachedChildren: BABYLON.Node[] = [];
+
     const transition = (newState: MysteryBoxState, duration: number = 0) => {
         stateManager.mysteryBox.state = newState;
         stateManager.mysteryBox.stateTimer = duration;
@@ -98,8 +100,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         animateOptions?: { rotSpeed: number; posY: number; scale: number }
     ) => {
         if (!anchor) return;
-        const children = anchor.getChildren();
-        children.forEach((node, i) => {
+        _cachedChildren.forEach((node, i) => {
             const c = node as BABYLON.TransformNode;
             if (c.name === "box_teddy") {
                 if (c.isEnabled()) c.setEnabled(false);
@@ -153,7 +154,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         for (let i = 0; i < box.instances.length; i++) {
             const inst = box.instances[i];
             if (inst.weaponAnchor) {
-                const children = inst.weaponAnchor.getChildren();
+                const children = (i === box.activeLocationIndex) ? _cachedChildren : inst.weaponAnchor.getChildren();
                 for (let j = 0; j < children.length; j++) {
                     const child = children[j] as BABYLON.TransformNode;
                     if (child.isEnabled()) {
@@ -231,25 +232,21 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const handleBoxClosing = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>, isAuthority: boolean) => {
         box.lidAngle = BABYLON.Scalar.Lerp(box.lidAngle, 0, 0.15);
         updateGlow(activeInstance, 0);
-        if (activeInstance?.weaponAnchor) {
-            const children = activeInstance.weaponAnchor.getChildren();
-            children.forEach(node => {
-                const c = node as BABYLON.TransformNode;
-                if (c.isEnabled()) {
-                    c.scaling.scaleInPlace(0.9);
-                    if (c.scaling.x < 0.1) c.setEnabled(false);
-                }
-            });
-        }
-        if (isAuthority && box.stateTimer <= 0) {
-            if (activeInstance?.weaponAnchor) {
-                const children = activeInstance.weaponAnchor.getChildren();
-                children.forEach(node => {
-                    const t = node as BABYLON.TransformNode;
-                    t.scaling.copyFromFloats(2, 2, 2);
-                    if (t.isEnabled()) t.setEnabled(false);
-                });
+
+        const isFinished = isAuthority && box.stateTimer <= 0;
+
+        _cachedChildren.forEach(node => {
+            const c = node as BABYLON.TransformNode;
+            if (isFinished) {
+                c.scaling.copyFromFloats(2, 2, 2);
+                if (c.isEnabled()) c.setEnabled(false);
+            } else if (c.isEnabled()) {
+                c.scaling.scaleInPlace(0.9);
+                if (c.scaling.x < 0.1) c.setEnabled(false);
             }
+        });
+
+        if (isFinished) {
             transition(MysteryBoxState.BOX_IDLE);
         }
     };
@@ -257,7 +254,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
     const handleBoxTeddyReveal = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>, isAuthority: boolean) => {
         if (activeInstance?.weaponAnchor) {
             const mbc = stateManager.configManager.mysteryBox;
-            activeInstance.weaponAnchor.getChildren().forEach((node) => {
+            _cachedChildren.forEach((node) => {
                 const c = node as BABYLON.TransformNode;
                 if (c.name === "box_teddy") {
                     if (!c.isEnabled()) c.setEnabled(true);
@@ -277,7 +274,7 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
 
     const handleBoxTeddyWait = (box: typeof stateManager.mysteryBox, activeInstance: ReturnType<typeof getActiveInstance>, isAuthority: boolean, isFireSale: boolean) => {
         if (activeInstance?.weaponAnchor) {
-            activeInstance.weaponAnchor.getChildren().forEach((node) => {
+            _cachedChildren.forEach((node) => {
                 const c = node as BABYLON.TransformNode;
                 if (c.name === "box_teddy") {
                     c.rotation.y += 0.02;
@@ -328,7 +325,8 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
                 inst.lidMesh.rotation.x = 0;
             }
             if (inst.weaponAnchor) {
-                inst.weaponAnchor.getChildren().forEach(c => {
+                const children = (i === box.activeLocationIndex) ? _cachedChildren : inst.weaponAnchor.getChildren();
+                children.forEach(c => {
                     const child = c as BABYLON.TransformNode;
                     if (child.isEnabled()) child.setEnabled(false);
                 });
@@ -371,6 +369,8 @@ export const createMysteryBoxSystem = (stateManager: StateManager): MysteryBoxSy
         const weapons = stateManager.configManager.weapons;
         const activeInstance = box.instances[box.activeLocationIndex];
         if (!activeInstance) return;
+
+        _cachedChildren = activeInstance?.weaponAnchor?.getChildren() ?? [];
 
         switch (box.state) {
             case MysteryBoxState.BOX_IDLE:

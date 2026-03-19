@@ -29,7 +29,7 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
     return {
         name: 'weaponView',
         update: (dt: number, now: number) => {
-            if (!ctx.gameState.hasStarted) return;
+            if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen) return;
 
             // ── LOCAL WEAPON Visibility ──
             const activeWeapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
@@ -74,6 +74,9 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
                     w.setEnabled(isVisible);
                 });
             }
+        },
+        dispose: () => {
+            // No EventBus handlers currently
         }
     };
 };

@@ -9,6 +9,7 @@ import { getHorizontalDistSq } from '../../engine/GeometryUtils';
 import {
     _tempMoveResult, _tempDirectDir,
     updateBurningDamage, computeNavPath, applyRotationSmoothing,
+    isZombieSystemActive, applyGravityAndMove, clampZombieY,
 } from './zombieAIUtils';
 
 export interface IZombieAIContext {
@@ -38,15 +39,22 @@ export interface IZombieAIContext {
 const MAX_CROWD_AGENTS = 64;
 const CROWD_AGENT_RADIUS = 0.4;
 const TARGET_UPDATE_INTERVAL = 0.25; // How often crowd agents receive a new goto target
+const TARGET_UPDATE_JITTER = 0.05;   // Random offset added to target update interval
+const AGENT_HEIGHT = 1.8;
+const MAX_ACCELERATION = 8.0;
+const MAX_SPEED = 2.1;
+const COLLISION_QUERY_RANGE = 0.5;
+const SEPARATION_WEIGHT = 1.0;
+const ATTACK_RANGE_MULTIPLIER = 0.9; // Distance multiplier for attack range squared check
 
 const _BASE_AGENT_PARAMS: BABYLON.IAgentParameters = {
     radius: CROWD_AGENT_RADIUS,
-    height: 1.8,
-    maxAcceleration: 8.0,
-    maxSpeed: 2.1,
-    collisionQueryRange: 0.5,
+    height: AGENT_HEIGHT,
+    maxAcceleration: MAX_ACCELERATION,
+    maxSpeed: MAX_SPEED,
+    collisionQueryRange: COLLISION_QUERY_RANGE,
     pathOptimizationRange: 0.0,
-    separationWeight: 1.0,
+    separationWeight: SEPARATION_WEIGHT,
 };
 
 /**
@@ -152,8 +160,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
         applyRotationSmoothing(z, moveDir, frameFactor);
         _tempMoveResult.copyFrom(moveDir);
         _tempMoveResult.scaleInPlace(z.speed * frameFactor);
-        _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-        z.mesh.moveWithCollisions(_tempMoveResult);
+        applyGravityAndMove(z, gc.GRAVITY, frameFactor, _tempMoveResult);
     };
 
     /**
@@ -201,7 +208,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             // Check if within attack range
             const distHorizontalSq = getHorizontalDistSq(z.mesh.position, _targetPos);
             const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
-            const inAttackRange = distHorizontalSq <= (zc.ATTACK_RANGE * 0.9) * (zc.ATTACK_RANGE * 0.9) && 
+            const inAttackRange = distHorizontalSq <= (zc.ATTACK_RANGE * ATTACK_RANGE_MULTIPLIER) * (zc.ATTACK_RANGE * ATTACK_RANGE_MULTIPLIER) && 
                                   heightDiff <= ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD;
 
             if (inAttackRange) {
@@ -235,7 +242,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
                 if (z.pathUpdateTimer <= 0) {
                     _targetPos.y = 0;
                     crowd.agentGoto(z.crowdAgentIndex, _targetPos);
-                    z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * 0.05);
+                    z.pathUpdateTimer = TARGET_UPDATE_INTERVAL + (Math.random() * TARGET_UPDATE_JITTER);
                 }
             }
 
@@ -267,7 +274,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             const distHorizontalSq = getHorizontalDistSq(z.mesh.position, _targetPos);
             const heightDiff = Math.abs(z.mesh.position.y - _targetPos.y);
 
-            if (distHorizontalSq > (zc.ATTACK_RANGE * 0.9) * (zc.ATTACK_RANGE * 0.9) || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
+            if (distHorizontalSq > (zc.ATTACK_RANGE * ATTACK_RANGE_MULTIPLIER) * (zc.ATTACK_RANGE * ATTACK_RANGE_MULTIPLIER) || heightDiff > ctx.configManager.combat.ATTACK_HEIGHT_THRESHOLD) {
                 _tempMoveResult.copyFrom(moveDir);
                 _tempMoveResult.scaleInPlace(z.speed * frameFactor);
             }
@@ -290,9 +297,7 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
             }
         },
         update: (dt: number, now: number) => {
-            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
-            const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-            if (!isAuthority) return;
+            if (!isZombieSystemActive(ctx)) return;
 
             const scene = ctx.scene;
             const camera = ctx.camera;
@@ -392,9 +397,8 @@ export const createZombieAISystem = (ctx: IZombieAIContext): System => {
 
                 // Apply gravity for fallback-path zombies (crowd agents skip this)
                 if (z.crowdAgentIndex === undefined) {
-                    _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-                    z.mesh.moveWithCollisions(_tempMoveResult);
-                    if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) z.mesh.position.y = 0;
+                    applyGravityAndMove(z, gc.GRAVITY, frameFactor, _tempMoveResult);
+                    clampZombieY(z);
                 }
             }
         }

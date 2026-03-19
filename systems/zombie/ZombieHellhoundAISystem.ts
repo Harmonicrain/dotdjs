@@ -8,6 +8,7 @@ import { HellhoundManager } from '../../managers/HellhoundManager';
 import {
     _tempMoveResult, _tempLungeDir, _tempRetreatDir,
     updateBurningDamage, computeNavPath, applyRotationSmoothing, getTargetPosition,
+    isZombieSystemActive, applyGravityAndMove,
 } from './zombieAIUtils';
 
 export interface IHellhoundAIContext {
@@ -23,6 +24,8 @@ export interface IHellhoundAIContext {
     zombieManager: ZombieManager;
     getIsPathfindingActive: () => boolean;
 }
+
+const LUNGE_END_DISTANCE = 2.25;
 
 /**
  * ZombieHellhoundAISystem
@@ -49,8 +52,7 @@ export const createZombieHellhoundAISystem = (ctx: IHellhoundAIContext): System 
             if (z.stateTimer !== undefined && z.stateTimer <= 0) {
                 z.hellhoundState = HellhoundState.CHASING;
             }
-            _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-            z.mesh.moveWithCollisions(_tempMoveResult);
+            applyGravityAndMove(z, gc.GRAVITY, frameFactor, _tempMoveResult);
             return;
         }
 
@@ -98,7 +100,7 @@ export const createZombieHellhoundAISystem = (ctx: IHellhoundAIContext): System 
 
                 const distFromStartSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, z.lungeStartPos);
                 const distToPlayerSq = BABYLON.Vector3.DistanceSquared(z.mesh.position, _targetPos);
-                if (distFromStartSq >= hc.LUNGE_DISTANCE * hc.LUNGE_DISTANCE || distToPlayerSq <= 2.25) {
+                if (distFromStartSq >= hc.LUNGE_DISTANCE * hc.LUNGE_DISTANCE || distToPlayerSq <= LUNGE_END_DISTANCE) {
                     z.hellhoundState = HellhoundState.RECOVERY;
                     z.stateTimer = hc.RECOVERY_MIN + Math.random() * (hc.RECOVERY_MAX - hc.RECOVERY_MIN);
                 }
@@ -125,16 +127,13 @@ export const createZombieHellhoundAISystem = (ctx: IHellhoundAIContext): System 
             }
         }
 
-        _tempMoveResult.y += gc.GRAVITY * 3 * frameFactor;
-        z.mesh.moveWithCollisions(_tempMoveResult);
+        applyGravityAndMove(z, gc.GRAVITY, frameFactor, _tempMoveResult);
     };
 
     return {
         name: 'zombieHellhoundAI',
         update: (dt: number, now: number) => {
-            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
-            const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-            if (!isAuthority) return;
+            if (!isZombieSystemActive(ctx)) return;
 
             const frameFactor = dt * 60;
 

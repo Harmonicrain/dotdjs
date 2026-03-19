@@ -5,6 +5,7 @@ import { MapLoader } from '../managers/MapLoader';
 import { GameMessage, MysteryBox, createDefaultMysteryBox } from '../types/index';
 import { MAP_DEFINITIONS } from '../managers/MapRegistry';
 import { GAME_CONFIG, DEFAULT_MAP_ID, WEAPON_CONFIGS } from '../config';
+import { resetPlayerWeapons } from '../engine/weaponResetUtils';
 import type { PlayerFields, GameFields } from '../store/useGameStore';
 
 /**
@@ -246,21 +247,7 @@ export class GameLifecycle {
         sm.updateGameMode(mode);
 
         // Reset weapons to starting pistol
-        const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');
-        if (pistolConfig) {
-            sm.gameState.weapons = [{
-                ...pistolConfig,
-                currentAmmo:    pistolConfig.clipSize,
-                currentReserve: pistolConfig.maxReserve,
-                isPacked: false,
-                mesh: sm.gameState.weaponMeshes['pistol'] || null,
-            }];
-            sm.setActiveWeaponIndex(0);
-            sm.setWeaponName(pistolConfig.name);
-            sm.setWeaponId(pistolConfig.id);
-            sm.setAmmo(pistolConfig.clipSize);
-            sm.setReserveAmmo(pistolConfig.maxReserve);
-        }
+        resetPlayerWeapons(sm);
 
         // ── Multiplayer Handshake ──────────────────────────────────────────
         // Ensure the client stays on the loading screen until the host is fully ready.
@@ -286,15 +273,6 @@ export class GameLifecycle {
         // Signal all systems (NetworkSystem compressor, NetworkMessageHandler cache)
         // to reset their per-session state before the first tick fires.
         sm.eventBus.emit('GAME_STARTED', { startPoints });
-
-        // Activate weapon meshes
-        sm.gameState.weapons.forEach(w => {
-            const mesh = sm.gameState.weaponMeshes[w.id];
-            if (mesh) w.mesh = mesh;
-        });
-        Object.values(sm.gameState.weaponMeshes).forEach(m => m.setEnabled(false));
-        const initialWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
-        if (initialWeapon?.mesh) initialWeapon.mesh.setEnabled(true);
 
         game.inputManager.reset();
 
@@ -382,24 +360,7 @@ export class GameLifecycle {
         sm.setPlayerName(gs.playerName);
 
         // Reset to pistol
-        const pistolConfig = WEAPON_CONFIGS.find(w => w.id === 'pistol');
-        if (pistolConfig) {
-            gs.weapons = [{
-                ...pistolConfig,
-                currentAmmo:    pistolConfig.clipSize,
-                currentReserve: pistolConfig.maxReserve,
-                isPacked: false,
-                mesh: gs.weaponMeshes['pistol'],
-            }];
-        }
-        Object.values(gs.weaponMeshes).forEach(m => m.setEnabled(false));
-        if (gs.weapons[0].mesh) gs.weapons[0].mesh.setEnabled(true);
-
-        sm.setActiveWeaponIndex(0);
-        sm.setWeaponName(gs.weapons[0].name);
-        sm.setWeaponId(gs.weapons[0].id);
-        sm.setAmmo(gs.weapons[0].currentAmmo);
-        sm.setReserveAmmo(gs.weapons[0].currentReserve);
+        resetPlayerWeapons(sm);
 
         // Reposition camera to spawn point
         if (sm.spawnPoints) {

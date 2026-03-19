@@ -1,62 +1,81 @@
-# Dead Code
+# Dead Code & Unused Exports
 
-> Unused exports, unreachable paths, and stale code that adds noise for LLMs and humans alike.
+Items that can be safely removed to reduce confusion and bundle size.
 
 ---
 
-## Unused Exports
+## 1. `applyDamageToZombie` — exported but never called
 
-### `managers/SoundManager.ts` ~line 115-117
-```typescript
-public getSound(name: string): HTMLAudioElement | undefined {
-    return this.sounds.get(name);
-}
+**File:** `systems/zombie/ZombieDamageSystem.ts` ~line 39-55
+
+The function is exported from the module but never imported or called anywhere. Both `ProjectileSystem` and `PlayerCombatSystem` implement damage inline. This orphan export misleads LLMs into thinking it's the canonical damage path.
+
+**Action:** Delete the export. If a shared damage util is wanted later, re-create it intentionally.
+
+---
+
+## 2. `semiAutoWeapons` — empty array export
+
+**File:** `config/weapons/semiauto.ts` line 3
+
+```ts
+export const semiAutoWeapons: WeaponDefinition[] = [];
 ```
-**Issue**: No callers found in the codebase. If needed for future use, mark with `/** @internal — reserved for future debug tooling */`. Otherwise remove.
+
+Exported, imported into `config/weapons/index.ts`, spread into `allDefinitions`. Contributes nothing — just an empty array that adds maintenance overhead.
+
+**Action:** Remove the file and its import from `config/weapons/index.ts`.
 
 ---
 
-## Stale/Dead Variables
+## 3. `POINTS_THRESHOLD_START` — defined, never referenced
 
-### `systems/zombie/zombieAIUtils.ts` ~line 102-103
-```typescript
-const cursor = z.pathCursor ?? 0;
+**File:** `config/gameplay.ts` ~line 108
+
+The constant is defined in config but only `POINTS_THRESHOLD_MULTIPLIER` is used in `PowerUpSystem.ts`. The start value is never read anywhere.
+
+**Action:** Remove or add usage — if it was intended to seed the threshold formula, wire it in.
+
+---
+
+## 4. `barrelOffset` — optional field never read
+
+**File:** `types/player.ts` line 18
+
+```ts
+barrelOffset?: number;
 ```
-**Issue**: `cursor` is assigned but the function body later re-checks `z.pathCursor` directly at line 143 instead of using `cursor`. Either use `cursor` consistently or remove the variable.
+
+Defined on `WeaponConfig` but no system, factory, or combat code reads it. Only `barrelLength` and `hipFireOriginCorrection` are used for projectile origin calculation.
+
+**Action:** Remove the field from `WeaponConfig`.
 
 ---
 
-## Suppression Code with Bug
+## 5. `DEBUG_SHOW_NAVFLOORS` — dead code branch
 
-### `game/Game.ts` ~lines 77-84
-```typescript
-const suppressedWarn = (msg: string, ...args: any[]) => {
-    if (typeof msg === 'string' && (msg.includes('context') || ...)) {
-        return;
-    }
-    originalWarn(msg, args);  // BUG: should be ...args
-};
-```
-**Issues**:
-1. `originalWarn(msg, args)` passes args as a single array instead of spreading. Should be `originalWarn(msg, ...args)`.
-2. The suppression is broad — any warning containing "context" is silently swallowed, including potentially useful ones.
-3. Consider scoping the suppression more tightly (only during engine construction) and restoring `console.warn` immediately after.
+**File:** `engine/LevelBuilder.ts` ~line 392
+
+Hardcoded `const DEBUG_SHOW_NAVFLOORS = false;`. The conditional block that creates navfloor debug materials (lines ~408-414) will never execute. This isn't a runtime toggle — it's compiled dead code.
+
+**Action:** Either remove entirely, or convert to a runtime debug command in `CommandRegistry.ts` so it's actually usable.
 
 ---
 
-## Debug Flag That's Never Enabled
+## 6. `HighlightLayer` created but never stored
 
-### `engine/LevelBuilder.ts` ~line 380
-```typescript
-const DEBUG_SHOW_NAVFLOORS = false;
-```
-**Issue**: This flag is hardcoded `false` and never toggled. If it's useful for debugging, wire it to a debug command (`/shownavfloors`). If not, remove the conditional branch entirely.
+**File:** `factories/gameplay/PowerUpFactory.ts` ~line 28
+
+A `HighlightLayer` is instantiated but the reference is immediately lost. It persists in the scene with no way to dispose it and no visual effect hooked up.
+
+**Action:** Remove the creation, or store the reference and wire it into the power-up glow effect.
 
 ---
 
-## Refactoring Strategy
+## 7. Custom `MutableRefObject<T>` in `types/index.ts`
 
-1. **Remove** `SoundManager.getSound()` if truly unused (verify with grep first)
-2. **Fix** the `...args` spread bug in Game.ts console.warn suppression
-3. **Use `cursor`** consistently in `zombieAIUtils.ts` or remove the variable
-4. **Wire or remove** `DEBUG_SHOW_NAVFLOORS`
+**File:** `types/index.ts` line 9
+
+A custom `MutableRefObject<T>` type is defined, but `types/ui.ts` uses `React.MutableRefObject` from the React library instead. The custom type is unused.
+
+**Action:** Remove the custom definition. Standardize on `React.MutableRefObject` or a non-React equivalent if engine code needs it.

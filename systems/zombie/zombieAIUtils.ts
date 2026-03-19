@@ -230,3 +230,29 @@ export const getTargetPosition = (
 
     return targetId;
 };
+
+/**
+ * Common authority and pause/debug guard for all zombie AI systems.
+ */
+export function isZombieSystemActive(ctx: { gameModeRef: { current: string }, gameState: { isDebugMode?: boolean, isPaused: boolean } }): boolean {
+    const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
+    return isAuthority && !ctx.gameState.isDebugMode && !ctx.gameState.isPaused;
+}
+
+/**
+ * Applies gravity to a movement vector and performs moveWithCollisions.
+ */
+export function applyGravityAndMove(z: Zombie, gravity: number, frameFactor: number, moveResult: BABYLON.Vector3): void {
+    moveResult.y += gravity * 3 * frameFactor;
+    z.mesh.moveWithCollisions(moveResult);
+}
+
+/**
+ * Clamps a zombie's Y position to 0 if it's within a small threshold of the ground.
+ * Prevents floating/jitter on slightly uneven navmesh geometry.
+ */
+export function clampZombieY(z: Zombie): void {
+    if (z.mesh.position.y > 0 && z.mesh.position.y < 0.15) {
+        z.mesh.position.y = 0;
+    }
+}

@@ -1,103 +1,124 @@
 # Type Safety Issues
 
-> Loose typing (`any`, unnecessary `unknown`, missing type narrowing) that defeats TypeScript's strict mode and makes it easy for LLMs to introduce type errors silently.
+Places where TypeScript's type system is bypassed or underused, creating runtime risk and LLM confusion.
 
 ---
 
-## Critical: `any` usage that enables silent bugs
+## 1. `any` types in world.ts — 4 instances
 
-### `engine/EventBus.ts` ~line 33
-```typescript
-Map<keyof GameEvents, Handler<any>[]>
-```
-**Problem**: The handler map stores `any`-typed handlers, so subscribing with the wrong payload type compiles fine but fails at runtime.
-**Fix**: Use a properly generic `get`/`set` accessor pattern or accept the trade-off with a comment explaining why.
+**File:** `types/world.ts`
 
-### `network/NetworkMessageHandler.ts` ~lines 24, 54
-```typescript
-[key: string]: any;  // in CachedHostState and CachedClientState
-```
-**Problem**: These index signatures allow any property to be read/written without type checking. A typo like `cachedHost.heatlh` silently returns `undefined`.
-**Fix**: Remove the index signature. Define all fields explicitly. If extensibility is needed, use a separate `extras: Record<string, unknown>` field.
+| Line | Field | Current | Better |
+|------|-------|---------|--------|
+| ~26 | `InteractableMetadata.data` | `data?: any` | Discriminated union based on `type` field |
+| ~246 | `DebugInfo.metadata` | `metadata?: any` | `Record<string, string \| number \| boolean>` |
+| ~257 | `DoorMeshEntry.obstacle` | `obstacle?: any` | Recast TileCacheObstacle type or opaque branded type |
+| ~308 | `MapDefinition.navmeshParameters` | `navmeshParameters?: any` | `Partial<RecastConfig>` matching @recast-navigation types |
 
-### `network/NetworkMessageHandler.ts` ~line 245
-```typescript
-const perkMsg = msg as any;
-```
-**Problem**: Casts away all type safety for the perk message. If the message shape changes, no compile error.
-**Fix**: Define a `PerkSyncMessage` type and use a type guard or discriminated union.
-
-### `network/network.ts` (types) ~lines 18, 29-30
-```typescript
-(...args: any[])
-```
-**Problem**: Event handler signatures are fully permissive.
-**Fix**: Use the `GameEvents` interface to derive handler types.
+These are the most dangerous because `world.ts` types flow through LevelBuilder, MapLoader, and every interaction handler. An LLM generating a new map definition will pass anything for these fields.
 
 ---
 
-## High: Loose `any` in world/entity types
+## 2. `WeaponUpgrade` defined in two places
 
-### `types/world.ts`
-| Line | Field | Current Type | Suggested Type |
-|------|-------|-------------|----------------|
-| 26 | `InteractableMetadata.data` | `any` | Discriminated union by `type` field |
-| 248 | `DebugInfo.metadata` | `any` | `Record<string, string \| number \| boolean>` |
-| 259 | `DoorMeshEntry.obstacle` | `any` | Recast obstacle handle type or `unknown` with guards |
-| 310 | `MapDefinition.navmeshParameters` | `any` | `INavMeshParameters` from Recast |
+**File:** `config/weapons/types.ts` line 3 AND `types/player.ts` line 34
 
-### `engine/LevelBuilder.ts` ~line 48
-```typescript
-Promise<any>[]
-```
-**Fix**: `Promise<BABYLON.AssetContainer>[]` or `Promise<void>[]` depending on actual return.
+Identical `WeaponUpgrade` type exists in both files. When an LLM imports from the wrong location, the type still works — until someone changes one and not the other.
 
-### `game/Game.ts` ~line 78
-```typescript
-...args: any[]
-```
-**Fix**: Type the args based on what `console.warn` accepts: `...args: unknown[]`.
+**Action:** Single definition in `types/player.ts`, re-exported from `config/weapons/types.ts` if needed there.
 
 ---
 
-## Medium: Missing type narrowing
+## 3. `Record<string, ...>` without key constraints
 
-### `types/entities.ts` — Zombie `type` field
-The `type` field is `'ZOMBIE' | 'HELLHOUND'` but many systems check it with string comparison instead of using a type guard. A shared `isHellhound(z: Zombie)` guard would prevent typo bugs and help LLMs pattern-match.
+**File:** `types/ui.ts` ~lines 122-125, 140
 
-### `types/player.ts` — WeaponConfig `automatic` field
-The `automatic` property controls fire mode but the name is ambiguous. An LLM seeing `automatic: true` doesn't know if this means "automatic fire" or "automatically equipped". The JSDoc added in commit `50274f5` helps, but a union type like `fireMode: 'auto' | 'semi'` would be self-documenting.
-
-### `network/useMultiplayer.ts` ~line 75
-```typescript
-data: unknown
+```ts
+doorStates: Record<string, DoorState>;
+windowBarrierStates: Record<string, WindowBarrierState>;
+lidStates: Record<string, LidState>;
 ```
-**Improvement**: Use a discriminated union `NetworkMessage` type with a `type` field, then narrow in the handler.
+
+No validation that keys correspond to actual door/window/lid IDs from the map definition. Branded string types would catch typos:
+
+```ts
+type DoorId = string & { __brand: 'DoorId' };
+doorStates: Record<DoorId, DoorState>;
+```
 
 ---
 
-## Low: Config type documentation gaps
+## 4. Non-null assertions hiding potential crashes
 
-### `config/gameplay.ts` — Missing units in numeric fields
-| Field | Value | Unit? |
-|-------|-------|-------|
-| `BLOOD_NORMAL_OFFSET` | `0.02` | meters? UV units? |
-| `BLOOD_FADE_SPEED` | `0.02` | per frame? per second? |
-| `DAMAGE_IMMUNITY_MS` | `500` | clearly ms (good) |
+**File:** `game/Game.ts` ~line 456-481
 
-**Fix**: Add JSDoc with units on every numeric config field, or adopt a naming convention like `_MS`, `_SEC`, `_METERS`.
+```ts
+releaseZombieMesh({ mesh: z.mesh as Mesh, head: z.headMesh, torso: z.torsoMesh, limbs: z.limbs! });
+```
 
-### Weapon upgrade scaling — no documented formula
-STG-44 upgrade: damage 25->50 (2x), clip 30->60 (2x)
-FAMAS upgrade: damage 30->55 (1.8x), clip 30->45 (1.5x)
-No consistent multiplier. This isn't a bug, but LLMs creating new weapons will guess wrong.
-**Fix**: Add a comment block in `config/weapons/index.ts` documenting the design philosophy for upgrade scaling.
+`z.limbs!` asserts non-null without checking. If a zombie is in a corrupted state (e.g., partially initialized from a network sync), this crashes.
+
+**File:** `ui/components/GameOverScreen.tsx` ~line 76
+
+```ts
+((remoteKills! / remoteShots) * 100).toFixed(1)
+```
+
+`remoteKills!` non-null assertion despite the field being optional. Should use nullish coalescing.
 
 ---
 
-## Refactoring Strategy
+## 5. MysteryBoxState numeric enum
 
-1. **Phase 1**: Remove `[key: string]: any` from `CachedHostState`/`CachedClientState` — highest impact
-2. **Phase 2**: Type `InteractableMetadata.data` as discriminated union
-3. **Phase 3**: Replace `as any` casts with proper type guards
-4. **Phase 4**: Add unit suffixes to config field names or JSDoc
+**File:** `types/world.ts` ~lines 7-18
+
+```ts
+enum MysteryBoxState {
+    BOX_IDLE = 0,
+    BOX_ROLLING = 1,
+    // ...
+    BOX_RELOCATING = 9
+}
+```
+
+Numeric enums are harder for LLMs to reason about in state machine transitions. String enums (`BOX_IDLE = 'BOX_IDLE'`) are self-documenting in debug logs and runtime inspection.
+
+---
+
+## 6. Inconsistent `MutableRefObject` types
+
+**File:** `types/index.ts` line 9 vs `types/ui.ts` lines 147-170
+
+A custom `MutableRefObject<T>` is defined in `types/index.ts` but UI state slices use `React.MutableRefObject`. Engine code should not import from React, so there's a legitimate need for the custom type — but it's unused. Either use it consistently in engine types, or remove it.
+
+---
+
+## 7. Loose `Partial<Record<PowerUpType, number>>`
+
+**File:** `types/ui.ts` ~line 131
+
+```ts
+activePowerUps: Partial<Record<PowerUpType, number>>;
+```
+
+This allows any combination of power-ups with numeric values, but doesn't encode:
+- What the number represents (expiry timestamp? remaining duration? stack count?)
+- Which power-ups can actually be active simultaneously
+- Whether multiple of the same type stack
+
+A named type with JSDoc would help:
+
+```ts
+/** Maps active power-up type to its expiry timestamp (ms since epoch) */
+type ActivePowerUps = Partial<Record<PowerUpType, number>>;
+```
+
+---
+
+## 8. Explosive weapon properties scattered across 3 types
+
+**Files:** `types/player.ts` (WeaponConfig), `types/entities.ts` (Projectile), `config/weapons/wonderweapons.ts`
+
+`isExplosive`, `splashRadius`, `splashDamage` are defined independently in WeaponConfig, Projectile, and individual weapon configs. No single source of truth — an LLM adding an explosive weapon must update all three correctly.
+
+**Action:** Define explosive properties once on `WeaponConfig` and derive Projectile explosive fields from the weapon that fired it.

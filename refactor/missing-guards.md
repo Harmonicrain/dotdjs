@@ -1,98 +1,106 @@
 # Missing Guards
 
-> Missing pause guards, authority checks, and safety validations that could cause bugs during edge cases (pausing, level reload, network authority transitions).
+Systems missing pause guards, authority checks, or lastTickTime compensation as required by AGENTS.md sections 5a-5b.
 
 ---
 
-## Missing Pause Guards
+## PAUSE GUARDS (Section 5a)
 
-### `systems/PowerUpSystem.ts` ~line 37-121
-**Problem**: Returns early if `!ctx.gameState.hasStarted` but does NOT check `isPaused` at the top of `update()`. Active power-up effects (lines 108-120) continue to be processed while paused, which could cause effects to expire during pause.
-**Expected guard** (per AGENTS.md zombie-style):
-```typescript
-if (ctx.gameState.isPaused) return;
-```
-**Note**: The `lastTickTime` compensation at line 41 partially mitigates this, but the guard should still exist for consistency.
+### 1. MysteryBoxSystem — NO pause guard at all
 
-### `systems/zombie/ZombieCleanupSystem.ts` ~lines 30-42
-**Problem**: Returns early on `isDebugMode` but NOT on `isPaused`. Zombies can be cleaned up (disposed) while the game is paused. This violates the zombie system pause guard table in AGENTS.md Section 5a.
-**Expected guard**:
-```typescript
-if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
-```
+**File:** `systems/MysteryBoxSystem.ts` ~line 348
 
----
+The `update()` function has no guard for `isPaused` or `isDebugMode`. Per AGENTS.md, MysteryBoxSystem is called directly in `GameLoop.ts` (not via SystemManager), so it **must** have its own pause guard.
 
-## Missing Safety Validations
+**Impact:** If somehow called during pause (e.g., GameLoop freeze logic changes), box timers will advance and state transitions will fire while the game is paused.
 
-### `systems/zombie/ZombieAISystem.ts` ~lines 71-82
-**Problem**: `addZombieToCrowd()` adds agents to the Recast crowd but never checks if the crowd is full. The constant `MAX_CROWD_AGENTS = 64` is defined at line 38, but no validation occurs before `crowd.addAgent()`.
-**Impact**: If 65+ zombies exist simultaneously (possible in high rounds with slow cleanup), the 65th agent silently fails to add. The zombie will have no pathfinding and stand still.
-**Fix**:
-```typescript
-if (crowd.getAgentCount() >= MAX_CROWD_AGENTS) {
-    console.warn('Crowd agent limit reached, zombie will use fallback AI');
-    return false;
-}
-```
-
-### `systems/RoundSystem.ts` ~line 59
-```typescript
-Math.min(round, 5)
-```
-**Problem**: Hardcoded `5` assumes `ZOMBIE_COUNTS_BY_ROUND` always has 5 entries. If someone shortens the array, this silently accesses `undefined`.
-**Fix**:
-```typescript
-Math.min(round, ZOMBIE_COUNTS_BY_ROUND.length)
-```
-
----
-
-## Missing Authority Checks
-
-### `systems/interaction/handlers/` — Decentralized authority
-**Problem**: Authority validation is NOT done at the `InteractionSystem` level. Each individual handler must implement its own authority check. This is documented nowhere and easy to forget when adding a new handler.
-**Impact**: A new handler created by an LLM that forgets the authority check will execute on both HOST and CLIENT, causing duplicate state mutations.
-**Recommended**: Add to the `InteractionHandler` interface:
-```typescript
-interface InteractionHandler {
-    type: string;
-    requiresAuthority?: boolean;  // If true, InteractionSystem skips on CLIENT
-    canInteract(mesh, stateManager): InteractionResult;
-    interact(mesh, stateManager): void;
+**Fix:**
+```ts
+update: (dt: number, now: number) => {
+    if (ctx.gameState.isPaused || ctx.gameState.isDebugMode) return;
+    // ... existing logic
 }
 ```
 
 ---
 
-## Missing Null Safety
+### 2. RemotePlayerSystem — missing isPaused check
 
-### `systems/interaction/handlers/MysteryBoxHandler.ts` ~line 45
-```typescript
-stateManager.mysteryBoxSystem?.interact()
-```
-**Problem**: Optional chaining handles the null case but silently returns `undefined`. The subsequent check `if (!res || res === 'NO_POINTS')` treats undefined the same as "no points", which masks the real issue (system not initialized).
-**Fix**: Add an explicit warning:
-```typescript
-if (!stateManager.mysteryBoxSystem) {
-    console.warn('MysteryBoxSystem not initialized');
-    return;
-}
-```
+**File:** `systems/RemotePlayerSystem.ts` ~line 28-29
 
-### `systems/RemotePlayerSystem.ts` ~lines 35-38
-**Problem**: Disables remote player rendering in SOLO mode but has no pause guard. If the game is paused while a remote player exists (edge case during mode transition), the system continues processing.
+Only checks `!ctx.gameState.hasStarted`. Should also check `isPaused` per the system guard table in AGENTS.md 5a.
+
+**Fix:** Add `|| ctx.gameState.isPaused` to the early-return condition.
 
 ---
 
-## Summary by Priority
+### 3. WeaponViewSystem — minimal guard
 
-| Priority | Issue | File |
-|----------|-------|------|
-| **High** | ZombieCleanupSystem missing pause guard | `systems/zombie/ZombieCleanupSystem.ts` |
-| **High** | Crowd agent overflow not checked | `systems/zombie/ZombieAISystem.ts` |
-| **High** | PowerUpSystem effects tick during pause | `systems/PowerUpSystem.ts` |
-| **Medium** | Hardcoded array length in RoundSystem | `systems/RoundSystem.ts` |
-| **Medium** | Decentralized authority in handlers | `systems/interaction/handlers/` |
-| **Low** | Silent MysteryBox null | `systems/interaction/handlers/MysteryBoxHandler.ts` |
-| **Low** | RemotePlayerSystem no pause guard | `systems/RemotePlayerSystem.ts` |
+**File:** `systems/player/WeaponViewSystem.ts` ~line 32
+
+Only checks `hasStarted`. As a player system, it should follow the full player guard pattern:
+
+```ts
+if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating
+    || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen) return;
+```
+
+Currently, weapon sway/bob animations continue during pause, game over, and spectating.
+
+---
+
+### 4. PlayerCombatSystem — missing isConsoleOpen
+
+**File:** `systems/player/PlayerCombatSystem.ts` ~line 343
+
+Has 4 guard conditions but is missing `isConsoleOpen`, which other player systems check. Players can potentially trigger combat inputs while the console is open.
+
+---
+
+## AUTHORITY CHECKS
+
+### 5. PackAPunchSystem — no authority check on performPackAPunch
+
+**File:** `systems/interaction/handlers/PackAPunchHandler.ts` or `systems/MysteryBoxSystem.ts` (PaP handler)
+
+The `performPackAPunch` function processes the weapon upgrade without verifying `isAuthority`. In multiplayer, a client could trigger PaP locally.
+
+**Fix:** Add authority check before processing the upgrade.
+
+---
+
+## lastTickTime COMPENSATION (Section 5b)
+
+### 6. MysteryBoxSystem — timers vulnerable to pause gaps
+
+**File:** `systems/MysteryBoxSystem.ts` ~lines 366-368
+
+```ts
+box.stateTimer -= dt * 1000;
+```
+
+Uses `dt` to decrement timers without `lastTickTime` compensation. After a long pause, `dt` could be huge (entire pause duration), causing all state transitions to fire instantly.
+
+**Impact:** Unpausing mid-mystery-box-roll could skip the animation and jump to weapon reveal.
+
+**Fix:** Add the `lastTickTime` pattern from AGENTS.md 5b:
+```ts
+let lastTickTime = 0;
+// In update:
+if (lastTickTime !== 0 && now - lastTickTime > 150) {
+    // Clamp dt to prevent timer skip
+}
+lastTickTime = now;
+```
+
+---
+
+### 7. TimerManager — no pause awareness
+
+**File:** `engine/TimerManager.ts` ~lines 31-41
+
+`TimerManager.update(dt)` has no concept of pause state. It relies entirely on calling code to not call `update()` during pause. But AGENTS.md notes that some systems are called outside SystemManager, so there's no enforcement.
+
+**Impact:** If any code path calls `timerManager.update()` during pause, all scheduled timers will fire.
+
+**Suggestion:** Consider adding an `isPaused` flag to TimerManager, or document the contract more explicitly.

@@ -1,116 +1,123 @@
 # Pattern Inconsistencies
 
-> Violations of the patterns documented in AGENTS.md. These make the codebase unpredictable for LLMs — when patterns aren't consistent, we can't reliably infer behavior from one file when working on another.
+Places where similar code follows different patterns, making it harder for LLMs to learn and replicate the "right" way.
 
 ---
 
-## Manager Lifecycle Contract Violations
+## 1. Pause guard shapes vary across player systems
 
-### `managers/ResourceManager.ts` — Missing `reset()`
-AGENTS.md Section 5g documents that managers implement both `reset()` (between-game) and `dispose()` (full teardown). ResourceManager only has `dispose()`.
-**Impact**: An LLM adding cleanup logic won't know whether to add it to `reset()` or `dispose()` because the pattern is broken.
-**Fix**: Add `reset()` — even if it's intentionally a no-op, document WHY the cache persists across games.
+**Files:**
+- `PlayerMovementSystem.ts` — 5 conditions (hasStarted, isPaused, isSpectating, isGameOver, isConsoleOpen)
+- `PlayerCombatSystem.ts` — 4 conditions (missing isConsoleOpen)
+- `WeaponViewSystem.ts` — 1 condition (hasStarted only)
+- `DownedSystem.ts` — 4 conditions (different structure)
 
-### `managers/SoundManager.ts` — Missing both `reset()` and `dispose()`
-Has `stopAll()` and `resumeAll()` but doesn't follow the manager lifecycle contract at all.
-**Fix**: Implement `reset()` (calls `stopAll()`) and `dispose()` (releases `HTMLAudioElement` references, clears the sound map).
+AGENTS.md defines **one** canonical guard per system type. All player systems should use the same guard. An LLM copying from WeaponViewSystem will produce a system missing 4 guards.
 
----
-
-## StateManager Initialization
-
-### `state/StateManager.ts` ~lines 108-111
-```typescript
-public visualManager: VisualManager = null!;
-public zombieManager: ZombieManager = null!;
-public hellhoundManager: HellhoundManager = null!;
-public powerUpManager: PowerUpManager = null!;
-public ui: UIBridge = null!;
-```
-**Problem**: `null!` assertions defeat TypeScript's strict null checking. These fields are initialized via `setManagers()` called from `Game.ts`, but there's a window between construction and initialization where access causes runtime errors with no type-level warning.
-**Fix**: Either:
-- Make fields optional (`?`) and add guards at usage sites, OR
-- Document the initialization order contract with a comment block, OR
-- Use a builder pattern that returns a fully-initialized StateManager
-
----
-
-## Error Handling Inconsistencies
-
-### `game/Game.ts` — Mixed patterns
-| Location | Pattern | Behavior |
-|----------|---------|----------|
-| ~line 716-720 | `try/catch` | Door obstacle creation — logs error, continues |
-| ~line 759-760 | `.catch()` | Map load failure — logs error, continues |
-| Other locations | No error handling | Failures throw to caller |
-
-**Impact**: LLMs adding new async operations won't know which pattern to follow.
-**Fix**: Establish a single error handling pattern for non-critical failures (log + continue) vs critical failures (throw). Document in AGENTS.md.
-
----
-
-## Interaction Handler Inconsistencies
-
-### `systems/interaction/handlers/PerkHandler.ts` ~line 41
-Uses `stateManager.getPerkState()` method to access perk state.
-
-### Other systems
-Directly access `gameState.perkStates[perkId]`.
-
-**Impact**: Two different access patterns for the same data. LLMs will copy whichever file they happen to reference.
-**Fix**: Standardize on one pattern. If `getPerkState()` exists, use it everywhere. If direct access is preferred, remove the accessor.
-
----
-
-## Authority Check Placement
-
-### `systems/InteractionSystem.ts` ~lines 20-22
-Authority validation is pushed down to individual handler implementations (DoorHandler, PerkHandler, etc.) rather than checked at the system level.
-
-### Other systems (RoundSystem, ZombieSpawnSystem)
-Authority is checked at the TOP of `update()` as documented in AGENTS.md.
-
-**Impact**: Decentralized authority checking means each new handler must remember to add its own check. Easy to forget.
-**Fix**: Consider adding a top-level authority check in `InteractionSystem` for handlers that are HOST-only, with a `requiresAuthority` flag on the handler interface.
-
----
-
-## Dispose Pattern in Systems
-
-### Systems WITH proper dispose:
-- `RoundSystem` — cleans up `ZOMBIE_DEATH`, `HELLHOUND_DEATH` handlers
-- `ReviveSystem` — cleans up `REVIVE_EVENT` handler
-- `ProjectileSystem` — cleans up `REMOTE_SHOOT` handler
-
-### Systems WITHOUT dispose (but should have):
-- `NetworkSystem` — subscribes to 3 EventBus events, empty `dispose()`
-- `DownedSystem` — no `dispose()` at all (currently safe but fragile)
-
-### Systems WITHOUT dispose (correctly):
-- `PlayerMovementSystem`, `PlayerCombatSystem` — no EventBus subscriptions
-
-**Fix**: Audit every system with `eventBus.on()` calls and ensure matching `off()` in `dispose()`.
-
----
-
-## Config Access Patterns
-
-### Correct (per AGENTS.md):
-```typescript
-const zc = ctx.configManager.zombieAI;
+**Fix:** Extract a helper or at minimum standardize the guard:
+```ts
+const isPlayerFrozen = (gs: GameStateData) =>
+    !gs.hasStarted || gs.isPaused || gs.isSpectating || gs.isGameOver || gs.isConsoleOpen;
 ```
 
-### Incorrect (direct import):
-Some files import from `config/gameplay.ts` directly instead of going through `MapConfigManager`, bypassing per-map overrides.
+---
 
-**Fix**: Grep for direct `GAME_CONFIG` imports in systems and replace with `ctx.configManager` access where per-map overrides should apply.
+## 2. EventBus cleanup — most systems correct, PackAPunchSystem broken
+
+**Files:** Most systems (RoundSystem, NetworkSystem, ProjectileSystem, InteractionSystem, ReviveSystem, ZombieSyncSystem) properly implement `dispose()` with `eventBus.off()`.
+
+But `PackAPunchSystem` has `init()` and `dispose()` but no `update()` method. It's event-driven only, which means it doesn't conform to the `System` interface that AGENTS.md mandates. An LLM looking at this as a reference will produce systems without `update()`.
+
+**Fix:** Add a no-op `update()` to PackAPunchSystem, or document event-driven systems as an explicit pattern variation.
 
 ---
 
-## Refactoring Strategy
+## 3. RemotePlayerSystem — no dispose() at all
 
-1. **Add lifecycle methods** to ResourceManager and SoundManager
-2. **Standardize authority checking** — either centralize in InteractionSystem or document the decentralized pattern in AGENTS.md
-3. **Fix NetworkSystem dispose** — add EventBus cleanup
-4. **Standardize perk state access** — pick one pattern
-5. **Document error handling convention** in AGENTS.md
+**File:** `systems/RemotePlayerSystem.ts`
+
+While it doesn't subscribe to EventBus, every other system has `dispose()`. An LLM modeling a new system after this one will omit `dispose()`.
+
+**Fix:** Add an empty `dispose()` for interface compliance.
+
+---
+
+## 4. Config imports in UI — mixed sources
+
+**Files:**
+- `PlayerStatus.tsx` — imports `GAME_CONFIG` directly for health thresholds
+- `HUDOverlayEffects.tsx` — imports `GAME_CONFIG` directly
+- `DownedOverlay.tsx` — imports `GAME_CONFIG` AND hardcodes `45`
+- Other components — correctly use `useGameStore` for all values
+
+The AGENTS.md architecture says UI should read from Zustand store, not config. Config values that affect rendering (like max health) should flow through UIBridge.
+
+**Fix:** Expose `maxHealth` (or `hasJuggernog`) through the store so components don't need config imports.
+
+---
+
+## 5. Material creation — 4 different patterns
+
+**Files:**
+- `GeometryUtils.ts` — `createMaterial()` for level geometry PBR
+- `LevelBuilder.ts` — `createPBRMaterialWithTexture()` for custom metallic
+- Various factories — inline `new PBRMaterial()` / `new StandardMaterial()`
+- `ResourceManager.ts` — `getOrCreateMaterial()` for cached shared materials
+
+AGENTS.md documents when to use each, but factories don't follow it. `MysteryBoxFactory`, `RemotePlayerFactory`, and `WeaponMeshFactory` all create materials inline without ResourceManager caching.
+
+**Fix:** Route all factory materials through ResourceManager, or document factory materials as intentionally unmanaged.
+
+---
+
+## 6. React component type annotations — inconsistent
+
+**Files:**
+- `Crosshair.tsx` — `const Crosshair: React.FC = () => {`
+- `Console.tsx` — `export const Console: React.FC<ConsoleProps>`
+- Other components — plain arrow functions without `React.FC`
+
+**Fix:** Pick one style. `React.FC` is falling out of favor (React 18+ doesn't need it). Use plain typed props:
+```tsx
+export const MyComponent = ({ prop }: Props) => { ... };
+```
+
+---
+
+## 7. Null checking patterns in GameOverScreen
+
+**File:** `ui/components/GameOverScreen.tsx` ~lines 74-77
+
+```ts
+const accuracy = shotsFired > 0 ? ((kills / shotsFired) * 100).toFixed(1) : '0.0';
+const remoteAccuracy = remoteShots && remoteShots > 0
+    ? ((remoteKills! / remoteShots) * 100).toFixed(1) : '0.0';
+```
+
+Two nearly identical calculations use different null-safety patterns. First uses simple `> 0`, second uses `&& > 0` plus a `!` assertion. Should be identical logic.
+
+---
+
+## 8. State selector naming — inconsistent abbreviations
+
+**Files across UI:**
+- `DeveloperStats.tsx` — uses `pos` for position
+- `RoundDisplay.tsx` — mixes `activeZombies`, `zombiesSpawned`, `zombiesToSpawn`
+- `HUD.tsx` — uses `points` (full name)
+- `PlayerStatus.tsx` — uses variable renames
+
+No naming convention for store selectors. LLMs will generate inconsistent selector names.
+
+---
+
+## 9. Manager reset() semantics differ
+
+**Files:**
+- `ResourceManager.reset()` — no-op (cache survives between games)
+- `SoundManager.reset()` — stops all sounds
+- `GoreManager.reset()` — clears pieces but keeps observers
+- `ParticleManager.reset()` — stops particles but keeps observers
+
+The word "reset" means different things per manager. AGENTS.md documents `reset()` vs `dispose()` contract but managers interpret "reset" differently.
+
+**Fix:** Document the specific reset scope in each manager's JSDoc, or establish levels: `softReset()` (between rounds) vs `hardReset()` (between games).
