@@ -8,7 +8,7 @@ interface PowerUpIconProps {
     expireTime: number;
 }
 
-const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
+const PowerUpIcon = ({ type, expireTime }: PowerUpIconProps) => {
     const isPaused = useGameStore(s => s.isPaused);
     const isConsoleOpen = useGameStore(s => s.isConsoleOpen);
     const isLogicFrozen = isPaused || isConsoleOpen;
@@ -171,7 +171,7 @@ const PowerUpIcon: React.FC<PowerUpIconProps> = ({ type, expireTime }) => {
     );
 };
 
-export const PowerUpDisplay: React.FC = () => {
+export const PowerUpDisplay = () => {
     const activePowerUps = useGameStore(s => s.activePowerUps);
     const activePowerUpEntries = Object.entries(activePowerUps)
         .map(([type, expTime]) => ({ type: type as PowerUpType, expTime: expTime! }));

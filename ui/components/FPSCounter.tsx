@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
  * Uses direct DOM manipulation via refs to avoid React re-render overhead.
  * Samples frame times and updates the display every ~500ms.
  */
-export const FPSCounter: React.FC = () => {
+export const FPSCounter = () => {
     const valueRef = useRef<HTMLSpanElement>(null);
     const lastTimeRef = useRef(performance.now());
     const frameCountRef = useRef(0);

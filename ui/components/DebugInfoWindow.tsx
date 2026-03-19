@@ -2,7 +2,7 @@
 import React from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
-export const DebugInfoWindow: React.FC = () => {
+export const DebugInfoWindow = () => {
     const debugInfo = useGameStore(s => s.debugInfo);
 
     if (!debugInfo) return null;

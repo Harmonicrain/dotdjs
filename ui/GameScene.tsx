@@ -15,7 +15,7 @@ interface GameSceneProps {
     onGameReset: () => void;
 }
 
-const GameScene: React.FC<GameSceneProps> = ({ onGameReset }) => {
+const GameScene = ({ onGameReset }: GameSceneProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const lifecycleRef = useRef<GameLifecycle | null>(null);
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
 // Roman numeral tally marks for round display
-const RoundTally: React.FC<{ round: number; isDogRound: boolean }> = ({ round, isDogRound }) => {
+const RoundTally = ({ round, isDogRound }: { round: number; isDogRound: boolean }) => {
     const vCount = Math.floor(round / 5);
     const iCount = round % 5;
 
@@ -46,9 +46,9 @@ const RoundTally: React.FC<{ round: number; isDogRound: boolean }> = ({ round, i
 };
 
 // Animated stat bar
-const StatBar: React.FC<{ label: string; value: number; max: number; color: string }> = ({
+const StatBar = ({
     label, value, max, color
-}) => {
+}: { label: string; value: number; max: number; color: string }) => {
     const percent = max > 0 ? (value / max) * 100 : 0;
 
     return (
@@ -65,7 +65,7 @@ const StatBar: React.FC<{ label: string; value: number; max: number; color: stri
     );
 };
 
-export const RoundDisplay: React.FC = () => {
+export const RoundDisplay = () => {
     const round = useGameStore(s => s.round);
     const isDogRound = useGameStore(s => s.isDogRound);
     const activeZombies = useGameStore(s => s.activeZombiesCount);

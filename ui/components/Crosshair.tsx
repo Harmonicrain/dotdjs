@@ -5,7 +5,7 @@ import { useGameStore } from '../../store/useGameStore';
 /** Weapon IDs whose model has a built-in sight — hide HUD crosshair during ADS. */
 const HIDE_CROSSHAIR_ADS_WEAPONS = new Set(['ray_gun']);
 
-export const Crosshair: React.FC = () => {
+export const Crosshair = () => {
     const ammo = useGameStore(state => state.ammo);
     const health = useGameStore(state => state.health);
     const kills = useGameStore(state => state.kills);

@@ -32,7 +32,7 @@ interface HUDProps {
 }
 
 // Interaction prompt component with enhanced styling
-const InteractionPrompt: React.FC<{ message: string }> = ({ message }) => (
+const InteractionPrompt = ({ message }: { message: string }) => (
     <div className="absolute top-[68%] left-1/2 -translate-x-1/2 flex flex-col items-center z-30"
         style={{ animation: 'fadeIn 0.2s ease-out' }}>
         <div className="relative">
@@ -58,7 +58,7 @@ const InteractionPrompt: React.FC<{ message: string }> = ({ message }) => (
 );
 
 // Hover info component with enhanced styling
-const HoverInfo: React.FC<{ message: string }> = ({ message }) => (
+const HoverInfo = ({ message }: { message: string }) => (
     <div className="absolute top-[60%] left-1/2 -translate-x-1/2 flex flex-col items-center z-30">
         <div className="bg-black/80 backdrop-blur-sm px-5 py-3 rounded-sm
                       border border-stone-600/30 shadow-[0_4px_20px_rgba(0,0,0,0.7)]">
@@ -71,7 +71,7 @@ const HoverInfo: React.FC<{ message: string }> = ({ message }) => (
 );
 
 // Spectating overlay with enhanced visuals
-const SpectatingOverlay: React.FC<{ playerName: string }> = ({ playerName }) => (
+const SpectatingOverlay = ({ playerName }: { playerName: string }) => (
     <div className="absolute top-1/4 w-full text-center z-50 pointer-events-none">
         {/* Vignette overlay */}
         <div className="fixed inset-0 bg-gradient-radial from-transparent via-black/20 to-black/50 pointer-events-none" />
@@ -104,7 +104,7 @@ const SpectatingOverlay: React.FC<{ playerName: string }> = ({ playerName }) => 
 );
 
 // Dog round announcement
-const DogRoundAnnouncement: React.FC = () => (
+const DogRoundAnnouncement = () => (
     <div className="absolute top-1/3 left-0 w-full flex flex-col items-center justify-center z-40 pointer-events-none select-none">
         <div className="relative">
             {/* Glow effect */}
@@ -131,7 +131,7 @@ const DogRoundAnnouncement: React.FC = () => (
     </div>
 );
 
-export const HUD: React.FC<HUDProps> = ({ onResume, onQuit, onCommand }) => {
+export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
     // Only subscribe to fields needed for conditional rendering layout
     const isGameOver = useGameStore(s => s.isGameOver);
     const isPaused = useGameStore(s => s.isPaused);

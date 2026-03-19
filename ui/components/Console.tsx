@@ -6,7 +6,7 @@ interface ConsoleProps {
     onCommand: (command: string) => void;
 }
 
-export const Console: React.FC<ConsoleProps> = ({ onCommand }) => {
+export const Console = ({ onCommand }: ConsoleProps) => {
     const isConsoleOpen = useGameStore(s => s.isConsoleOpen);
     const consoleResult = useGameStore(s => s.consoleResult);
     const [input, setInput] = useState('');

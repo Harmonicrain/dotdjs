@@ -26,7 +26,7 @@ interface GameMenuManagerProps {
     onGameReset: () => void; // Reset entire app (reload)
 }
 
-export const GameMenuManager: React.FC<GameMenuManagerProps> = ({
+export const GameMenuManager = ({
     selectedMap,
     onSelectMap,
     connectionStatus,
@@ -41,7 +41,7 @@ export const GameMenuManager: React.FC<GameMenuManagerProps> = ({
     onClientReady,
     onAbort,
     onGameReset
-}) => {
+}: GameMenuManagerProps) => {
     const [menuState, setMenuState] = useState<MenuState>('MAIN');
     const [joinId, setJoinId] = useState("");
     const [tempName, setTempName] = useState("");

@@ -28,7 +28,7 @@ interface LoadingScreenProps {
 }
 
 // Animated loading bar segments
-const LoadingBarSegment: React.FC<{ filled: boolean; index: number }> = ({ filled, index }) => (
+const LoadingBarSegment = ({ filled, index }: { filled: boolean; index: number }) => (
     <div 
         className={`h-full flex-1 transition-all duration-300 ${
             filled ? 'bg-red-700' : 'bg-stone-900'
@@ -41,7 +41,7 @@ const LoadingBarSegment: React.FC<{ filled: boolean; index: number }> = ({ fille
 );
 
 // Animated hex grid background
-const HexGrid: React.FC = () => (
+const HexGrid = () => (
     <div className="absolute inset-0 overflow-hidden opacity-5">
         <svg width="100%" height="100%" className="absolute inset-0">
             <defs>
@@ -59,7 +59,7 @@ const HexGrid: React.FC = () => (
     </div>
 );
 
-export const LoadingScreen: React.FC<LoadingScreenProps> = ({ isVisible, mapName }) => {
+export const LoadingScreen = ({ isVisible, mapName }: LoadingScreenProps) => {
     const [tip, setTip] = useState(TIPS[0]);
     const [progress, setProgress] = useState(0);
     const [phase, setPhase] = useState(0);

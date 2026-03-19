@@ -10,7 +10,7 @@ interface KillEntry {
     timestamp: number;
 }
 
-export const KillFeed: React.FC = () => {
+export const KillFeed = () => {
     const [kills, setKills] = useState<KillEntry[]>([]);
     const killEvents = useGameStore(state => state.killEvents);
     const processedRef = useRef<Set<string>>(new Set());

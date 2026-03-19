@@ -7,14 +7,14 @@ interface OptionsScreenProps {
 }
 
 // Reusable row wrapper for each option
-const OptionRow: React.FC<{ children: React.ReactNode; muted?: boolean }> = ({ children, muted }) => (
+const OptionRow = ({ children, muted }: { children: React.ReactNode; muted?: boolean }) => (
     <div className={`flex flex-col gap-2 transition-opacity duration-300 ${muted ? 'opacity-40 hover:opacity-100' : ''}`}>
         {children}
     </div>
 );
 
 // Label + value display for sliders
-const SliderHeader: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+const SliderHeader = ({ label, value }: { label: string; value: string }) => (
     <div className="flex justify-between items-center">
         <span className="text-stone-400 text-xs tracking-[0.3em] uppercase font-mono">{label}</span>
         <span className="text-stone-300 text-xs tracking-[0.2em] font-mono">{value}</span>
@@ -22,11 +22,11 @@ const SliderHeader: React.FC<{ label: string; value: string }> = ({ label, value
 );
 
 // Styled range slider
-const Slider: React.FC<{
+const Slider = ({ min, max, step, value, disabled, onChange }: {
     min: number; max: number; step: number;
     value: number; disabled?: boolean;
     onChange: (v: number) => void;
-}> = ({ min, max, step, value, disabled, onChange }) => (
+}) => (
     <input
         type="range"
         min={min} max={max} step={step}
@@ -37,7 +37,7 @@ const Slider: React.FC<{
     />
 );
 
-export const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
+export const OptionsScreen = ({ onBack }: OptionsScreenProps) => {
     const settings = useGameStore(s => s.settings);
     const updateSettings = useGameStore(s => s.updateSettings);
     const resetSettings = useGameStore(s => s.resetSettings);

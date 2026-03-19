@@ -11,7 +11,7 @@ interface MainMenuProps {
     isLoading?: boolean;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ selectedMap, onSelectMap, onStartSolo, onHost, onJoin, isLoading }) => {
+export const MainMenu = ({ selectedMap, onSelectMap, onStartSolo, onHost, onJoin, isLoading }: MainMenuProps) => {
     const [hoveredButton, setHoveredButton] = useState<string | null>(null);
     const [titleVisible, setTitleVisible] = useState(false);
     const [menuVisible, setMenuVisible] = useState(false);

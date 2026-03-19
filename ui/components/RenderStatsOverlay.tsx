@@ -22,7 +22,7 @@ interface StatRowProps {
     colorClass: string;
 }
 
-const StatRow: React.FC<StatRowProps> = ({ label, value, colorClass }) => (
+const StatRow = ({ label, value, colorClass }: StatRowProps) => (
     <div className="flex justify-between items-center">
         <span className="text-gray-400 text-[10px] uppercase">{label}</span>
         <span className={`font-bold tabular-nums ${colorClass}`}>{value}</span>
@@ -36,7 +36,7 @@ interface StatBarProps {
     thresholds: [number, number]; // [green, yellow] — above yellow = red
 }
 
-const StatBar: React.FC<StatBarProps> = ({ label, value, max, thresholds }) => {
+const StatBar = ({ label, value, max, thresholds }: StatBarProps) => {
     const pct = Math.min(100, (value / max) * 100);
     const color = value <= thresholds[0]
         ? 'bg-green-500'
@@ -61,7 +61,7 @@ const StatBar: React.FC<StatBarProps> = ({ label, value, max, thresholds }) => {
 
 const formatK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
-export const RenderStatsOverlay: React.FC = () => {
+export const RenderStatsOverlay = () => {
     const stats: RenderStatsData = useGameStore(s => s.renderStats);
 
     if (!stats.isActive) return null;

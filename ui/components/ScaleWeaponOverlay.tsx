@@ -2,7 +2,7 @@
 import React from 'react';
 import { useGameStore, ScaleWeaponModeData } from '../../store/useGameStore';
 
-export const ScaleWeaponOverlay: React.FC = () => {
+export const ScaleWeaponOverlay = () => {
     const mode = useGameStore(s => s.scaleWeaponMode) as ScaleWeaponModeData | null;
 
     if (!mode) return null;

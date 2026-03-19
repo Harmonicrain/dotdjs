@@ -3,7 +3,7 @@ import React from 'react';
 import { GAME_CONFIG } from '../../config';
 import { useGameStore } from '../../store/useGameStore';
 
-export const HUDOverlayEffects: React.FC = () => {
+export const HUDOverlayEffects = () => {
     const health = useGameStore(s => s.health);
     const perks = useGameStore(s => s.perks);
     const flashColor = useGameStore(s => s.flashColor);

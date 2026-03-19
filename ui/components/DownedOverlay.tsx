@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { GAME_CONFIG } from '../../config';
 import { useGameStore } from '../../store/useGameStore';
 
-export const DownedOverlay: React.FC = () => {
+export const DownedOverlay = () => {
     const isDowned = useGameStore(s => s.isDowned);
     const isBeingRevived = useGameStore(s => s.isBeingRevived);
 

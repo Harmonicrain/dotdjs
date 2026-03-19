@@ -2,7 +2,7 @@
 import React from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
-export const DeveloperStats: React.FC = () => {
+export const DeveloperStats = () => {
     const isDebugActive = useGameStore(s => s.isDebugActive);
     const currentZone = useGameStore(s => s.currentZone);
     const pos = useGameStore(s => s.playerPosition);

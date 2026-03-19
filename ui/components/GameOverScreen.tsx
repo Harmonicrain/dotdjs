@@ -7,12 +7,12 @@ interface GameOverScreenProps {
 }
 
 // Animated stat reveal component
-const StatReveal: React.FC<{
+const StatReveal = ({ label, value, delay, highlight }: {
     label: string;
     value: number | string;
     delay: number;
     highlight?: boolean;
-}> = ({ label, value, delay, highlight }) => {
+}) => {
     const [show, setShow] = useState(false);
     const [countedValue, setCountedValue] = useState(0);
 
@@ -59,7 +59,7 @@ const StatReveal: React.FC<{
     );
 };
 
-export const GameOverScreen: React.FC<GameOverScreenProps> = ({ onQuit }) => {
+export const GameOverScreen = ({ onQuit }: GameOverScreenProps) => {
     const round = useGameStore(s => s.round);
     const playerName = useGameStore(s => s.playerName);
     const kills = useGameStore(s => s.kills);

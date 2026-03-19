@@ -9,7 +9,7 @@ interface HitMark {
     timestamp: number;
 }
 
-export const HitMarker: React.FC = () => {
+export const HitMarker = () => {
     const [hitMarks, setHitMarks] = useState<HitMark[]>([]);
     const killEvents = useGameStore(state => state.killEvents);
     const processedRef = useRef<Set<string>>(new Set());

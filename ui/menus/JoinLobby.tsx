@@ -13,7 +13,7 @@ interface JoinLobbyProps {
     onAbort: () => void;
 }
 
-export const JoinLobby: React.FC<JoinLobbyProps> = ({ joinId, onUpdateJoinId, connectionStatus, isWaitingForHost, tempName, onUpdateTempName, onConnect, onReady, onAbort }) => (
+export const JoinLobby = ({ joinId, onUpdateJoinId, connectionStatus, isWaitingForHost, tempName, onUpdateTempName, onConnect, onReady, onAbort }: JoinLobbyProps) => (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black font-serif select-none">
         {/* Background */}
         <div className="absolute inset-0 bg-gradient-to-b from-stone-950 via-black to-stone-950" />

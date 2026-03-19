@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
 // Individual bullet indicator for visual feedback
-const BulletIndicator: React.FC<{ filled: boolean; index: number }> = ({ filled, index }) => (
+const BulletIndicator = ({ filled, index }: { filled: boolean; index: number }) => (
     <div
         className={`w-[3px] h-3 rounded-sm transition-all duration-150 ${filled
                 ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]'
@@ -16,7 +16,7 @@ const BulletIndicator: React.FC<{ filled: boolean; index: number }> = ({ filled,
     />
 );
 
-export const AmmoCounter: React.FC = () => {
+export const AmmoCounter = () => {
     const weaponName = useGameStore(s => s.weaponName);
     const ammo = useGameStore(s => s.ammo);
     const reserveAmmo = useGameStore(s => s.reserveAmmo);

@@ -10,7 +10,7 @@ export const PointsIcon = ({ className = "w-4 h-4" }: { className?: string }) =>
 );
 
 // Animated point notification
-const PointNotification: React.FC<{ value: number; id: string }> = ({ value, id }) => {
+const PointNotification = ({ value, id }: { value: number; id: string }) => {
     const isPositive = value > 0;
     const text = isPositive ? `+${value}` : `${value}`;
     
@@ -33,7 +33,7 @@ const PointNotification: React.FC<{ value: number; id: string }> = ({ value, id 
 };
 
 // Perk icon with glow effect
-const PerkIcon: React.FC<{ type: string; active: boolean }> = ({ type, active }) => {
+const PerkIcon = ({ type, active }: { type: string; active: boolean }) => {
     if (!active) return null;
     
     const perkStyles: Record<string, { bg: string; glow: string; icon: string }> = {
@@ -84,9 +84,9 @@ interface PlayerStatusProps {
     isLocal?: boolean;
 }
 
-export const PlayerStatus: React.FC<PlayerStatusProps> = ({ 
+export const PlayerStatus = ({ 
     name, hp, pts, perks, opacity = 1, isLocal = false 
-}) => {
+}: PlayerStatusProps) => {
     const prevPts = useRef(pts);
     const prevHp = useRef(hp);
     const [diffs, setDiffs] = useState<{id: string, val: number}[]>([]);

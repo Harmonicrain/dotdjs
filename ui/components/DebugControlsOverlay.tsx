@@ -2,7 +2,7 @@
 import React from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
-export const DebugControlsOverlay: React.FC = () => {
+export const DebugControlsOverlay = () => {
     const debugControls = useGameStore(s => s.debugControls);
 
     if (!debugControls.isActive) return null;

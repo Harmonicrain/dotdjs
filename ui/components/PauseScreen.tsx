@@ -8,11 +8,11 @@ interface PauseScreenProps {
 }
 
 // Menu button component with hover effects
-const MenuButton: React.FC<{
+const MenuButton = ({ onClick, children, variant = 'primary' }: {
     onClick: () => void;
     children: React.ReactNode;
     variant?: 'primary' | 'secondary';
-}> = ({ onClick, children, variant = 'primary' }) => (
+}) => (
     <button
         onClick={onClick}
         className={`group relative w-64 py-4 overflow-hidden transition-all duration-300
@@ -57,7 +57,7 @@ const MenuButton: React.FC<{
     </button>
 );
 
-export const PauseScreen: React.FC<PauseScreenProps> = ({ onResume, onQuit }) => {
+export const PauseScreen = ({ onResume, onQuit }: PauseScreenProps) => {
     const [showOptions, setShowOptions] = useState(false);
 
     const handleBackFromOptions = () => {
