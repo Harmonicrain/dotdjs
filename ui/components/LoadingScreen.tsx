@@ -159,28 +159,28 @@ export const LoadingScreen = ({ isVisible, mapName }: LoadingScreenProps) => {
             </div>
 
             {/* Main content */}
-            <div className="z-10 flex flex-col items-center gap-8 max-w-2xl px-8">
+            <div className="z-10 flex flex-col items-center justify-center text-center gap-8 max-w-2xl px-8">
                 {/* Title with glitch effect */}
-                <div className="relative">
-                    <h1 className="text-6xl font-black text-red-800 tracking-[0.3em] uppercase
+                <div className="relative w-full text-center">
+                    <h1 className="text-6xl font-black text-red-800 tracking-[0.3em] uppercase w-full
                                  drop-shadow-[0_0_40px_rgba(127,29,29,0.5)]"
                         style={{ 
                             textShadow: '0 0 60px rgba(127,29,29,0.3), 0 4px 0 rgba(0,0,0,0.8)',
                             fontFamily: 'Bebas Neue, Oswald, sans-serif'
                         }}>
-                        DOM OF THE DEAD
+                        DOM OF THE<br/>DEAD
                     </h1>
                     
                     {/* Glitch layers */}
-                    <h1 className="absolute inset-0 text-6xl font-black text-red-500/20 tracking-[0.3em] uppercase
+                    <h1 className="absolute inset-0 text-6xl font-black text-red-500/20 tracking-[0.3em] uppercase w-full
                                  translate-x-[2px]"
                         style={{ clipPath: 'inset(30% 0 50% 0)', animation: 'glitchLeft 3s ease-in-out infinite' }}>
-                        DOM OF THE DEAD
+                        DOM OF THE<br/>DEAD
                     </h1>
-                    <h1 className="absolute inset-0 text-6xl font-black text-cyan-500/10 tracking-[0.3em] uppercase
+                    <h1 className="absolute inset-0 text-6xl font-black text-cyan-500/10 tracking-[0.3em] uppercase w-full
                                  -translate-x-[2px]"
                         style={{ clipPath: 'inset(60% 0 20% 0)', animation: 'glitchRight 3s ease-in-out infinite' }}>
-                        DOM OF THE DEAD
+                        DOM OF THE<br/>DEAD
                     </h1>
                 </div>
 
