@@ -9,19 +9,22 @@
 export const DEFAULT_MAP_ID = 'warehouse';
 
 export const MAPS = [
-  { 
-    id: 'warehouse', 
-    name: 'WAREHOUSE 115', 
-    description: 'An abandoned storage facility with tight corridors.' 
+  {
+    id: 'warehouse',
+    name: 'WAREHOUSE 115',
+    description: 'An abandoned storage facility with tight corridors.',
+    preview: '/textures/maps/warehouse/preview.png',
   },
-  { 
-    id: 'map_test', 
-    name: 'MAP TEST', 
-    description: 'A large octagonal stone arena surrounded by gates.' 
+  {
+    id: 'map_test',
+    name: 'MAP TEST',
+    description: 'A large octagonal stone arena surrounded by gates.',
+    preview: null,
   },
   {
     id: 'wipmap',
     name: 'BARN',
-    description: 'Work in progress map.'
+    description: 'Work in progress map.',
+    preview: null,
   }
 ];

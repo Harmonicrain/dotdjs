@@ -1,7 +1,6 @@
-
 import { create } from 'zustand';
 import { PowerUpType, DoorState, DebugInfo } from '../types/index';
-import { WEAPON_CONFIGS, DEFAULT_SETTINGS } from '../config';
+import { WEAPON_CONFIGS, DEFAULT_SETTINGS as BASE_SETTINGS } from '../config';
 
 const startWeapon = WEAPON_CONFIGS[0];
 
@@ -68,6 +67,19 @@ export interface RenderStatsData {
   particleSystems: number;
 }
 
+export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
+
+export interface ExtendedSettings {
+  inputDevice: 'KM' | 'CONTROLLER';
+  mouseSensitivity: number;
+  controllerSensitivity: number;
+  controllerDeadzone: number;
+  resolutionScale: number;
+  graphicsQuality: GraphicsQuality;
+  fov: number;
+  showFPS: boolean;
+}
+
 export interface GameFields {
   round: number;
   showRoundIntro: boolean;
@@ -95,15 +107,10 @@ export interface GameFields {
   debugInfo: DebugInfo | null;
   scaleWeaponMode: ScaleWeaponModeData | null;
   currentZone: number;
-  playerPosition: { x: number, y: number, z: number, rot: number };
+  playerPosition: { x: number; y: number; z: number; rot: number };
   debugControls: DebugControlsData;
   renderStats: RenderStatsData;
-  settings: {
-    inputDevice: 'KM' | 'CONTROLLER';
-    mouseSensitivity: number;
-    controllerSensitivity: number;
-    controllerDeadzone: number;
-  };
+  settings: ExtendedSettings;
 }
 
 export interface RemoteFields {
@@ -120,17 +127,30 @@ export interface GameStore extends PlayerFields, GameFields, RemoteFields {
   updatePlayer: (updates: Partial<PlayerFields>) => void;
   updateGame: (updates: Partial<GameFields>) => void;
   updateRemote: (updates: Partial<RemoteFields>) => void;
-  updateSettings: (updates: Partial<GameStore['settings']>) => void;
+  updateSettings: (updates: Partial<ExtendedSettings>) => void;
   resetSettings: () => void;
 }
 
 const STORAGE_KEY = 'zombz_settings';
 
-const getSavedSettings = () => {
+const EXTENDED_DEFAULT_SETTINGS: ExtendedSettings = {
+  ...BASE_SETTINGS,
+  resolutionScale: 1.0,
+  graphicsQuality: 'high',
+  fov: 90,
+  showFPS: false,
+};
+
+const getSavedSettings = (): ExtendedSettings | null => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : null;
-  } catch { return null; }
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    // Merge with defaults so new fields are populated on upgrade
+    return { ...EXTENDED_DEFAULT_SETTINGS, ...parsed };
+  } catch {
+    return null;
+  }
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -149,7 +169,7 @@ export const useGameStore = create<GameStore>((set) => ({
   flashColor: null,
   kills: 0,
   shotsFired: 0,
-  playerName: 'Unknown',
+  playerName: '',
   reviveProgress: 0,
   killEvents: [],
   isAiming: false,
@@ -207,7 +227,7 @@ export const useGameStore = create<GameStore>((set) => ({
     textures: 0,
     particleSystems: 0,
   },
-  settings: getSavedSettings() || DEFAULT_SETTINGS,
+  settings: getSavedSettings() ?? EXTENDED_DEFAULT_SETTINGS,
 
   // Remote Defaults
   remotePlayerName: 'Unknown',
@@ -222,13 +242,15 @@ export const useGameStore = create<GameStore>((set) => ({
   updatePlayer: (updates) => set(updates),
   updateGame: (updates) => set(updates),
   updateRemote: (updates) => set(updates),
-  updateSettings: (updates) => set((state) => {
-    const newSettings = { ...state.settings, ...updates };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
-    return { settings: newSettings };
-  }),
-  resetSettings: () => set(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    return { settings: DEFAULT_SETTINGS };
-  }),
+  updateSettings: (updates) =>
+    set((state) => {
+      const newSettings = { ...state.settings, ...updates };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+      return { settings: newSettings };
+    }),
+  resetSettings: () =>
+    set(() => {
+      localStorage.removeItem(STORAGE_KEY);
+      return { settings: EXTENDED_DEFAULT_SETTINGS };
+    }),
 }));

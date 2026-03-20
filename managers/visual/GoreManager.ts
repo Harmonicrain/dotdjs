@@ -1,6 +1,17 @@
 import * as BABYLON from '@babylonjs/core';
 import { ResourceManager } from '../ResourceManager';
 
+const GORE_POOL_SIZE = 20;
+const MAX_FLOOR_GORE = 60;
+const GORE_FADE_MS = 30000;
+const BLOOD_COLOR_R = 0.8;
+const BLOOD_COLOR_G = 0;
+const BLOOD_COLOR_B = 0;
+const GORE_DISC_MIN_SCALE = 0.4;
+const GORE_DISC_SCALE_RANGE = 0.45;
+const MIN_GORE_BITS = 1;
+const MAX_GORE_BITS = 2;
+
 interface PooledSplatter {
     mesh: BABYLON.Mesh;
     material: BABYLON.StandardMaterial;
@@ -15,9 +26,8 @@ interface ActiveGoreDisc {
 
 export class GoreManager {
     private bloodPool: PooledSplatter[] = [];
-    private poolSize = 20;
+    private poolSize = GORE_POOL_SIZE;
 
-    private static readonly MAX_FLOOR_GORE = 60;
     private floorGorePieces: BABYLON.Mesh[] = [];
     private goreDiscPool: BABYLON.Mesh[] = [];
     private goreDiscCursor = 0;
@@ -42,7 +52,7 @@ export class GoreManager {
             plane.setEnabled(false);
 
             const mat = new BABYLON.StandardMaterial("bloodMat_" + i, this.scene);
-            mat.diffuseColor = new BABYLON.Color3(0.8, 0, 0);
+            mat.diffuseColor = new BABYLON.Color3(BLOOD_COLOR_R, BLOOD_COLOR_G, BLOOD_COLOR_B);
             mat.specularColor = new BABYLON.Color3(0.1, 0, 0);
             mat.emissiveColor = new BABYLON.Color3(0.2, 0, 0);
             mat.alpha = 0.9;
@@ -60,7 +70,7 @@ export class GoreManager {
     private initGoreDiscPool() {
         const mat = this.getFloorGoreMaterial();
 
-        for (let i = 0; i < GoreManager.MAX_FLOOR_GORE; i++) {
+        for (let i = 0; i < MAX_FLOOR_GORE; i++) {
             const disc = BABYLON.MeshBuilder.CreateDisc(`goreDisc_${i}`, {
                 radius: 1,
                 tessellation: 12
@@ -74,7 +84,6 @@ export class GoreManager {
     }
 
     private initGoreFadeObserver() {
-        const FADE_MS = 30000;
         this.goreFadeObserver = this.scene.onBeforeRenderObservable.add(() => {
             const arr = this.activeGoreDiscs;
             if (arr.length === 0) return; // no-op when nothing active (e.g. after reset())
@@ -83,13 +92,13 @@ export class GoreManager {
                 const entry = arr[i];
                 const elapsed = now - entry.startTime;
 
-                if (elapsed >= FADE_MS) {
+                if (elapsed >= GORE_FADE_MS) {
                     entry.mesh.setEnabled(false);
                     // Swap-remove: O(1) instead of splice O(n)
                     arr[i] = arr[arr.length - 1];
                     arr.pop();
                 } else {
-                    const t = elapsed / FADE_MS;
+                    const t = elapsed / GORE_FADE_MS;
                     entry.mesh.visibility = entry.startVis * (1 - t);
                 }
             }
@@ -106,9 +115,9 @@ export class GoreManager {
             ? floorPick.pickedPoint.y + 0.005
             : 0.005;
 
-        this.spawnGoreDisc(pos.x, floorY, pos.z, 0.4 + Math.random() * 0.45, 0.9);
+        this.spawnGoreDisc(pos.x, floorY, pos.z, GORE_DISC_MIN_SCALE + Math.random() * GORE_DISC_SCALE_RANGE, 0.9);
 
-        const bitsCount = 1 + Math.floor(Math.random() * 2); // 1-2 bits instead of 2-4
+        const bitsCount = MIN_GORE_BITS + Math.floor(Math.random() * (MAX_GORE_BITS - MIN_GORE_BITS + 1));
         for (let i = 0; i < bitsCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const dist = 0.2 + Math.random() * 0.4;
@@ -123,7 +132,7 @@ export class GoreManager {
     }
 
     private spawnGoreDisc(x: number, y: number, z: number, scale: number, vis: number) {
-        const idx = this.goreDiscCursor % GoreManager.MAX_FLOOR_GORE;
+        const idx = this.goreDiscCursor % MAX_FLOOR_GORE;
         this.goreDiscCursor++;
         const disc = this.goreDiscPool[idx];
 
@@ -176,8 +185,8 @@ export class GoreManager {
                 this.scene.onBeforeRenderObservable.remove(item.observer);
                 item.observer = null;
             }
-            item.mesh.dispose();
-            item.material.dispose();
+            if (item.mesh && !item.mesh.isDisposed()) item.mesh.dispose();
+            if (item.material) item.material.dispose();
         }
         this.bloodPool = [];
 

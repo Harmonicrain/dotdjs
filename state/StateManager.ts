@@ -215,8 +215,8 @@ export class StateManager {
         this.connectionStatusRef = { current: this.getConnectionStatus() };
     }
 
-    public initializeDoor(doorId: string, cost: number, connects: [number, number]) {
-        this.gameState.doorStates[doorId] = { isOpen: false, cost, connectsZones: connects };
+    public initializeDoor(doorId: string, cost: number, connects: [number, number], startsOpen: boolean = false) {
+        this.gameState.doorStates[doorId] = { isOpen: startsOpen, cost, connectsZones: connects };
     }
 
     public initializeWindow(windowId: string, zone: number, planks: number = 6) {

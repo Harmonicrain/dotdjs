@@ -46,7 +46,8 @@ export const handleWeaponPickup = (ctx: StateManager, weaponId: string) => {
 
         if (currentWeapon.mesh) currentWeapon.mesh.setEnabled(false);
 
-        if (weapons.length < 2) {
+        const hasMuleKick = !!ctx.gameState.perkStates['muleKick'];
+        if (weapons.length < (hasMuleKick ? 3 : 2)) {
             weapons.push(newWeaponState);
             const newIndex = weapons.length - 1;
             ctx.gameState.activeWeaponIndex = newIndex;

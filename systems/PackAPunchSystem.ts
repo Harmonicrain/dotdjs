@@ -26,7 +26,7 @@ export const createPackAPunchSystem = (ctx: StateManager) => {
             ctx.scene.onBeforeRenderObservable.remove(activePapAnimObs);
             activePapAnimObs = null;
         }
-        if (activePapAnimMesh) {
+        if (activePapAnimMesh && !activePapAnimMesh.isDisposed()) {
             activePapAnimMesh.dispose();
             activePapAnimMesh = null;
         }

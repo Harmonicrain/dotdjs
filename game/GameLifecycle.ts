@@ -315,9 +315,13 @@ export class GameLifecycle {
             const sm = game.stateManager;
             sm.gameState.hasStarted   = false;
             sm.gameState.isGameOver   = false;
-            sm.gameState.isPaused     = false;
             sm.gameState.isSpectating = false;
             sm.updateGameMode('SOLO');
+
+            // Must go through setPaused() so scene.particlesEnabled and
+            // scene.animationsEnabled are restored — setting the flag directly
+            // left those Babylon flags stale across map loads.
+            sm.setPaused(false);
         }
 
         callbacks.onStartedChange(false);

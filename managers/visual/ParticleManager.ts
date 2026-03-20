@@ -1,57 +1,62 @@
 import * as BABYLON from '@babylonjs/core';
 import { ResourceManager } from '../ResourceManager';
 
+const POOL_SIZES = {
+    EXPLOSION: 3,
+    TRAIL: 20,
+    IMPACT: 15,
+    BLOOD: 15,
+    DEBRIS: 10,
+    DIRT_BURST: 5,
+    ZOMBIE_EXPLOSION: 5,
+    HEAD_EXPLOSION: 5,
+    HOUND_EXPLOSION: 3,
+    SPAWN_EFFECT: 6,
+    SPAWN_SMOKE: 4,
+    HOLE_SMOKE: 8
+} as const;
+
+const MAX_ZOMBIE_EXPLOSIONS_PER_FRAME = 2;
+
 export class ParticleManager {
     private explosionQueueObserver: BABYLON.Observer<BABYLON.Scene> | null = null;
 
-    private static readonly MAX_EXPLOSION_PS = 3;
     private explosionPSPool: BABYLON.ParticleSystem[] = [];
     private explosionPSCursor = 0;
 
-    private static readonly MAX_TRAIL_PS = 20;
     private trailPSPool: BABYLON.ParticleSystem[] = [];
     private trailPSCursor = 0;
 
-    private static readonly MAX_IMPACT_PS = 15;
     private impactPSPool: BABYLON.ParticleSystem[] = [];
     private impactPSCursor = 0;
 
-    private static readonly MAX_BLOOD_PS = 15;
     private bloodPSPool: BABYLON.ParticleSystem[] = [];
     private bloodPSCursor = 0;
 
-    private static readonly MAX_DEBRIS_PS = 10;
     private debrisPSPool: BABYLON.ParticleSystem[] = [];
     private debrisPSCursor = 0;
 
-    private static readonly MAX_DIRT_BURST_PS = 5;
     private dirtBurstPSPool: BABYLON.ParticleSystem[] = [];
     private dirtBurstPSCursor = 0;
 
-    private static readonly MAX_ZOMBIE_EXPLOSIONS = 5;
     private burstPSPool: BABYLON.ParticleSystem[] = [];
     private mistPSPool: BABYLON.ParticleSystem[] = [];
     private chunksPSPool: BABYLON.ParticleSystem[] = [];
     private zombieExplosionCursor = 0;
 
-    private static readonly MAX_HEAD_EXPLOSIONS = 5;
     private brainPSPool: BABYLON.ParticleSystem[] = [];
     private headExplosionCursor = 0;
 
-    private static readonly MAX_HOUND_EXPLOSIONS = 3;
     private houndExplosionPSPool: BABYLON.ParticleSystem[] = [];
     private houndExplosionCursor = 0;
 
-    private static readonly MAX_SPAWN_EFFECT_PS = 6;
     private spawnEffectPSPool: BABYLON.ParticleSystem[] = [];
     private spawnEffectCursor = 0;
 
-    private static readonly MAX_SPAWN_SMOKE_PS = 4;
     private spawnSmokePSPool: BABYLON.ParticleSystem[] = [];
     private spawnSmokeCursor = 0;
 
     // Ambient hole smoke — persistent, always-on, one per ground spawn (max 8)
-    private static readonly MAX_HOLE_SMOKE_PS = 8;
     private holeSmokePSPool: BABYLON.ParticleSystem[] = [];
     private activeHoleSmokeCount = 0;
 
@@ -83,7 +88,6 @@ export class ParticleManager {
     private static readonly _trailColorPacked2 = new BABYLON.Color4(0.48, 0.08, 0.8, 1);
 
     // Staggered nuke explosion queue — prevents simultaneous mass kills from spiking the frame
-    private static readonly MAX_ZOMBIE_EXPLOSIONS_PER_FRAME = 2;
     private static readonly _queuePos = new BABYLON.Vector3();
     private static readonly _queueHit = new BABYLON.Vector3();
     private zombieExplosionQueue: Array<{ x: number; y: number; z: number; hx: number; hy: number; hz: number; hasHit: boolean }> = [];
@@ -113,7 +117,7 @@ export class ParticleManager {
             if (this.zombieExplosionQueue.length === 0) return;
 
             // Drain the nuke queue
-            const toFire = Math.min(this.zombieExplosionQueue.length, ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME);
+            const toFire = Math.min(this.zombieExplosionQueue.length, MAX_ZOMBIE_EXPLOSIONS_PER_FRAME);
             for (let j = 0; j < toFire; j++) {
                 const e = this.zombieExplosionQueue.shift()!;
                 ParticleManager._queuePos.set(e.x, e.y, e.z);
@@ -127,7 +131,7 @@ export class ParticleManager {
 
     private initExplosionPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_EXPLOSION_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.EXPLOSION; i++) {
             const ps = new BABYLON.ParticleSystem(`plasmaExplosion_${i}`, 80, this.scene);
             ps.particleTexture = tex;
             ps.minSize = 0.5;
@@ -150,7 +154,7 @@ export class ParticleManager {
 
     private initTrailPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_TRAIL_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.TRAIL; i++) {
             const ps = new BABYLON.ParticleSystem(`trailPS_${i}`, 100, this.scene);
             ps.particleTexture = tex;
             ps.minSize = 0.1;
@@ -170,7 +174,7 @@ export class ParticleManager {
 
     private initImpactPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_IMPACT_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.IMPACT; i++) {
             const ps = new BABYLON.ParticleSystem(`impactPS_${i}`, 10, this.scene);
             ps.particleTexture = tex;
             ps.color1 = new BABYLON.Color4(1, 1, 0.8, 1);
@@ -192,7 +196,7 @@ export class ParticleManager {
 
     private initBloodPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_BLOOD_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.BLOOD; i++) {
             const ps = new BABYLON.ParticleSystem(`bloodPS_${i}`, 20, this.scene);
             ps.particleTexture = tex;
             ps.color1 = new BABYLON.Color4(0.7, 0, 0, 1);
@@ -215,7 +219,7 @@ export class ParticleManager {
 
     private initDebrisPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/wood.jpg");
-        for (let i = 0; i < ParticleManager.MAX_DEBRIS_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.DEBRIS; i++) {
             const ps = new BABYLON.ParticleSystem(`debrisPS_${i}`, 20, this.scene);
             ps.particleTexture = tex;
             ps.minEmitBox = ParticleManager._debrisMinBox;
@@ -238,7 +242,7 @@ export class ParticleManager {
 
     private initDirtBurstPSPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/wood.jpg"); // Reusing for blocky dirt chunks
-        for (let i = 0; i < ParticleManager.MAX_DIRT_BURST_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.DIRT_BURST; i++) {
             const ps = new BABYLON.ParticleSystem(`dirtBurstPS_${i}`, 50, this.scene);
             ps.particleTexture = tex;
             ps.minEmitBox = new BABYLON.Vector3(-0.8, -0.1, -0.8);
@@ -264,7 +268,7 @@ export class ParticleManager {
 
     private initZombieExplosionPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_ZOMBIE_EXPLOSIONS; i++) {
+        for (let i = 0; i < POOL_SIZES.ZOMBIE_EXPLOSION; i++) {
             const burst = new BABYLON.ParticleSystem(`zombieBurst_${i}`, 60, this.scene);
             burst.particleTexture = tex;
             burst.color1 = new BABYLON.Color4(0.9, 0.02, 0.02, 1);
@@ -319,7 +323,7 @@ export class ParticleManager {
 
     private initHeadExplosionPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_HEAD_EXPLOSIONS; i++) {
+        for (let i = 0; i < POOL_SIZES.HEAD_EXPLOSION; i++) {
             const brain = new BABYLON.ParticleSystem(`headBrain_${i}`, 8, this.scene);
             brain.particleTexture = tex;
             brain.color1 = new BABYLON.Color4(0.5, 0.05, 0.05, 1);
@@ -340,7 +344,7 @@ export class ParticleManager {
 
     private initHoundExplosionPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_HOUND_EXPLOSIONS; i++) {
+        for (let i = 0; i < POOL_SIZES.HOUND_EXPLOSION; i++) {
             const ps = new BABYLON.ParticleSystem(`houndExplosion_${i}`, 50, this.scene);
             ps.particleTexture = tex;
             ps.color1 = new BABYLON.Color4(1, 0.5, 0, 1);
@@ -360,7 +364,7 @@ export class ParticleManager {
 
     private initSpawnEffectPool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_SPAWN_EFFECT_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.SPAWN_EFFECT; i++) {
             const ps = new BABYLON.ParticleSystem(`spawnEffect_${i}`, 50, this.scene);
             ps.particleTexture = tex;
             ps.color1 = new BABYLON.Color4(0.5, 0.5, 0.5, 1);
@@ -376,7 +380,7 @@ export class ParticleManager {
 
     private initSpawnSmokePool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_SPAWN_SMOKE_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.SPAWN_SMOKE; i++) {
             const ps = new BABYLON.ParticleSystem(`spawnSmoke_${i}`, 100, this.scene);
             ps.particleTexture = tex;
             ps.color1 = new BABYLON.Color4(0.1, 0.1, 0.15, 1);
@@ -401,7 +405,7 @@ export class ParticleManager {
 
     private initHoleSmokePool() {
         const tex = this.resourceManager.getTexture("https://playground.babylonjs.com/textures/flare.png");
-        for (let i = 0; i < ParticleManager.MAX_HOLE_SMOKE_PS; i++) {
+        for (let i = 0; i < POOL_SIZES.HOLE_SMOKE; i++) {
             const ps = new BABYLON.ParticleSystem(`holeSmoke_${i}`, 15, this.scene);
             ps.particleTexture = tex;
             // Red-orange hellish glow
@@ -429,7 +433,7 @@ export class ParticleManager {
     }
 
     public createWoodDebris(pos: BABYLON.Vector3) {
-        const idx = this.debrisPSCursor % ParticleManager.MAX_DEBRIS_PS;
+        const idx = this.debrisPSCursor % POOL_SIZES.DEBRIS;
         this.debrisPSCursor++;
         const ps = this.debrisPSPool[idx];
         if (ps.isStarted()) {
@@ -441,7 +445,7 @@ export class ParticleManager {
     }
 
     public createDirtBurst(pos: BABYLON.Vector3) {
-        const idx = this.dirtBurstPSCursor % ParticleManager.MAX_DIRT_BURST_PS;
+        const idx = this.dirtBurstPSCursor % POOL_SIZES.DIRT_BURST;
         this.dirtBurstPSCursor++;
         const ps = this.dirtBurstPSPool[idx];
         if (ps.isStarted()) {
@@ -453,7 +457,7 @@ export class ParticleManager {
     }
 
     public createImpactParticles(pos: BABYLON.Vector3, normal: BABYLON.Vector3) {
-        const idx = this.impactPSCursor % ParticleManager.MAX_IMPACT_PS;
+        const idx = this.impactPSCursor % POOL_SIZES.IMPACT;
         this.impactPSCursor++;
         const ps = this.impactPSPool[idx];
         if (ps.isStarted()) {
@@ -468,7 +472,7 @@ export class ParticleManager {
     }
 
     public createBloodSplatterParticles(pos: BABYLON.Vector3, normal: BABYLON.Vector3) {
-        const idx = this.bloodPSCursor % ParticleManager.MAX_BLOOD_PS;
+        const idx = this.bloodPSCursor % POOL_SIZES.BLOOD;
         this.bloodPSCursor++;
         const ps = this.bloodPSPool[idx];
         if (ps.isStarted()) {
@@ -489,7 +493,7 @@ export class ParticleManager {
 
         ParticleManager._scratchOrigin.set(pos.x, pos.y + 0.8, pos.z);
 
-        const idx = this.zombieExplosionCursor % ParticleManager.MAX_ZOMBIE_EXPLOSIONS;
+        const idx = this.zombieExplosionCursor % POOL_SIZES.ZOMBIE_EXPLOSION;
         this.zombieExplosionCursor++;
 
         const burst = this.burstPSPool[idx];
@@ -513,7 +517,7 @@ export class ParticleManager {
     }
 
     public createZombieExplosionParticles(pos: BABYLON.Vector3, hitDir?: BABYLON.Vector3): void {
-        if (this.zombieExplosionFrameCount < ParticleManager.MAX_ZOMBIE_EXPLOSIONS_PER_FRAME) {
+        if (this.zombieExplosionFrameCount < MAX_ZOMBIE_EXPLOSIONS_PER_FRAME) {
             this.zombieExplosionFrameCount++;
             this._fireZombieExplosionParticles(pos, hitDir);
         } else {
@@ -535,8 +539,8 @@ export class ParticleManager {
 
         ParticleManager._scratchOrigin.set(pos.x, pos.y, pos.z);
 
-        const idx = this.zombieExplosionCursor % ParticleManager.MAX_ZOMBIE_EXPLOSIONS;
-        const hIdx = this.headExplosionCursor % ParticleManager.MAX_HEAD_EXPLOSIONS;
+        const idx = this.zombieExplosionCursor % POOL_SIZES.ZOMBIE_EXPLOSION;
+        const hIdx = this.headExplosionCursor % POOL_SIZES.HEAD_EXPLOSION;
         this.zombieExplosionCursor++;
         this.headExplosionCursor++;
 
@@ -561,7 +565,7 @@ export class ParticleManager {
     }
 
     public createHellhoundDeathExplosion(pos: BABYLON.Vector3) {
-        const idx = this.houndExplosionCursor % ParticleManager.MAX_HOUND_EXPLOSIONS;
+        const idx = this.houndExplosionCursor % POOL_SIZES.HOUND_EXPLOSION;
         this.houndExplosionCursor++;
         const ps = this.houndExplosionPSPool[idx];
         if (ps.isStarted()) { ps.stop(); ps.reset(); }
@@ -570,7 +574,7 @@ export class ParticleManager {
     }
 
     public createSpawnEffect(pos: BABYLON.Vector3) {
-        const idx = this.spawnEffectCursor % ParticleManager.MAX_SPAWN_EFFECT_PS;
+        const idx = this.spawnEffectCursor % POOL_SIZES.SPAWN_EFFECT;
         this.spawnEffectCursor++;
         const ps = this.spawnEffectPSPool[idx];
         if (ps.isStarted()) { ps.stop(); ps.reset(); }
@@ -579,7 +583,7 @@ export class ParticleManager {
     }
 
     public createSpawnSmokeEffect(pos: BABYLON.Vector3): BABYLON.ParticleSystem {
-        const idx = this.spawnSmokeCursor % ParticleManager.MAX_SPAWN_SMOKE_PS;
+        const idx = this.spawnSmokeCursor % POOL_SIZES.SPAWN_SMOKE;
         this.spawnSmokeCursor++;
         const ps = this.spawnSmokePSPool[idx];
         if (ps.isStarted()) { ps.stop(); ps.reset(); }
@@ -595,7 +599,7 @@ export class ParticleManager {
      */
     public startHoleSmoke(positions: BABYLON.Vector3[]): void {
         this.stopHoleSmoke();
-        const count = Math.min(positions.length, ParticleManager.MAX_HOLE_SMOKE_PS);
+        const count = Math.min(positions.length, POOL_SIZES.HOLE_SMOKE);
         for (let i = 0; i < count; i++) {
             const ps = this.holeSmokePSPool[i];
             ps.emitter = positions[i];
@@ -624,7 +628,7 @@ export class ParticleManager {
     }
 
     public createPlasmaExplosion(pos: BABYLON.Vector3, isPacked: boolean = false) {
-        const idx = this.explosionPSCursor % ParticleManager.MAX_EXPLOSION_PS;
+        const idx = this.explosionPSCursor % POOL_SIZES.EXPLOSION;
         this.explosionPSCursor++;
         const ps = this.explosionPSPool[idx];
         if (ps.isStarted()) {
@@ -644,7 +648,7 @@ export class ParticleManager {
     }
 
     public createProjectileTrail(mesh: BABYLON.AbstractMesh, isPacked: boolean = false): BABYLON.ParticleSystem {
-        const idx = this.trailPSCursor % ParticleManager.MAX_TRAIL_PS;
+        const idx = this.trailPSCursor % POOL_SIZES.TRAIL;
         this.trailPSCursor++;
         const ps = this.trailPSPool[idx];
         if (ps.isStarted()) {

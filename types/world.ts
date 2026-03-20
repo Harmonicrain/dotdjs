@@ -157,6 +157,7 @@ export interface DoorDefinition {
     rotation?: number;
     closedY?: number;  // Default: pos[1]
     openY?: number;    // Default: pos[1] + 4
+    startsOpen?: boolean; // Door begins open (no mesh/obstacle), used for zone passageways
 }
 
 export interface WindowDefinition {
@@ -168,7 +169,7 @@ export interface WindowDefinition {
 }
 
 export interface PerkDefinition {
-    type: 'juggernog' | 'speed_cola' | 'quick_revive' | 'double_tap';
+    type: 'juggernog' | 'speed_cola' | 'quick_revive' | 'double_tap' | 'mule_kick';
     id: string;
     zone: number;
     pos: [number, number, number];

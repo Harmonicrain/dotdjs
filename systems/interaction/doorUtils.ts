@@ -21,7 +21,7 @@ export const animateDoorMeshToY = (
 ) => {
     // Handle special door cases that should be disposed instead of animated
     if (doorId === 'door1' || doorId === 'door2') {
-        if (mesh) mesh.dispose();
+        if (mesh && !mesh.isDisposed()) mesh.dispose();
         ctx.mapVisuals.doorMeshes.delete(doorId);
         return;
     }

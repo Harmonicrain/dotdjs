@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
-import { createJuggernog, createSpeedCola, createQuickRevive, createDoubleTap, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
+import { createJuggernog, createSpeedCola, createQuickRevive, createDoubleTap, createMuleKick, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
 import { createBuilding } from '../factories/BuildingFactory';
 import { GAME_CONFIG, MYSTERY_BOX_CONFIG } from '../config';
 
@@ -468,6 +468,10 @@ export class LevelBuilder {
         const doorMat = this.materials.get('door')!;
 
         doors.forEach(d => {
+            // startsOpen doors are passageways — no physical mesh needed,
+            // only the zone connection (handled by extractDoorConnections)
+            if (d.startsOpen) return;
+
             const mesh = BABYLON.MeshBuilder.CreateBox(`door_${d.id}`, { width: d.size[0], height: d.size[1], depth: d.size[2] }, this.scene);
             mesh.position = new BABYLON.Vector3(d.pos[0], d.pos[1], d.pos[2]);
             if (d.rotation) mesh.rotation.y = d.rotation;
@@ -636,6 +640,7 @@ export class LevelBuilder {
             speed_cola: GAME_CONFIG.SPEED_COLA_COST,
             quick_revive: GAME_CONFIG.QUICK_REVIVE_COST,
             double_tap: GAME_CONFIG.DOUBLE_TAP_COST,
+            mule_kick: GAME_CONFIG.MULE_KICK_COST,
         };
 
         perks.forEach(p => {
@@ -648,6 +653,8 @@ export class LevelBuilder {
                 machine = createSpeedCola(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['speed_cola'], this.loadPromises);
             } else if (p.type === 'double_tap') {
                 machine = createDoubleTap(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['double_tap'], this.loadPromises);
+            } else if (p.type === 'mule_kick') {
+                machine = createMuleKick(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['mule_kick'], this.loadPromises);
             } else {
                 machine = createQuickRevive(this.scene, this.shadowCasters, pos, p.rotation || 0, def.modelOverrides?.['quick_revive'], this.loadPromises);
             }

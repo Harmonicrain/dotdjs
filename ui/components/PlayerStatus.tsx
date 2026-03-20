@@ -57,6 +57,11 @@ const PerkIcon = ({ type, active }: { type: string; active: boolean }) => {
             glow: 'shadow-[0_0_15px_rgba(245,158,11,0.8),inset_0_0_10px_rgba(255,255,255,0.2)]',
             icon: '💥'
         },
+        muleKick: {
+            bg: 'bg-gradient-to-br from-purple-600 to-purple-900',
+            glow: 'shadow-[0_0_15px_rgba(147,51,234,0.8),inset_0_0_10px_rgba(255,255,255,0.2)]',
+            icon: '🎒'
+        },
     };
     
     const style = perkStyles[type] || perkStyles.juggernog;
@@ -163,6 +168,7 @@ export const PlayerStatus = ({
                         <PerkIcon type="speedCola" active={perks['speedCola']} />
                         <PerkIcon type="quickRevive" active={perks['quickRevive']} />
                         <PerkIcon type="doubleTap" active={perks['doubleTap']} />
+                        <PerkIcon type="muleKick" active={perks['muleKick']} />
                     </div>
                     
                     {/* KIA indicator */}

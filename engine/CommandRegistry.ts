@@ -64,7 +64,9 @@ const COMMANDS: Record<string, CommandHandler> = {
             const oldWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
             if (oldWeapon?.mesh) oldWeapon.mesh.setEnabled(false);
 
-            if (sm.gameState.weapons.length >= 2) {
+            const hasMuleKick = !!sm.gameState.perkStates['muleKick'];
+            const weaponLimit = hasMuleKick ? 3 : 2;
+            if (sm.gameState.weapons.length >= weaponLimit) {
                 // Replace current weapon
                 sm.gameState.weapons[sm.gameState.activeWeaponIndex] = newState;
             } else {
@@ -297,6 +299,57 @@ const COMMANDS: Record<string, CommandHandler> = {
         }
         return `Noclip: ${sm.gameState.isNoclip ? 'ON' : 'OFF'}`;
     },
+    'perk': (args, sm) => {
+        if (args.length < 1) return "Usage: /perk <id>  (juggernog, speedCola, quickRevive, doubleTap, muleKick)";
+
+        const perkId = args[0];
+        const gc = sm.configManager.gameplay;
+
+        // Map perk id → perk type (snake_case used for effect logic)
+        const idToType: Record<string, string> = {
+            juggernog:   'juggernog',
+            speedcola:   'speed_cola',
+            speedCola:   'speed_cola',
+            quickrevive: 'quick_revive',
+            quickRevive: 'quick_revive',
+            doubletap:   'double_tap',
+            doubleTap:   'double_tap',
+            mulekick:    'mule_kick',
+            muleKick:    'mule_kick',
+        };
+
+        // Canonical camelCase state key for each perk
+        const idToStateKey: Record<string, string> = {
+            juggernog:   'juggernog',
+            speedcola:   'speedCola',
+            speedCola:   'speedCola',
+            quickrevive: 'quickRevive',
+            quickRevive: 'quickRevive',
+            doubletap:   'doubleTap',
+            doubleTap:   'doubleTap',
+            mulekick:    'muleKick',
+            muleKick:    'muleKick',
+        };
+
+        const perkType  = idToType[perkId];
+        const stateKey  = idToStateKey[perkId];
+
+        if (!perkType || !stateKey) {
+            return `Unknown perk: ${perkId}. Use: juggernog, speedCola, quickRevive, doubleTap, muleKick`;
+        }
+
+        sm.gameState.perkStates[stateKey] = true;
+
+        if (perkType === 'juggernog') {
+            sm.gameState.maxHealth = gc.PLAYER_JUGG_HEALTH;
+            sm.gameState.health    = gc.PLAYER_JUGG_HEALTH;
+            sm.setHealth(gc.PLAYER_JUGG_HEALTH);
+        }
+
+        sm.setPerks(sm.gameState.perkStates);
+
+        return `Perk granted: ${stateKey}`;
+    },
     'powerup': (args, sm) => {
         if (args.length < 1) return "Usage: /powerup <type> (instakill, max_ammo, double_points, nuke, carpenter, fire_sale)";
         
@@ -427,7 +480,7 @@ const COMMANDS: Record<string, CommandHandler> = {
         }
     },
     'help': () => {
-        return `Commands: /debug, /debug_controls, /render_stats, /pos, /tp, /points, /give, /ammo, /round, /kill_all, /show_zones, /show_navmesh, /show_pathfinding, /wireframe, /god, /noclip, /powerup, /scaleweapon [weapon_id], /debug_pbr`;
+        return `Commands: /debug, /debug_controls, /render_stats, /pos, /tp, /points, /give, /ammo, /round, /kill_all, /show_zones, /show_navmesh, /show_pathfinding, /wireframe, /god, /noclip, /powerup, /perk <name>, /scaleweapon [weapon_id], /debug_pbr`;
     }
 };
 

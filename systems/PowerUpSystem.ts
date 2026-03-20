@@ -129,7 +129,7 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                     const lifeTime = now - p.spawnTime;
 
                     if (lifeTime > pc.DURATION) {
-                        p.mesh.dispose();
+                        if (p.mesh && !p.mesh.isDisposed()) p.mesh.dispose();
                         gameState.powerUps[i] = gameState.powerUps[gameState.powerUps.length - 1];
                         gameState.powerUps.pop();
                         continue;
@@ -159,7 +159,7 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
                                 ctx.soundManager?.play('nuke');
                             }
 
-                            p.mesh.dispose();
+                            if (p.mesh && !p.mesh.isDisposed()) p.mesh.dispose();
                             gameState.powerUps[i] = gameState.powerUps[gameState.powerUps.length - 1];
                             gameState.powerUps.pop();
                         }

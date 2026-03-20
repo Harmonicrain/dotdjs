@@ -1,104 +1,216 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useGameStore } from '../../store/useGameStore';
+import { MenuPanel, ActionButton } from './MenuPrimitives';
 
 interface HostLobbyProps {
-    mapName?: string;
-    roomId: string;
-    connectionStatus: string;
-    remotePlayerName: string;
-    isClientReady: boolean;
-    tempName: string;
-    onUpdateTempName: (val: string) => void;
-    onStart: () => void;
-    onAbort: () => void;
+  mapName?: string;
+  roomId: string;
+  connectionStatus: string;
+  remotePlayerName: string;
+  isClientReady: boolean;
+  onStart: () => void;
 }
 
-export const HostLobby = ({ mapName, roomId, connectionStatus, remotePlayerName, isClientReady, tempName, onUpdateTempName, onStart, onAbort }: HostLobbyProps) => (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black font-serif select-none">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-950 via-black to-stone-950" />
-        <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 200px 80px rgba(0,0,0,0.9)' }} />
-        <div className="absolute inset-0 opacity-30" style={{
-            background: 'radial-gradient(ellipse at 50% 0%, rgba(139, 0, 0, 0.4) 0%, transparent 50%)'
-        }} />
-        
-        <div className="relative w-full max-w-md z-10">
-            {/* Card with gothic arch top */}
-            <div className="relative bg-gradient-to-b from-stone-900 via-stone-950 to-black overflow-hidden"
+export const HostLobby = ({
+  mapName,
+  roomId,
+  connectionStatus,
+  remotePlayerName,
+  isClientReady,
+  onStart,
+}: HostLobbyProps) => {
+  const playerName = useGameStore((s) => s.playerName);
+  const updatePlayer = useGameStore((s) => s.updatePlayer);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  const isConnected = connectionStatus === 'CONNECTED';
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center overflow-hidden select-none pointer-events-auto"
+    >
+      <div
+        style={{
+          width: 'min(520px, 90vw)',
+          opacity: ready ? 1 : 0,
+          transform: ready ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.98)',
+          transition: 'opacity 0.35s ease, transform 0.35s ease',
+          zIndex: 20,
+        }}
+      >
+        <MenuPanel title="Host Lobby" maxWidth="520px">
+          {/* Map info */}
+          <div>
+            <span
+              style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '10px',
+                letterSpacing: '0.3em',
+                color: '#FF8C00',
+                opacity: 0.7,
+                textTransform: 'uppercase',
+              }}
+            >
+              MAP
+            </span>
+            <p
+              style={{
+                fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+                fontSize: '22px',
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: '#E8E8E8',
+                textTransform: 'uppercase',
+                margin: '6px 0 0',
+              }}
+            >
+              {mapName}
+            </p>
+          </div>
+
+          {/* Room code */}
+          <div
+            style={{
+              background: 'rgba(0,0,0,0.6)',
+              border: '1px solid rgba(139,0,0,0.3)',
+              padding: '20px',
+              textAlign: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '10px',
+                letterSpacing: '0.3em',
+                color: '#888',
+                textTransform: 'uppercase',
+                display: 'block',
+                marginBottom: '12px',
+              }}
+            >
+              ROOM CODE
+            </span>
+            <p
+              style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: 'clamp(32px, 5vw, 48px)',
+                fontWeight: 700,
+                letterSpacing: '0.4em',
+                color: '#FF9A00',
+                margin: 0,
+                userSelect: 'all',
+              }}
+            >
+              {roomId || '------'}
+            </p>
+          </div>
+
+          {/* Connection status */}
+          <div style={{ textAlign: 'center' }}>
+            <span
+              style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '11px',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: isConnected ? '#22C55E' : '#888',
+                animation: isConnected ? 'none' : 'pulse 2s ease-in-out infinite',
+              }}
+            >
+              {isConnected ? '● CONNECTED' : connectionStatus}
+            </span>
+          </div>
+
+          {/* Player joined */}
+          {isClientReady && (
+            <div
+              style={{
+                padding: '14px',
+                background: 'rgba(22,101,52,0.15)',
+                border: '1px solid rgba(34,197,94,0.3)',
+                textAlign: 'center',
+              }}
+            >
+              <span
                 style={{
-                    clipPath: 'polygon(0% 8%, 10% 2%, 50% 0%, 90% 2%, 100% 8%, 100% 100%, 0% 100%)',
-                    boxShadow: '0 0 60px rgba(139, 0, 0, 0.2)',
-                }}>
-                
-                <div className="border border-red-900/30 p-10 pt-12">
-                    {/* Decorative cross */}
-                    <div className="text-red-800 text-3xl text-center mb-6 animate-pulse">✝</div>
-                    
-                    <h2 className="text-3xl font-bold tracking-[0.2em] text-stone-200 uppercase text-center mb-10"
-                        style={{ textShadow: '0 0 20px rgba(139, 0, 0, 0.5)' }}>
-                        Summon Allies
-                    </h2>
-                    
-                    <div className="space-y-6">
-                        {/* Map Info */}
-                        <div className="text-center pb-4 border-b border-stone-800">
-                            <span className="text-stone-600 text-xs tracking-[0.3em] uppercase font-sans">Destination</span>
-                            <p className="text-stone-300 text-xl font-semibold mt-2">{mapName}</p>
-                        </div>
-
-                        {/* Room Code */}
-                        <div className="bg-black/60 p-6 border border-stone-800 text-center relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-r from-red-900/0 via-red-900/10 to-red-900/0 animate-pulse" />
-                            <span className="text-stone-500 text-xs tracking-[0.3em] uppercase block mb-3 font-sans relative">Ritual Code</span>
-                            <p className="text-5xl font-mono font-bold text-amber-500 tracking-[0.4em] select-all relative">
-                                {roomId || "------"}
-                            </p>
-                        </div>
-                        
-                        {/* Status */}
-                        <div className="text-center">
-                            <span className={`text-sm tracking-[0.2em] uppercase font-sans ${
-                                connectionStatus === 'CONNECTED' ? 'text-green-600' : 'text-stone-500 animate-pulse'
-                            }`}>
-                                {connectionStatus === 'CONNECTED' ? '⦿ Linked' : connectionStatus}
-                            </span>
-                        </div>
-
-                        {/* Client Ready */}
-                        {isClientReady && (
-                            <div className="p-4 bg-green-950/30 border border-green-900/40 text-center">
-                                <span className="text-green-500 text-sm tracking-[0.2em] uppercase font-sans">
-                                    ☠ {remotePlayerName} has joined
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Name & Start */}
-                        <div className="space-y-4 pt-4">
-                            <input 
-                                type="text" 
-                                placeholder="INSCRIBE YOUR NAME" 
-                                value={tempName} 
-                                onChange={e => onUpdateTempName(e.target.value)} 
-                                className="w-full bg-black border border-stone-700 p-4 text-center text-stone-200 tracking-[0.15em] focus:border-red-800 outline-none placeholder:text-stone-700 uppercase font-sans" 
-                                maxLength={12} 
-                            />
-                            <button 
-                                onClick={onStart} 
-                                disabled={connectionStatus !== 'CONNECTED'} 
-                                className="w-full py-5 bg-gradient-to-b from-red-900 to-red-950 hover:from-red-800 hover:to-red-900 disabled:from-stone-900 disabled:to-stone-950 disabled:text-stone-700 text-stone-100 font-bold tracking-[0.2em] uppercase transition-all disabled:cursor-not-allowed border border-red-800/50 disabled:border-stone-800"
-                                style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}
-                            >
-                                Begin the Ritual
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                  fontFamily: "'Share Tech Mono', monospace",
+                  fontSize: '12px',
+                  letterSpacing: '0.2em',
+                  color: '#22C55E',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {remotePlayerName} JOINED — READY
+              </span>
             </div>
-        </div>
-        
-        <button onClick={onAbort} className="mt-8 text-stone-600 hover:text-red-700 text-sm tracking-[0.2em] uppercase transition-colors z-10 font-sans">
-            ← Abandon
-        </button>
+          )}
+
+          {/* Player name input */}
+          <div>
+            <span
+              style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '10px',
+                letterSpacing: '0.3em',
+                color: '#888',
+                textTransform: 'uppercase',
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
+              YOUR NAME
+            </span>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => updatePlayer({ playerName: e.target.value })}
+              placeholder="ENTER YOUR NAME"
+              maxLength={16}
+              style={{
+                width: '100%',
+                background: 'rgba(0,0,0,0.6)',
+                border: '1px solid rgba(80,80,80,0.4)',
+                padding: '12px 14px',
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '13px',
+                letterSpacing: '0.15em',
+                color: '#D0D0D0',
+                textTransform: 'uppercase',
+                outline: 'none',
+                boxSizing: 'border-box',
+                textAlign: 'center',
+              }}
+              onFocus={(e) =>
+                ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(180,30,0,0.7)')
+              }
+              onBlur={(e) =>
+                ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(80,80,80,0.4)')
+              }
+            />
+          </div>
+
+          {/* Start button */}
+          <ActionButton
+            label="START GAME"
+            onClick={onStart}
+            disabled={!isConnected}
+          />
+        </MenuPanel>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
-);
+  );
+};

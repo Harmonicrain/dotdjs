@@ -44,7 +44,7 @@ export class MapLoader {
         sm.gameState.doorStates = {};
         if (definition.interactables.doors) {
             definition.interactables.doors.forEach(d => {
-                sm.initializeDoor(d.id, d.cost, d.connects);
+                sm.initializeDoor(d.id, d.cost, d.connects, d.startsOpen);
             });
         }
         // Initialize power door

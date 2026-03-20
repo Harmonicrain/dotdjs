@@ -188,11 +188,11 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                     remotePlayerName={remoteNameLocal}
                     isClientReady={isClientReady}
                     isMapLoaded={isMapLoaded}
-                    onStartSolo={(name) => startGame('SOLO', selectedMap, name || 'Player')}
+                    onStartSolo={(mapId, name) => startGame('SOLO', mapId, name || 'Player')}
                     onHostInit={initializeHost}
-                    onHostStart={(name) => {
-                        startGame('HOST', selectedMap, name || 'Player');
-                        send?.({ type: 'START_GAME', mapId: selectedMap });
+                    onHostStart={(mapId, name) => {
+                        startGame('HOST', mapId, name || 'Player');
+                        send?.({ type: 'START_GAME', mapId: mapId });
                     }}
                     onJoinInit={initializeClient}
                     onClientReady={(name) => {

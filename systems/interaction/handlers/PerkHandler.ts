@@ -10,7 +10,8 @@ export const PerkHandler: InteractionHandler = {
             juggernog: gc.JUGGERNOG_COST,
             speed_cola: gc.SPEED_COLA_COST,
             quick_revive: gc.QUICK_REVIVE_COST,
-            double_tap: gc.DOUBLE_TAP_COST
+            double_tap: gc.DOUBLE_TAP_COST,
+            mule_kick: gc.MULE_KICK_COST
         };
         const perkCost = metadata.cost || perkCostDefaults[metadata.perkType || ""] || 2000;
         const alreadyHas = stateManager.gameState.perkStates[metadata.id!];
@@ -28,7 +29,8 @@ export const PerkHandler: InteractionHandler = {
             juggernog: gc.JUGGERNOG_COST,
             speed_cola: gc.SPEED_COLA_COST,
             quick_revive: gc.QUICK_REVIVE_COST,
-            double_tap: gc.DOUBLE_TAP_COST
+            double_tap: gc.DOUBLE_TAP_COST,
+            mule_kick: gc.MULE_KICK_COST
         };
 
         const perkCost = metadata.cost || perkCostDefaults[perkType];

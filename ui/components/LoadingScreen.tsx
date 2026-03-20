@@ -14,6 +14,8 @@ const TIPS = [
     "MAXIMIZE POINTS BY USING PISTOL HEADSHOTS IN EARLY ROUNDS."
 ];
 
+import { GameLogo } from './GameLogo';
+
 const LOADING_PHASES = [
     "ESTABLISHING SECURE CONNECTION",
     "LOADING COMBAT ASSETS",
@@ -160,29 +162,8 @@ export const LoadingScreen = ({ isVisible, mapName }: LoadingScreenProps) => {
 
             {/* Main content */}
             <div className="z-10 flex flex-col items-center justify-center text-center gap-8 max-w-2xl px-8">
-                {/* Title with glitch effect */}
-                <div className="relative w-full text-center">
-                    <h1 className="text-6xl font-black text-red-800 tracking-[0.3em] uppercase w-full
-                                 drop-shadow-[0_0_40px_rgba(127,29,29,0.5)]"
-                        style={{ 
-                            textShadow: '0 0 60px rgba(127,29,29,0.3), 0 4px 0 rgba(0,0,0,0.8)',
-                            fontFamily: 'Bebas Neue, Oswald, sans-serif'
-                        }}>
-                        DOM OF THE<br/>DEAD
-                    </h1>
-                    
-                    {/* Glitch layers */}
-                    <h1 className="absolute inset-0 text-6xl font-black text-red-500/20 tracking-[0.3em] uppercase w-full
-                                 translate-x-[2px]"
-                        style={{ clipPath: 'inset(30% 0 50% 0)', animation: 'glitchLeft 3s ease-in-out infinite' }}>
-                        DOM OF THE<br/>DEAD
-                    </h1>
-                    <h1 className="absolute inset-0 text-6xl font-black text-cyan-500/10 tracking-[0.3em] uppercase w-full
-                                 -translate-x-[2px]"
-                        style={{ clipPath: 'inset(60% 0 20% 0)', animation: 'glitchRight 3s ease-in-out infinite' }}>
-                        DOM OF THE<br/>DEAD
-                    </h1>
-                </div>
+                {/* Unified Game Logo */}
+                <GameLogo scale={0.5} className="-my-12" />
 
                 {/* Map name */}
                 {mapName && (
@@ -208,13 +189,17 @@ export const LoadingScreen = ({ isVisible, mapName }: LoadingScreenProps) => {
                     {/* Inner pulse */}
                     <div className="absolute inset-4 border border-stone-800 rounded-full opacity-50" />
                     
-                    {/* Center icon */}
+                    {/* Center skull */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="relative">
-                            <div className="w-4 h-4 bg-red-800 rounded-full"
-                                 style={{ animation: 'pulse 1s ease-in-out infinite' }} />
-                            <div className="absolute inset-0 w-4 h-4 bg-red-600 rounded-full"
-                                 style={{ animation: 'ping 1s ease-out infinite' }} />
+                        <div className="relative w-8 h-8" style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>
+                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full text-red-800 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]">
+                                <path d="M12,2C7.58,2 4,5.58 4,10C4,12.7 5.25,15.09 7.1,16.59C7.45,16.86 7.6,17.3 7.6,17.75V19.5C7.6,20.88 8.72,22 10.1,22H13.9C15.28,22 16.4,20.88 16.4,19.5V17.75C16.4,17.3 16.55,16.86 16.9,16.59C18.75,15.09 20,12.7 20,10C20,5.58 16.42,2 12,2M9,13C7.9,13 7,12.1 7,11C7,9.9 7.9,9 9,9C10.1,9 11,9.9 11,11C11,12.1 10.1,13 9,13M15,13C13.9,13 13,12.1 13,11C13,9.9 13.9,9 15,9C16.1,9 17,9.9 17,11C17,12.1 16.1,13 15,13M13,17H11V16H13V17Z" />
+                            </svg>
+                            {/* Glowing eyes */}
+                            <div className="absolute w-[4px] h-[4px] bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2" 
+                                 style={{ top: '45.83%', left: '37.5%', animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+                            <div className="absolute w-[4px] h-[4px] bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2" 
+                                 style={{ top: '45.83%', left: '62.5%', animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite 0.2s' }} />
                         </div>
                     </div>
                     

@@ -1,114 +1,231 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useGameStore } from '../../store/useGameStore';
+import { MenuPanel, ActionButton } from './MenuPrimitives';
 
 interface JoinLobbyProps {
-    joinId: string;
-    onUpdateJoinId: (val: string) => void;
-    connectionStatus: string;
-    isWaitingForHost: boolean;
-    tempName: string;
-    onUpdateTempName: (val: string) => void;
-    onConnect: () => void;
-    onReady: () => void;
-    onAbort: () => void;
+  joinId: string;
+  onUpdateJoinId: (val: string) => void;
+  connectionStatus: string;
+  isWaitingForHost: boolean;
+  onConnect: () => void;
+  onReady: () => void;
 }
 
-export const JoinLobby = ({ joinId, onUpdateJoinId, connectionStatus, isWaitingForHost, tempName, onUpdateTempName, onConnect, onReady, onAbort }: JoinLobbyProps) => (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black font-serif select-none">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-950 via-black to-stone-950" />
-        <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 200px 80px rgba(0,0,0,0.9)' }} />
-        <div className="absolute inset-0 opacity-30" style={{
-            background: 'radial-gradient(ellipse at 50% 0%, rgba(180, 83, 9, 0.3) 0%, transparent 50%)'
-        }} />
-        
-        <div className="relative w-full max-w-md z-10">
-            {/* Card with gothic arch */}
-            <div className="relative bg-gradient-to-b from-stone-900 via-stone-950 to-black overflow-hidden"
-                style={{
-                    clipPath: 'polygon(0% 8%, 10% 2%, 50% 0%, 90% 2%, 100% 8%, 100% 100%, 0% 100%)',
-                    boxShadow: '0 0 60px rgba(180, 83, 9, 0.15)',
-                }}>
-                
-                <div className="border border-amber-900/30 p-10 pt-12">
-                    <div className="text-amber-700 text-3xl text-center mb-6 animate-pulse">⛧</div>
-                    
-                    <h2 className="text-3xl font-bold tracking-[0.2em] text-stone-200 uppercase text-center mb-10"
-                        style={{ textShadow: '0 0 20px rgba(180, 83, 9, 0.4)' }}>
-                        Join Ritual
-                    </h2>
+export const JoinLobby = ({
+  joinId,
+  onUpdateJoinId,
+  connectionStatus,
+  isWaitingForHost,
+  onConnect,
+  onReady,
+}: JoinLobbyProps) => {
+  const playerName = useGameStore((s) => s.playerName);
+  const updatePlayer = useGameStore((s) => s.updatePlayer);
+  const [ready, setReady] = useState(false);
 
-                    {!isWaitingForHost ? (
-                        <div className="space-y-6">
-                            {/* Code Input */}
-                            <div>
-                                <label className="text-stone-500 text-xs tracking-[0.3em] uppercase block text-center mb-4 font-sans">
-                                    Enter Ritual Code
-                                </label>
-                                <input 
-                                    type="text" 
-                                    value={joinId} 
-                                    onChange={e => onUpdateJoinId(e.target.value.toUpperCase())} 
-                                    className="w-full bg-black border border-stone-700 p-5 text-center text-4xl font-mono text-amber-500 tracking-[0.5em] uppercase focus:border-amber-700 outline-none placeholder:text-stone-800" 
-                                    placeholder="------" 
-                                    maxLength={6} 
-                                />
-                            </div>
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 60);
+    return () => clearTimeout(t);
+  }, []);
 
-                            {connectionStatus === 'CONNECTED' ? (
-                                <div className="space-y-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="INSCRIBE YOUR NAME" 
-                                        value={tempName} 
-                                        onChange={e => onUpdateTempName(e.target.value)} 
-                                        className="w-full bg-black border border-stone-700 p-4 text-center text-stone-200 tracking-[0.15em] focus:border-amber-800 outline-none placeholder:text-stone-700 uppercase font-sans" 
-                                        maxLength={12} 
-                                    />
-                                    <button 
-                                        onClick={onReady} 
-                                        className="w-full py-5 bg-gradient-to-b from-green-900/80 to-green-950 hover:from-green-800/90 hover:to-green-900 border border-green-700/50 text-green-100 font-bold tracking-[0.2em] uppercase transition-all"
-                                    >
-                                        Ready for Death
-                                    </button>
-                                </div>
-                            ) : (
-                                <button 
-                                    onClick={onConnect} 
-                                    disabled={joinId.length < 6 || connectionStatus === 'CONNECTING...'} 
-                                    className="w-full py-5 bg-gradient-to-b from-stone-800 to-stone-900 hover:from-stone-700 hover:to-stone-800 disabled:from-stone-900 disabled:to-stone-950 disabled:text-stone-700 text-stone-200 font-bold tracking-[0.2em] uppercase transition-all disabled:cursor-not-allowed border border-stone-700"
-                                >
-                                    {connectionStatus === 'CONNECTING...' ? 'Seeking...' : 'Connect'}
-                                </button>
-                            )}
-                            
-                            {connectionStatus !== 'DISCONNECTED' && (
-                                <p className={`text-center text-xs tracking-[0.2em] uppercase font-sans ${
-                                    connectionStatus.includes('ERROR') ? 'text-red-500' : 'text-stone-500'
-                                }`}>
-                                    {connectionStatus}
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center gap-8 py-8">
-                            <div className="relative">
-                                <div className="w-16 h-16 border-2 border-stone-800 rounded-full" />
-                                <div className="absolute inset-0 w-16 h-16 border-2 border-transparent border-t-amber-600 rounded-full animate-spin" />
-                                <span className="absolute inset-0 flex items-center justify-center text-amber-700 text-2xl">☠</span>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-amber-500 text-lg font-semibold tracking-[0.2em] uppercase mb-2">Awaiting</p>
-                                <p className="text-stone-600 text-sm tracking-wider font-sans">The host will begin soon...</p>
-                            </div>
-                        </div>
-                    )}
+  const isConnected = connectionStatus === 'CONNECTED';
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center overflow-hidden select-none pointer-events-auto"
+    >
+      <div
+        style={{
+          width: 'min(520px, 90vw)',
+          opacity: ready ? 1 : 0,
+          transform: ready ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.98)',
+          transition: 'opacity 0.35s ease, transform 0.35s ease',
+          zIndex: 20,
+        }}
+      >
+        <MenuPanel title="Join Lobby" maxWidth="520px">
+          {!isWaitingForHost ? (
+            <>
+              {/* Room code input */}
+              <div>
+                <span
+                  style={{
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '10px',
+                    letterSpacing: '0.3em',
+                    color: '#888',
+                    textTransform: 'uppercase',
+                    display: 'block',
+                    marginBottom: '12px',
+                    textAlign: 'center',
+                  }}
+                >
+                  ENTER ROOM CODE
+                </span>
+                <input
+                  type="text"
+                  value={joinId}
+                  onChange={(e) => onUpdateJoinId(e.target.value.toUpperCase())}
+                  placeholder="------"
+                  maxLength={6}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.6)',
+                    border: '1px solid rgba(139,0,0,0.3)',
+                    padding: '18px 14px',
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: 'clamp(24px, 4vw, 36px)',
+                    letterSpacing: '0.5em',
+                    color: '#FF9A00',
+                    textTransform: 'uppercase',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    textAlign: 'center',
+                  }}
+                  onFocus={(e) =>
+                    ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(180,30,0,0.7)')
+                  }
+                  onBlur={(e) =>
+                    ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,0,0,0.3)')
+                  }
+                />
+              </div>
+
+              {isConnected ? (
+                <>
+                  {/* Player name input */}
+                  <div>
+                    <span
+                      style={{
+                        fontFamily: "'Share Tech Mono', monospace",
+                        fontSize: '10px',
+                        letterSpacing: '0.3em',
+                        color: '#888',
+                        textTransform: 'uppercase',
+                        display: 'block',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      YOUR NAME
+                    </span>
+                    <input
+                      type="text"
+                      value={playerName}
+                      onChange={(e) => updatePlayer({ playerName: e.target.value })}
+                      placeholder="ENTER YOUR NAME"
+                      maxLength={16}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(80,80,80,0.4)',
+                        padding: '12px 14px',
+                        fontFamily: "'Share Tech Mono', monospace",
+                        fontSize: '13px',
+                        letterSpacing: '0.15em',
+                        color: '#D0D0D0',
+                        textTransform: 'uppercase',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        textAlign: 'center',
+                      }}
+                      onFocus={(e) =>
+                        ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(180,30,0,0.7)')
+                      }
+                      onBlur={(e) =>
+                        ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(80,80,80,0.4)')
+                      }
+                    />
+                  </div>
+
+                  {/* Ready button */}
+                  <ActionButton label="READY" onClick={onReady} variant="green" />
+                </>
+              ) : (
+                <>
+                  {/* Connect button */}
+                  <ActionButton
+                    label={connectionStatus === 'CONNECTING...' ? 'CONNECTING...' : 'CONNECT'}
+                    onClick={onConnect}
+                    disabled={joinId.length < 6 || connectionStatus === 'CONNECTING...'}
+                  />
+                </>
+              )}
+
+              {/* Status message */}
+              {connectionStatus !== 'DISCONNECTED' && !isConnected && (
+                <div style={{ textAlign: 'center' }}>
+                  <span
+                    style={{
+                      fontFamily: "'Share Tech Mono', monospace",
+                      fontSize: '11px',
+                      letterSpacing: '0.2em',
+                      textTransform: 'uppercase',
+                      color: connectionStatus.includes('ERROR') ? '#EF4444' : '#888',
+                    }}
+                  >
+                    {connectionStatus}
+                  </span>
                 </div>
+              )}
+            </>
+          ) : (
+            /* Waiting for host state */
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '24px',
+                padding: '24px 0',
+              }}
+            >
+              {/* Spinner */}
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  border: '2px solid rgba(80,80,80,0.3)',
+                  borderTop: '2px solid #FF9A00',
+                  borderRadius: '50%',
+                  animation: 'spin 1.2s linear infinite',
+                }}
+              />
+              <div style={{ textAlign: 'center' }}>
+                <p
+                  style={{
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '14px',
+                    letterSpacing: '0.25em',
+                    color: '#FF9A00',
+                    textTransform: 'uppercase',
+                    margin: '0 0 8px',
+                  }}
+                >
+                  WAITING FOR HOST
+                </p>
+                <p
+                  style={{
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.15em',
+                    color: '#666',
+                    margin: 0,
+                  }}
+                >
+                  The host will start the game soon...
+                </p>
+              </div>
             </div>
-        </div>
-        
-        <button onClick={onAbort} className="mt-8 text-stone-600 hover:text-amber-700 text-sm tracking-[0.2em] uppercase transition-colors z-10 font-sans">
-            ← Abandon
-        </button>
+          )}
+        </MenuPanel>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
-);
+  );
+};

@@ -27,6 +27,11 @@ export const DEFAULT_MODEL_TRANSFORMS: Record<string, ModelTransform> = {
     rotation: [0, 0, 0],
     scaling: [-1.50, 1.50, 1.50],
   },
+  mule_kick: {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scaling: [-0.015, 0.015, 0.015],
+  },
   pack_a_punch: {
     position: [0.5, 0, 0],
     rotation: [0, 0, 0],

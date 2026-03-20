@@ -64,7 +64,8 @@ export const WarehouseMapDefinition: MapDefinition = {
             { type: "juggernog", id: "juggernog", zone: 2, pos: [0, 0, 39], rotation: Math.PI },
             { type: "speed_cola", id: "speedCola", zone: 3, pos: [28, 0, 2], rotation: -Math.PI / 2 },
             { type: "quick_revive", id: "quickRevive", zone: 1, pos: [-3, 0, -28.9], rotation: 0 },
-            { type: "double_tap", id: "doubleTap", zone: 2, pos: [-9.25, 0, 21.16], rotation: Math.PI / 2 }
+            { type: "double_tap", id: "doubleTap", zone: 2, pos: [-9.25, 0, 21.16], rotation: Math.PI / 2 },
+            { type: "mule_kick", id: "muleKick", zone: 3, pos: [28, 0, -8], rotation: -Math.PI / 2 }
         ],
         wallbuys: [
             { weapon: "shotgun", cost: 500, id: "buy_shotgun", zone: 1, pos: [-9.4, 2.5, -15], rotation: Math.PI / 2 },

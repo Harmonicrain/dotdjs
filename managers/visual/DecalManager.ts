@@ -1,22 +1,25 @@
 import * as BABYLON from '@babylonjs/core';
 import { ResourceManager } from '../ResourceManager';
 
+const MAX_DECALS = 40;
+const MAX_BLOOD_DECALS = 60;
+const DECAL_THROTTLE_MS = 50; // ~20 decals/sec max
+const BULLET_DECAL_SIZE = new BABYLON.Vector3(0.2, 0.2, 0.2);
+const BLOOD_DECAL_SIZE = new BABYLON.Vector3(0.15, 0.15, 0.15);
+
 export class DecalManager {
     private decalMat: BABYLON.StandardMaterial | null = null;
 
     // ── Circular-buffer pools replace shift()-based arrays ────────────────
     // Decals are pre-allocated once and recycled via cursor index, eliminating
     // both the costly MeshBuilder.CreateDecal() per-shot AND the O(n) shift().
-    private static readonly MAX_DECALS = 40;
-    private decalPool: (BABYLON.Mesh | null)[] = new Array(DecalManager.MAX_DECALS).fill(null);
+    private decalPool: (BABYLON.Mesh | null)[] = new Array(MAX_DECALS).fill(null);
     private decalCursor = 0;
 
-    private static readonly MAX_BLOOD_DECALS = 60;
-    private bloodDecalPool: (BABYLON.Mesh | null)[] = new Array(DecalManager.MAX_BLOOD_DECALS).fill(null);
+    private bloodDecalPool: (BABYLON.Mesh | null)[] = new Array(MAX_BLOOD_DECALS).fill(null);
     private bloodDecalCursor = 0;
 
     // Throttle decal creation — at most one bullet-hole decal per this interval
-    private static readonly DECAL_THROTTLE_MS = 50; // ~20 decals/sec max
     private lastDecalTime = 0;
     private lastBloodDecalTime = 0;
 
@@ -47,21 +50,20 @@ export class DecalManager {
 
         // Throttle: skip if too soon after last decal
         const now = performance.now();
-        if (now - this.lastDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+        if (now - this.lastDecalTime < DECAL_THROTTLE_MS) return;
         this.lastDecalTime = now;
 
-        const idx = this.decalCursor % DecalManager.MAX_DECALS;
+        const idx = this.decalCursor % MAX_DECALS;
         this.decalCursor++;
 
         // Dispose old decal in this slot
         const old = this.decalPool[idx];
         if (old && !old.isDisposed()) old.dispose();
 
-        const size = new BABYLON.Vector3(0.2, 0.2, 0.2);
         const decal = BABYLON.MeshBuilder.CreateDecal("bulletHole", target, {
             position: pos,
             normal: normal,
-            size: size,
+            size: BULLET_DECAL_SIZE,
             angle: Math.random() * Math.PI
         });
 
@@ -75,21 +77,20 @@ export class DecalManager {
     public createBloodDecalOnMesh(pos: BABYLON.Vector3, normal: BABYLON.Vector3, target: BABYLON.AbstractMesh) {
         // Throttle blood decals too
         const now = performance.now();
-        if (now - this.lastBloodDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+        if (now - this.lastBloodDecalTime < DECAL_THROTTLE_MS) return;
         this.lastBloodDecalTime = now;
 
-        const idx = this.bloodDecalCursor % DecalManager.MAX_BLOOD_DECALS;
+        const idx = this.bloodDecalCursor % MAX_BLOOD_DECALS;
         this.bloodDecalCursor++;
 
         // Dispose old decal in this slot
         const old = this.bloodDecalPool[idx];
         if (old && !old.isDisposed()) old.dispose();
 
-        const size = new BABYLON.Vector3(0.15, 0.15, 0.15);
         const decal = BABYLON.MeshBuilder.CreateDecal("bloodDecal", target, {
             position: pos,
             normal: normal,
-            size: size,
+            size: BLOOD_DECAL_SIZE,
             angle: Math.random() * Math.PI
         });
 
@@ -105,7 +106,7 @@ export class DecalManager {
     public createFloorBloodDecal(pos: BABYLON.Vector3) {
         // Skip if blood decal was just throttled (avoid the raycast entirely)
         const now = performance.now();
-        if (now - this.lastBloodDecalTime < DecalManager.DECAL_THROTTLE_MS) return;
+        if (now - this.lastBloodDecalTime < DECAL_THROTTLE_MS) return;
 
         DecalManager._floorRayOrigin.set(pos.x, pos.y + 0.1, pos.z);
         DecalManager._floorRay.origin.copyFrom(DecalManager._floorRayOrigin);

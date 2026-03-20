@@ -158,7 +158,9 @@ export const WipmapDefinition: MapDefinition = {
 
     interactables: {
         doors: [
-            { id: "door1", cost: 1000, connects: [1, 2], pos: [12.5, 2.5, 0], size: [0.4, 5, 4], closedY: 2.5, openY: 7.5 }
+            { id: "door1", cost: 1000, connects: [1, 2], pos: [12.5, 2.5, 0], size: [0.4, 5, 4], closedY: 2.5, openY: 7.5 },
+            { id: "passage_2_3", cost: 0, connects: [2, 3], pos: [25, 2.5, 12.5], size: [4, 5, 0.4], startsOpen: true },
+            { id: "passage_2_4", cost: 0, connects: [2, 4], pos: [25, 2.5, -12.5], size: [4, 5, 0.4], startsOpen: true },
         ],
         windows: [
             { id: "window_1", zone: 2, pos: [37.5, 0, 0] }
@@ -166,7 +168,9 @@ export const WipmapDefinition: MapDefinition = {
         groundSpawns: [
             { id: "hole_1", zone: 1, pos: [0, 0, 0] }
         ],
-        perks: [],
+        perks: [
+            { type: "quick_revive", id: "quickRevive", zone: 1, pos: [0.23, 0, 11.6], rotation: Math.PI }
+        ],
         wallbuys: [],
         mysteryBoxes: [
             { pos: [-11.5, 0, -8], rotation: -Math.PI / 2 },
