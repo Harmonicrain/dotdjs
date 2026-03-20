@@ -196,6 +196,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                 return !mesh.name.includes("weapon") &&
                     !mesh.name.includes("projectile") &&
                     !mesh.name.includes("knife") &&
+                    !mesh.name.includes("_trigger") &&
                     mesh !== ctx.gameState.knifeMesh;
             });
 

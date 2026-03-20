@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore, GraphicsQuality } from '../../store/useGameStore';
 import { MenuPanel } from './MenuPrimitives';
 
+interface SettingsMenuProps {
+  onBack?: () => void;
+}
+
 const RESOLUTION_SCALES = [
   { value: 0.5, label: '0.5×' },
   { value: 0.75, label: '0.75×' },
@@ -158,7 +162,7 @@ const ToggleButton = ({
 );
 
 // ── Main component ─────────────────────────────────────────────
-export const SettingsMenu = () => {
+export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
   const settings = useGameStore((s) => s.settings);
   const playerName = useGameStore((s) => s.playerName);
   const updateSettings = useGameStore((s) => s.updateSettings);
@@ -178,6 +182,18 @@ export const SettingsMenu = () => {
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
+
+  useEffect(() => {
+    if (!onBack) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onBack();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onBack]);
 
   const toggleFullscreen = async () => {
     if (!document.fullscreenElement) {
@@ -427,6 +443,38 @@ export const SettingsMenu = () => {
             RESET TO DEFAULTS
           </button>
         </div>
+
+        {onBack && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '2px' }}>
+            <button
+              onClick={onBack}
+              style={{
+                padding: '10px 24px',
+                background: 'rgba(255,154,0,0.12)',
+                border: '1px solid rgba(255,154,0,0.7)',
+                cursor: 'pointer',
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '11px',
+                letterSpacing: '0.22em',
+                color: '#FF9A00',
+                textTransform: 'uppercase',
+                transition: 'background 0.15s ease, box-shadow 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = 'rgba(255,154,0,0.22)';
+                el.style.boxShadow = '0 0 14px rgba(255,154,0,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = 'rgba(255,154,0,0.12)';
+                el.style.boxShadow = 'none';
+              }}
+            >
+              Back
+            </button>
+          </div>
+        )}
       </MenuPanel>
     </div>
   );

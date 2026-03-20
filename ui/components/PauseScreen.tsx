@@ -1,132 +1,240 @@
-
-import React, { useState } from 'react';
-import { OptionsScreen } from './OptionsScreen';
+import React, { useEffect, useState } from 'react';
+import { SettingsMenu } from '../menus/SettingsMenu';
+import { BackHeader } from '../menus/MenuPrimitives';
 
 interface PauseScreenProps {
     onResume: () => void;
     onQuit: () => void;
 }
 
-// Menu button component with hover effects
-const MenuButton = ({ onClick, children, variant = 'primary' }: {
+type PauseActionId = 'resume' | 'options' | 'quit';
+
+const PAUSE_MENU_ITEMS: { id: PauseActionId; label: string }[] = [
+    { id: 'resume', label: 'RESUME' },
+    { id: 'options', label: 'SETTINGS' },
+    { id: 'quit', label: 'QUIT TO MENU' },
+];
+
+const MainMenuStylePauseButton = ({
+    label,
+    onClick,
+    isActive,
+    onHover,
+}: {
+    label: string;
     onClick: () => void;
-    children: React.ReactNode;
-    variant?: 'primary' | 'secondary';
+    isActive: boolean;
+    onHover: () => void;
 }) => (
     <button
         onClick={onClick}
-        className={`group relative w-64 py-4 overflow-hidden transition-all duration-300
-                   border-2 ${variant === 'primary' 
-                       ? 'border-stone-600 hover:border-amber-600 bg-black/50 hover:bg-amber-950/20' 
-                       : 'border-stone-700 hover:border-red-700 bg-black/30 hover:bg-red-950/20'}`}
+        onMouseEnter={onHover}
+        onFocus={onHover}
+        style={{
+            width: '100%',
+            padding: '4px 0 4px 26px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textAlign: 'left',
+            position: 'relative',
+            fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+            fontSize: isActive ? 'clamp(28px, 3.1vw, 44px)' : 'clamp(22px, 2.6vw, 34px)',
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            color: isActive ? '#FF9A00' : '#E5E5E5',
+            textTransform: 'uppercase',
+            textShadow: isActive
+                ? '0 0 15px rgba(255,154,0,0.5), 0 0 30px rgba(255,100,0,0.2)'
+                : '2px 2px 4px rgba(0,0,0,0.8)',
+            transform: isActive ? 'scale(1.03)' : 'scale(1)',
+            transformOrigin: 'left center',
+            transition: 'color 0.1s ease, text-shadow 0.1s ease, font-size 0.15s ease, transform 0.2s ease',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+        }}
     >
-        {/* Animated background sweep */}
-        <div className={`absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%]
-                       transition-transform duration-500 ease-out
-                       ${variant === 'primary' 
-                           ? 'bg-gradient-to-r from-transparent via-amber-600/20 to-transparent' 
-                           : 'bg-gradient-to-r from-transparent via-red-600/20 to-transparent'}`} 
+        <div
+            style={{
+                position: 'absolute',
+                left: 0,
+                top: '16%',
+                bottom: '16%',
+                width: '5px',
+                background: '#FF9A00',
+                opacity: isActive ? 1 : 0,
+                transform: isActive ? 'scaleY(1)' : 'scaleY(0)',
+                transition: 'opacity 0.12s ease, transform 0.15s ease',
+                boxShadow: '0 0 12px rgba(255,154,0,0.7)',
+            }}
         />
-        
-        {/* Button text */}
-        <span className={`relative text-sm tracking-[0.3em] uppercase font-bold font-mono
-                        transition-colors duration-300
-                        ${variant === 'primary' 
-                            ? 'text-stone-300 group-hover:text-amber-200' 
-                            : 'text-stone-400 group-hover:text-red-200'}`}>
-            {children}
-        </span>
-        
-        {/* Corner accents */}
-        <div className={`absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 transition-colors duration-300
-                        ${variant === 'primary' 
-                            ? 'border-stone-600 group-hover:border-amber-500' 
-                            : 'border-stone-700 group-hover:border-red-600'}`} />
-        <div className={`absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 transition-colors duration-300
-                        ${variant === 'primary' 
-                            ? 'border-stone-600 group-hover:border-amber-500' 
-                            : 'border-stone-700 group-hover:border-red-600'}`} />
-        <div className={`absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 transition-colors duration-300
-                        ${variant === 'primary' 
-                            ? 'border-stone-600 group-hover:border-amber-500' 
-                            : 'border-stone-700 group-hover:border-red-600'}`} />
-        <div className={`absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 transition-colors duration-300
-                        ${variant === 'primary' 
-                            ? 'border-stone-600 group-hover:border-amber-500' 
-                            : 'border-stone-700 group-hover:border-red-600'}`} />
+        {label}
     </button>
 );
 
 export const PauseScreen = ({ onResume, onQuit }: PauseScreenProps) => {
-    const [showOptions, setShowOptions] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [ready, setReady] = useState(false);
+    const [hoveredAction, setHoveredAction] = useState<PauseActionId>('resume');
 
-    const handleBackFromOptions = () => {
-        setShowOptions(false);
+    useEffect(() => {
+        const t = setTimeout(() => setReady(true), 60);
+        return () => clearTimeout(t);
+    }, []);
+
+    const handleBackFromSettings = () => {
+        setShowSettings(false);
     };
 
-    if (showOptions) {
-        return <OptionsScreen onBack={handleBackFromOptions} />;
-    }
+    const runAction = (id: PauseActionId) => {
+        if (id === 'resume') onResume();
+        else if (id === 'options') setShowSettings(true);
+        else onQuit();
+    };
+
+    useEffect(() => {
+        if (showSettings) return;
+
+        const handler = (e: KeyboardEvent) => {
+            const currentIdx = PAUSE_MENU_ITEMS.findIndex((i) => i.id === hoveredAction);
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHoveredAction(PAUSE_MENU_ITEMS[Math.max(0, currentIdx - 1)].id);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHoveredAction(PAUSE_MENU_ITEMS[Math.min(PAUSE_MENU_ITEMS.length - 1, currentIdx + 1)].id);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                runAction(hoveredAction);
+            }
+        };
+
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [hoveredAction, showSettings]);
 
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-auto">
-            {/* Background overlay */}
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-            
-            {/* Noise texture */}
-            <div 
-                className="absolute inset-0 opacity-[0.03] pointer-events-none"
-                style={{ 
-                    backgroundImage: 'url("https://playground.babylonjs.com/textures/noise.png")',
-                    backgroundSize: '200px'
+        <div className="absolute inset-0 z-50 overflow-hidden pointer-events-auto select-none">
+            <div
+                className="absolute inset-0"
+                style={{ background: 'rgba(0, 0, 0, 0.42)' }}
+            />
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(circle at center, transparent 24%, rgba(0, 0, 0, 0.8) 100%)',
                 }}
             />
-            
-            {/* Vignette */}
-            <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/30 to-black/70 pointer-events-none" />
-            
-            {/* Content */}
-            <div className="relative z-10 text-center" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                {/* PAUSED title */}
-                <h1 className="text-7xl font-black text-stone-300 tracking-[0.5em] uppercase mb-4
-                             drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
-                    style={{ textShadow: '0 4px 0 rgba(0,0,0,0.8)' }}>
-                    PAUSED
-                </h1>
-                
-                {/* Decorative line */}
-                <div className="flex items-center justify-center gap-4 mb-12">
-                    <div className="w-24 h-[1px] bg-gradient-to-r from-transparent to-stone-600" />
-                    <div className="w-2 h-2 rotate-45 border border-stone-600" />
-                    <div className="w-24 h-[1px] bg-gradient-to-l from-transparent to-stone-600" />
-                </div>
-                
-                {/* Menu buttons */}
-                <div className="flex flex-col gap-4 items-center">
-                    <MenuButton onClick={onResume} variant="primary">
-                        Resume Game
-                    </MenuButton>
-                    
-                    <MenuButton onClick={() => setShowOptions(true)} variant="primary">
-                        Options
-                    </MenuButton>
-                    
-                    <MenuButton onClick={onQuit} variant="secondary">
-                        Quit to Menu
-                    </MenuButton>
-                </div>
-                
-                {/* Help text */}
-                <p className="mt-8 text-stone-600 text-xs tracking-[0.2em] uppercase font-mono">
-                    Press ESC to resume
-                </p>
-            </div>
-            
-            {/* Ambient corner decorations */}
-            <div className="absolute top-8 left-8 w-16 h-16 border-t-2 border-l-2 border-stone-800/50" />
-            <div className="absolute top-8 right-8 w-16 h-16 border-t-2 border-r-2 border-stone-800/50" />
-            <div className="absolute bottom-8 left-8 w-16 h-16 border-b-2 border-l-2 border-stone-800/50" />
-            <div className="absolute bottom-8 right-8 w-16 h-16 border-b-2 border-r-2 border-stone-800/50" />
+            <div
+                className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                style={{
+                    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+                }}
+            />
+
+            {showSettings ? (
+                <>
+                    <div
+                        className="absolute"
+                        style={{
+                            top: '32px',
+                            left: '7%',
+                            zIndex: 20,
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.45s ease 0.2s',
+                        }}
+                    >
+                        <BackHeader onBack={handleBackFromSettings} breadcrumb="PAUSE MENU / SETTINGS" />
+                    </div>
+                    <SettingsMenu />
+                </>
+            ) : (
+                <>
+                    <div
+                        className="absolute"
+                        style={{
+                            top: '40%',
+                            left: '7%',
+                            zIndex: 10,
+                            opacity: ready ? 0.72 : 0,
+                            transition: 'opacity 0.45s ease 0.2s',
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontFamily: "'Share Tech Mono', monospace",
+                                fontSize: '11px',
+                                letterSpacing: '0.28em',
+                                color: '#FF8C00',
+                                textTransform: 'uppercase',
+                            }}
+                        >
+                            Session Paused
+                        </span>
+                        <div
+                            style={{
+                                marginTop: '6px',
+                                width: '42px',
+                                height: '1px',
+                                background: 'rgba(255,140,0,0.5)',
+                            }}
+                        />
+                    </div>
+
+                    <div
+                        className="absolute"
+                        style={{
+                            top: '46%',
+                            left: '7%',
+                            zIndex: 10,
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.55s ease 0.25s',
+                        }}
+                    >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: 'min(420px, 86vw)' }}>
+                            {PAUSE_MENU_ITEMS.map((item) => (
+                                <MainMenuStylePauseButton
+                                    key={item.id}
+                                    label={item.label}
+                                    onClick={() => runAction(item.id)}
+                                    isActive={hoveredAction === item.id}
+                                    onHover={() => setHoveredAction(item.id)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div
+                        className="absolute bottom-4 left-5"
+                        style={{
+                            color: '#444',
+                            fontFamily: "'Share Tech Mono', monospace",
+                            fontSize: '11px',
+                            letterSpacing: '0.18em',
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.6s ease 0.4s',
+                            zIndex: 10,
+                        }}
+                    >
+                        BUILD 2024.1 • CLASSIFIED
+                    </div>
+                    <div
+                        className="absolute bottom-4 right-5"
+                        style={{
+                            color: '#444',
+                            fontFamily: "'Share Tech Mono', monospace",
+                            fontSize: '11px',
+                            letterSpacing: '0.12em',
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.6s ease 0.4s',
+                            zIndex: 10,
+                        }}
+                    >
+                        [ESC] RESUME  [CLICK] SELECT
+                    </div>
+                </>
+            )}
         </div>
     );
 };
