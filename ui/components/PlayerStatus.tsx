@@ -33,7 +33,7 @@ const PointNotification = ({ value, id }: { value: number; id: string }) => {
 };
 
 // Perk icon with glow effect
-const PerkIcon = ({ type, active }: { type: string; active: boolean }) => {
+const PerkIcon = ({ type, active, compact = false }: { type: string; active: boolean; compact?: boolean }) => {
     if (!active) return null;
     
     const perkStyles: Record<string, { bg: string; glow: string; icon: string }> = {
@@ -65,11 +65,12 @@ const PerkIcon = ({ type, active }: { type: string; active: boolean }) => {
     };
     
     const style = perkStyles[type] || perkStyles.juggernog;
+    const size = compact ? 'w-4 h-4 text-[10px]' : 'w-6 h-6 text-xs';
     
     return (
         <div 
-            className={`w-6 h-6 rounded ${style.bg} ${style.glow} 
-                       flex items-center justify-center text-white text-xs font-bold
+            className={`${size} rounded ${style.bg} ${style.glow} 
+                       flex items-center justify-center text-white font-bold
                        border border-white/30 transition-all duration-300
                        hover:scale-110`}
             title={type}
@@ -87,10 +88,12 @@ interface PlayerStatusProps {
     perks: Record<string, boolean>;
     opacity?: number;
     isLocal?: boolean;
+    /** When true, renders a compact layout for touch/mobile (narrower, smaller text) */
+    compact?: boolean;
 }
 
 export const PlayerStatus = ({ 
-    name, hp, pts, perks, opacity = 1, isLocal = false 
+    name, hp, pts, perks, opacity = 1, isLocal = false, compact = false
 }: PlayerStatusProps) => {
     const prevPts = useRef(pts);
     const prevHp = useRef(hp);
@@ -147,29 +150,31 @@ export const PlayerStatus = ({
             
             <div className="relative">
                 {/* Player name and perks row */}
-                <div className="flex items-center gap-3 mb-2">
+                <div className={`flex items-center gap-3 ${compact ? 'mb-1' : 'mb-2'}`}>
                     {/* Name with rank indicator */}
                     <div className="flex items-center gap-2">
-                        <div className={`w-1 h-6 rounded-full transition-all duration-300 ${
+                        <div className={`${compact ? 'w-0.5 h-4' : 'w-1 h-6'} rounded-full transition-all duration-300 ${
                             isDead ? 'bg-red-600' : 
                             isCritical ? 'bg-amber-500 animate-pulse' : 
                             'bg-emerald-500'
                         }`} />
-                        <span className={`text-sm font-bold tracking-[0.2em] uppercase font-mono
+                        <span className={`${compact ? 'text-xs' : 'text-sm'} font-bold tracking-[0.2em] uppercase font-mono
                                         ${isLocal ? 'text-stone-200' : 'text-stone-400'}
                                         ${isDead ? 'line-through opacity-50' : ''}`}>
                             {name}
                         </span>
                     </div>
                     
-                    {/* Perk icons */}
-                    <div className="flex gap-1.5 ml-2">
-                        <PerkIcon type="juggernog" active={perks['juggernog']} />
-                        <PerkIcon type="speedCola" active={perks['speedCola']} />
-                        <PerkIcon type="quickRevive" active={perks['quickRevive']} />
-                        <PerkIcon type="doubleTap" active={perks['doubleTap']} />
-                        <PerkIcon type="muleKick" active={perks['muleKick']} />
-                    </div>
+                    {/* Perk icons — hidden in compact when not local to save space */}
+                    {(!compact || isLocal) && (
+                        <div className={`flex ${compact ? 'gap-1 ml-1' : 'gap-1.5 ml-2'}`}>
+                            <PerkIcon type="juggernog" active={perks['juggernog']} compact={compact} />
+                            <PerkIcon type="speedCola" active={perks['speedCola']} compact={compact} />
+                            <PerkIcon type="quickRevive" active={perks['quickRevive']} compact={compact} />
+                            <PerkIcon type="doubleTap" active={perks['doubleTap']} compact={compact} />
+                            <PerkIcon type="muleKick" active={perks['muleKick']} compact={compact} />
+                        </div>
+                    )}
                     
                     {/* KIA indicator */}
                     {isDead && (
@@ -182,7 +187,7 @@ export const PlayerStatus = ({
                 </div>
 
                 {/* Health bar container */}
-                <div className={`relative w-72 h-4 overflow-hidden rounded-sm
+                <div className={`relative ${compact ? 'w-44 h-3' : 'w-72 h-4'} overflow-hidden rounded-sm
                                transition-all duration-200
                                ${healthFlash === 'damage' ? 'scale-[1.02]' : ''}
                                ${healthFlash === 'heal' ? 'scale-[1.01]' : ''}`}>
@@ -240,9 +245,9 @@ export const PlayerStatus = ({
                 </div>
 
                 {/* Points display */}
-                <div className="mt-2 flex items-center gap-2 relative">
-                    <PointsIcon className="w-5 h-5 text-amber-500 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
-                    <span className={`text-2xl font-black font-mono tracking-wider
+                <div className={`${compact ? 'mt-1' : 'mt-2'} flex items-center gap-2 relative`}>
+                    <PointsIcon className={`${compact ? 'w-3.5 h-3.5' : 'w-5 h-5'} text-amber-500 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]`} />
+                    <span className={`${compact ? 'text-lg' : 'text-2xl'} font-black font-mono tracking-wider
                                     ${isLocal ? 'text-amber-400' : 'text-amber-500/70'}
                                     drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]`}
                           style={{ textShadow: '0 0 20px rgba(251,191,36,0.3)' }}>

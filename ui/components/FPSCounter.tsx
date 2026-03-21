@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useCallback } from 'react';
+import { useGameStore } from '../../store/useGameStore';
 
 /**
- * FPSCounter - A lightweight, zero-rerender FPS display for the top-right corner.
+ * FPSCounter - A lightweight, zero-rerender FPS display.
  * Uses direct DOM manipulation via refs to avoid React re-render overhead.
  * Samples frame times and updates the display every ~500ms.
+ *
+ * On touch mode, shifts left to clear the pause button in the top-right corner.
  */
-export const FPSCounter = () => {
+export const FPSCounter = ({ isTouchMode = false }: { isTouchMode?: boolean }) => {
+    const showFPS = useGameStore(s => s.settings.showFPS);
     const valueRef = useRef<HTMLSpanElement>(null);
     const lastTimeRef = useRef(performance.now());
     const frameCountRef = useRef(0);
@@ -37,8 +41,16 @@ export const FPSCounter = () => {
         return () => cancelAnimationFrame(rafIdRef.current);
     }, [tick]);
 
+    if (!showFPS) return null;
+
+    // On touch: sit left of the pause button (pause btn is ~56px from right edge)
+    // On desktop: standard top-right
+    const positionStyle: React.CSSProperties = isTouchMode
+        ? { position: 'absolute', top: 16, right: 72, zIndex: 30 }
+        : { position: 'absolute', top: 24, right: 24, zIndex: 30 };
+
     return (
-        <div className="absolute top-6 right-6 pointer-events-none select-none z-30">
+        <div className="pointer-events-none select-none" style={positionStyle}>
             <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded px-2.5 py-1
                           border-r-2 border-stone-700/50">
                 <span className="text-stone-600 text-[9px] tracking-[0.3em] uppercase font-bold font-mono">

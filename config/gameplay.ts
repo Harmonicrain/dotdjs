@@ -183,6 +183,7 @@ export const DEFAULT_SETTINGS = {
   mouseSensitivity: 1.0,
   controllerSensitivity: 1.0,
   controllerDeadzone: 0.15,
+  touchSensitivity: 5.0,
 };
 
 // Speeds are per-frame (approx 1/60th of a second) relative to 1 unit = 1 meter

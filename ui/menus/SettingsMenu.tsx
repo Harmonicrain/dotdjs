@@ -204,6 +204,7 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
   };
 
   const isController = settings.inputDevice === 'CONTROLLER';
+  const isTouch = settings.inputDevice === 'TOUCH';
 
   return (
     <div
@@ -358,15 +359,36 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
 
         {/* Control scheme */}
         <SettingRow>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <RowHeader label="Control Scheme" />
-            <ToggleButton
-              value={isController}
-              labels={['CONTROLLER', 'MOUSE & KB']}
-              onClick={() =>
-                updateSettings({ inputDevice: isController ? 'KM' : 'CONTROLLER' })
-              }
-            />
+          <RowHeader label="Control Scheme" />
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {([
+              { value: 'KM' as const, label: 'MOUSE & KB' },
+              { value: 'CONTROLLER' as const, label: 'CONTROLLER' },
+              { value: 'TOUCH' as const, label: 'TOUCH' },
+            ]).map(({ value, label }) => {
+              const isActive = settings.inputDevice === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updateSettings({ inputDevice: value })}
+                  style={{
+                    padding: '6px 14px',
+                    background: isActive ? 'rgba(255,154,0,0.2)' : 'rgba(0,0,0,0.5)',
+                    border: isActive
+                      ? '1px solid rgba(255,154,0,0.8)'
+                      : '1px solid rgba(80,80,80,0.35)',
+                    cursor: 'pointer',
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.12em',
+                    color: isActive ? '#FF9A00' : '#888',
+                    transition: 'all 0.12s ease',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </SettingRow>
 
@@ -414,6 +436,22 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
             value={settings.controllerDeadzone}
             disabled={!isController}
             onChange={(v) => updateSettings({ controllerDeadzone: v })}
+          />
+        </SettingRow>
+
+        {/* Touch sensitivity */}
+        <SettingRow dimmed={!isTouch}>
+          <RowHeader
+            label="Touch Sensitivity"
+            value={settings.touchSensitivity.toFixed(1)}
+          />
+          <StyledSlider
+            min={1.0}
+            max={15.0}
+            step={0.5}
+            value={settings.touchSensitivity}
+            disabled={!isTouch}
+            onChange={(v) => updateSettings({ touchSensitivity: v })}
           />
         </SettingRow>
 

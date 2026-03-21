@@ -13,7 +13,7 @@ import { ZombieManager } from '../managers/ZombieManager';
 import { HellhoundManager } from '../managers/HellhoundManager';
 import { PowerUpManager } from '../managers/PowerUpManager';
 import { EventBus } from '../engine/EventBus';
-import { InputManager } from '../engine/InputManager';
+import { InputManager, InputDevice } from '../engine/InputManager';
 import { UIBridge } from './UIBridge';
 import { RemotePlayerState } from './RemotePlayerState';
 
@@ -52,7 +52,7 @@ export class StateManager {
     /** Shared ref written by ZombieAISystem, read by ZombieCleanupSystem */
     public crowdRef: { current?: BABYLON.ICrowd } = { current: undefined };
 
-    public get inputDevice(): 'KM' | 'CONTROLLER' {
+    public get inputDevice(): InputDevice {
         return this.inputManager?.getInputDevice() ?? 'KM';
     }
 
@@ -165,7 +165,9 @@ export class StateManager {
             this.ui.setIsConsoleOpen(false);
             this.ui.setConsoleResult(null);
             // Re-request pointer lock so the player is back in-game
-            this.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
+            if (this.inputManager?.shouldUsePointerLock()) {
+                this.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
+            }
         });
 
         // Init GameState
