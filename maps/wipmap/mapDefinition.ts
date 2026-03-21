@@ -4,7 +4,7 @@ import { wipmapGameplay } from './config/gameplay';
 export const WipmapDefinition: MapDefinition = {
     meta: {
         id: "wipmap",
-        name: "Barn",
+        name: "WIPMAP",
         version: "0.1",
         description: "Work in progress map."
     },

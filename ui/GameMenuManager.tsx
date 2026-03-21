@@ -127,6 +127,7 @@ export const GameMenuManager = ({
       case 'MULTIPLAYER':
         return {
           showLogo: true,
+          pinBackHeaderTop: true,
           bottomRightText: '[↑↓] NAVIGATE  [ENTER] SELECT  [ESC] BACK',
           onBack: () => navigate('MAIN'),
           breadcrumb: 'MAIN MENU / MULTIPLAYER',
