@@ -85,7 +85,7 @@ export class GameLifecycle {
 
         // Release pointer lock when the game ends — keeps DOM access out of ECS systems.
         game.stateManager?.eventBus.on('GAME_OVER', () => {
-            if (document.pointerLockElement) document.exitPointerLock();
+            if (document.pointerLockElement && game.inputManager.shouldUsePointerLock()) document.exitPointerLock();
         });
 
         // Boot the engine (including navPlugin initialization) and wait for it.
@@ -284,7 +284,7 @@ export class GameLifecycle {
         sm.timerManager.schedule('fade_out', 2_000, () => {});
 
         // Request pointer lock
-        game.canvas.requestPointerLock();
+        if (game.inputManager.shouldUsePointerLock()) game.canvas.requestPointerLock();
 
         // Let the engine render a few frames while the loading screen is still up.
         // This ensures the weapon shaders (just enabled) and shadow maps compile 
@@ -309,7 +309,7 @@ export class GameLifecycle {
         const { game, callbacks } = this;
         if (!game || !callbacks) return;
 
-        if (document.exitPointerLock) document.exitPointerLock();
+        if (document.exitPointerLock && game.inputManager.shouldUsePointerLock()) document.exitPointerLock();
 
         if (game.stateManager) {
             const sm = game.stateManager;
@@ -386,7 +386,9 @@ export class GameLifecycle {
 
         if (!paused && this.game) {
             // Resume: re-request pointer lock and flush stale mouse delta
-            this.game.canvas.requestPointerLock();
+            if (this.game.inputManager.shouldUsePointerLock()) {
+                this.game.canvas.requestPointerLock();
+            }
             this.game.inputManager.clearMouseMovement();
         }
 

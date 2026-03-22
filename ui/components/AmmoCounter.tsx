@@ -16,7 +16,16 @@ const BulletIndicator = ({ filled, index }: { filled: boolean; index: number }) 
     />
 );
 
-export const AmmoCounter = () => {
+interface AmmoCounterProps {
+    /** When true, renders compact positioning to clear touch controls */
+    isTouchMode?: boolean;
+    /** How many px from bottom to clear touch button grid */
+    touchBottomSafe?: number;
+    /** How many px from right to clear touch button grid */
+    touchRightSafe?: number;
+}
+
+export const AmmoCounter = ({ isTouchMode = false, touchBottomSafe = 170, touchRightSafe = 210 }: AmmoCounterProps) => {
     const weaponName = useGameStore(s => s.weaponName);
     const ammo = useGameStore(s => s.ammo);
     const reserveAmmo = useGameStore(s => s.reserveAmmo);
@@ -43,12 +52,27 @@ export const AmmoCounter = () => {
         prevAmmo.current = ammo;
     }, [ammo]);
 
-    // Show bullet indicators for clips <= 30
-    const showBulletIndicators = maxClip <= 30 && maxClip > 0;
+    // Show bullet indicators for clips <= 30 (disabled in touch mode to save space)
+    const showBulletIndicators = maxClip <= 30 && maxClip > 0 && !isTouchMode;
     const bulletCount = showBulletIndicators ? maxClip : 0;
 
+    // Touch mode: position above the action button grid, shifted left of buttons
+    const positionStyle: React.CSSProperties = isTouchMode
+        ? {
+            position: 'absolute',
+            bottom: touchBottomSafe,
+            right: touchRightSafe,
+            zIndex: 30,
+        }
+        : {
+            position: 'absolute',
+            bottom: 24,
+            right: 24,
+            zIndex: 30,
+        };
+
     return (
-        <div className="absolute bottom-6 right-6 z-30 pointer-events-none select-none">
+        <div className="pointer-events-none select-none" style={positionStyle}>
             {/* Backdrop glow */}
             <div className="absolute -inset-4 bg-gradient-radial from-black/60 via-black/30 to-transparent rounded-lg blur-xl" />
 
@@ -77,7 +101,7 @@ export const AmmoCounter = () => {
 
                     {/* Current ammo */}
                     <div className="relative">
-                        <span className={`text-7xl font-black tracking-tighter font-mono 
+                        <span className={`${isTouchMode ? 'text-5xl' : 'text-7xl'} font-black tracking-tighter font-mono 
                                         transition-all duration-200
                                         ${isEmpty ? 'text-red-600' :
                                 isLowAmmo ? 'text-red-500' :
@@ -95,8 +119,8 @@ export const AmmoCounter = () => {
 
                         {/* Glitch effect on low ammo */}
                         {isLowAmmo && (
-                            <span className="absolute inset-0 text-7xl font-black tracking-tighter font-mono
-                                           text-cyan-500/20 translate-x-[2px]"
+                            <span className={`absolute inset-0 ${isTouchMode ? 'text-5xl' : 'text-7xl'} font-black tracking-tighter font-mono
+                                           text-cyan-500/20 translate-x-[2px]`}
                                 style={{ clipPath: 'inset(60% 0 10% 0)' }}>
                                 {ammo}
                             </span>
@@ -104,16 +128,16 @@ export const AmmoCounter = () => {
                     </div>
 
                     {/* Separator */}
-                    <span className="text-3xl text-stone-600 font-bold font-mono mb-3 mx-1">/</span>
+                    <span className={`${isTouchMode ? 'text-xl mb-2' : 'text-3xl mb-3'} text-stone-600 font-bold font-mono mx-1`}>/</span>
 
                     {/* Reserve ammo */}
-                    <span className="text-3xl text-stone-500 font-bold font-mono mb-3
-                                   drop-shadow-[0_2px_0_rgba(0,0,0,0.8)]">
+                    <span className={`${isTouchMode ? 'text-xl mb-2' : 'text-3xl mb-3'} text-stone-500 font-bold font-mono
+                                   drop-shadow-[0_2px_0_rgba(0,0,0,0.8)]`}>
                         {reserveAmmo}
                     </span>
                 </div>
 
-                {/* Bullet indicators */}
+                {/* Bullet indicators — hidden in touch mode */}
                 {showBulletIndicators && (
                     <div className="flex justify-end gap-[2px] mt-3 flex-wrap-reverse max-w-[200px]"
                         style={{ flexDirection: 'row-reverse' }}>

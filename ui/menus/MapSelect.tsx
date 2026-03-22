@@ -52,7 +52,7 @@ export const MapSelect = ({ initialMapId, mode, onConfirm }: MapSelectProps) => 
           width: 'min(900px, 90vw)',
           maxHeight: '85vh',
           opacity: ready ? 1 : 0,
-          transform: ready ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.98)',
+          transform: ready ? 'translateY(24px) scale(1)' : 'translateY(40px) scale(0.98)',
           transition: 'opacity 0.35s ease, transform 0.35s ease',
           zIndex: 20,
         }}
@@ -76,13 +76,14 @@ export const MapSelect = ({ initialMapId, mode, onConfirm }: MapSelectProps) => 
             ) : undefined
           }
           maxWidth="900px"
+          height="min(640px, 85vh)"
         >
           {/* ── Split panel body ──────────────────────────────── */}
-          <div style={{ display: 'flex', minHeight: 0, overflow: 'hidden', margin: '-28px', marginTop: '-18px' }}>
+          <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', margin: '-28px', marginTop: '-18px' }}>
             {/* Left column – map list */}
             <div
               style={{
-                width: '38%',
+                width: '32%',
                 flexShrink: 0,
                 borderRight: '1px solid rgba(139,0,0,0.25)',
                 display: 'flex',
@@ -161,6 +162,7 @@ export const MapSelect = ({ initialMapId, mode, onConfirm }: MapSelectProps) => 
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '18px',
+                overflowY: 'auto',
               }}
             >
               {/* Map name */}

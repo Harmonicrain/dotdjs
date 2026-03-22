@@ -23,7 +23,7 @@ export const MAPS = [
   },
   {
     id: 'wipmap',
-    name: 'BARN',
+    name: 'WIPMAP',
     description: 'Work in progress map.',
     preview: null,
   }

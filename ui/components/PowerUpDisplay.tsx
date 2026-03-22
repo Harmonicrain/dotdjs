@@ -171,16 +171,41 @@ const PowerUpIcon = ({ type, expireTime }: PowerUpIconProps) => {
     );
 };
 
-export const PowerUpDisplay = () => {
+export const PowerUpDisplay = ({
+    isTouchMode = false,
+    touchBottomSafe = 170,
+}: {
+    isTouchMode?: boolean;
+    touchBottomSafe?: number;
+}) => {
     const activePowerUps = useGameStore(s => s.activePowerUps);
     const activePowerUpEntries = Object.entries(activePowerUps)
         .map(([type, expTime]) => ({ type: type as PowerUpType, expTime: expTime! }));
 
     if (activePowerUpEntries.length === 0) return null;
 
+    // On touch: raise above the button grid; on desktop: standard bottom-center
+    const containerStyle: React.CSSProperties = isTouchMode
+        ? {
+            position: 'absolute',
+            bottom: touchBottomSafe,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+        }
+        : {
+            position: 'absolute',
+            bottom: 32,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+        };
+
     return (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 
-                      flex gap-4 pointer-events-none select-none">
+        <div
+            className="flex gap-4 pointer-events-none select-none"
+            style={containerStyle}
+        >
             {activePowerUpEntries.map(({ type, expTime }) => (
                 <PowerUpIcon key={type} type={type} expireTime={expTime} />
             ))}

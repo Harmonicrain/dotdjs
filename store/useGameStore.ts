@@ -70,10 +70,11 @@ export interface RenderStatsData {
 export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
 
 export interface ExtendedSettings {
-  inputDevice: 'KM' | 'CONTROLLER';
+  inputDevice: 'KM' | 'CONTROLLER' | 'TOUCH';
   mouseSensitivity: number;
   controllerSensitivity: number;
   controllerDeadzone: number;
+  touchSensitivity: number;
   resolutionScale: number;
   graphicsQuality: GraphicsQuality;
   fov: number;
@@ -153,6 +154,14 @@ const getSavedSettings = (): ExtendedSettings | null => {
   }
 };
 
+const getDefaultSettings = (): ExtendedSettings => {
+  const isTouchDevice = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1;
+  if (isTouchDevice) {
+    return { ...EXTENDED_DEFAULT_SETTINGS, inputDevice: 'TOUCH' };
+  }
+  return EXTENDED_DEFAULT_SETTINGS;
+};
+
 export const useGameStore = create<GameStore>((set) => ({
   // Player Defaults
   points: 500,
@@ -227,7 +236,7 @@ export const useGameStore = create<GameStore>((set) => ({
     textures: 0,
     particleSystems: 0,
   },
-  settings: getSavedSettings() ?? EXTENDED_DEFAULT_SETTINGS,
+  settings: getSavedSettings() ?? getDefaultSettings(),
 
   // Remote Defaults
   remotePlayerName: 'Unknown',
@@ -251,6 +260,6 @@ export const useGameStore = create<GameStore>((set) => ({
   resetSettings: () =>
     set(() => {
       localStorage.removeItem(STORAGE_KEY);
-      return { settings: EXTENDED_DEFAULT_SETTINGS };
+      return { settings: getDefaultSettings() };
     }),
 }));

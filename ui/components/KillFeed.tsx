@@ -10,7 +10,14 @@ interface KillEntry {
     timestamp: number;
 }
 
-export const KillFeed = () => {
+interface KillFeedProps {
+    /** When true, repositions feed to avoid the touch action buttons on the right */
+    isTouchMode?: boolean;
+    /** How many px from the right the action button grid occupies */
+    touchRightSafe?: number;
+}
+
+export const KillFeed = ({ isTouchMode = false, touchRightSafe = 210 }: KillFeedProps) => {
     const [kills, setKills] = useState<KillEntry[]>([]);
     const killEvents = useGameStore(state => state.killEvents);
     const processedRef = useRef<Set<string>>(new Set());
@@ -42,9 +49,17 @@ export const KillFeed = () => {
 
     if (kills.length === 0) return null;
 
+    // On touch: anchor from right but offset inward past the action button grid
+    // On desktop: top-right corner as before
+    const containerStyle: React.CSSProperties = isTouchMode
+        ? { position: 'absolute', top: '8%', right: touchRightSafe + 8, zIndex: 30 }
+        : { position: 'absolute', top: '33%', right: 24, zIndex: 30 };
+
     return (
-        <div className="absolute top-1/3 right-6 z-30 pointer-events-none select-none
-                      flex flex-col gap-1 items-end">
+        <div
+            className="pointer-events-none select-none flex flex-col gap-1 items-end"
+            style={containerStyle}
+        >
             {kills.map((kill, index) => (
                 <div
                     key={kill.id}

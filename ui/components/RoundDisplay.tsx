@@ -65,7 +65,7 @@ const StatBar = ({
     );
 };
 
-export const RoundDisplay = () => {
+export const RoundDisplay = ({ isTouchMode = false }: { isTouchMode?: boolean }) => {
     const round = useGameStore(s => s.round);
     const isDogRound = useGameStore(s => s.isDogRound);
     const activeZombies = useGameStore(s => s.activeZombiesCount);
@@ -117,9 +117,11 @@ export const RoundDisplay = () => {
                     {/* Round number */}
                     <div className={`relative ${isDogRound ? 'animate-pulse' : ''}`}>
                         {!isPreRound ? (
-                            <RoundTally round={round} isDogRound={isDogRound} />
+                            <div className={isTouchMode ? 'scale-[0.65] origin-top-left' : ''}>
+                                <RoundTally round={round} isDogRound={isDogRound} />
+                            </div>
                         ) : (
-                            <div className="h-14" /> // Placeholder height
+                            <div className={isTouchMode ? 'h-9' : 'h-14'} /> // Placeholder height
                         )}
 
                         {/* Glitch effect for dog rounds */}
@@ -147,10 +149,16 @@ export const RoundDisplay = () => {
                 </div>
             </div>
 
-            {/* Zombie/Enemy stats - below round display */}
+            {/* Zombie/Enemy stats — on touch, inline below round label; on desktop, separate block */}
             {!isPreRound && (
-                <div className="absolute top-28 left-6 pointer-events-none select-none z-30">
-                    <div className="bg-black/30 backdrop-blur-sm rounded px-3 py-2 border-l-2 border-red-900/50">
+                <div
+                    className="pointer-events-none select-none z-30"
+                    style={isTouchMode
+                        ? { position: 'absolute', top: 88, left: 24 }
+                        : { position: 'absolute', top: 112, left: 24 }
+                    }
+                >
+                    <div className={`bg-black/30 backdrop-blur-sm rounded px-3 py-2 border-l-2 border-red-900/50 ${isTouchMode ? 'max-w-[160px]' : ''}`}>
                         <div className={`text-[9px] tracking-[0.3em] font-bold uppercase mb-2 font-mono
                                        ${isDogRound ? 'text-red-500' : 'text-stone-500'}`}>
                             {isDogRound ? '🐕 HELLHOUNDS' : '☠ ZOMBIES'}
@@ -190,7 +198,7 @@ export const RoundDisplay = () => {
                     {/* Round announcement */}
                     <div className="relative text-center" style={{ animation: 'roundReveal 3s ease-out forwards' }}>
                         {/* Large round number */}
-                        <div className={`text-[180px] font-black leading-none
+                        <div className={`${isTouchMode ? 'text-[100px]' : 'text-[180px]'} font-black leading-none
                                        ${isDogRound ? 'text-red-600' : 'text-red-800'}
                                        drop-shadow-[0_0_60px_rgba(127,29,29,0.8)]`}
                             style={{

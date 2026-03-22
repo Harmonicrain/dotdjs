@@ -23,12 +23,16 @@ import { HitMarker } from './components/HitMarker';
 import { KillFeed } from './components/KillFeed';
 import { FPSCounter } from './components/FPSCounter';
 import { RenderStatsOverlay } from './components/RenderStatsOverlay';
+import { TouchControls } from './components/TouchControls';
+import { InputManager } from '../engine/InputManager';
 
 interface HUDProps {
     onResume?: () => void;
     onQuit: () => void;
     onRestart?: () => void;
     onCommand: (cmd: string) => void;
+    inputManager?: InputManager | null;
+    onPause?: () => void;
 }
 
 // Interaction prompt component with enhanced styling
@@ -131,7 +135,7 @@ const DogRoundAnnouncement = () => (
     </div>
 );
 
-export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
+export const HUD = ({ onResume, onQuit, onCommand, inputManager, onPause }: HUDProps) => {
     // Only subscribe to fields needed for conditional rendering layout
     const isGameOver = useGameStore(s => s.isGameOver);
     const isPaused = useGameStore(s => s.isPaused);
@@ -143,6 +147,7 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
     const hoverMsg = useGameStore(s => s.hoverMsg);
     const gameMode = useGameStore(s => s.gameMode);
     const connectionStatus = useGameStore(s => s.connectionStatus);
+    const isTouchMode = useGameStore(s => s.settings.inputDevice === 'TOUCH');
 
     // Local player fields for PlayerStatus
     const playerName = useGameStore(s => s.playerName);
@@ -155,6 +160,14 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
     const remoteHealth = useGameStore(s => s.remoteHealth);
     const remotePoints = useGameStore(s => s.remotePoints);
     const remotePerks = useGameStore(s => s.remotePerks);
+
+    // Touch layout constants (must match TouchControls.tsx sizing)
+    // joystickSize ~132px + edgePadding ~16px → left safe zone
+    // action button grid ~3*(52+8)=180px wide + edgePadding → right safe zone
+    // joystick + edgePadding bottom offset
+    const TOUCH_BOTTOM_SAFE = 170; // px — clears joystick + action buttons height
+    const TOUCH_LEFT_SAFE = 164;   // px — clears joystick width + padding
+    const TOUCH_RIGHT_SAFE = 210;  // px — clears action button grid width + padding
 
     return (
         <>
@@ -170,17 +183,17 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
             {/* Hit marker feedback */}
             {!isGameOver && <HitMarker />}
 
-            {/* Kill feed */}
-            {!isGameOver && <KillFeed />}
+            {/* Kill feed — on touch, nudge left to clear action buttons */}
+            {!isGameOver && <KillFeed isTouchMode={isTouchMode} touchRightSafe={TOUCH_RIGHT_SAFE} />}
 
-            {/* FPS counter - top right */}
-            {!isGameOver && <FPSCounter />}
+            {/* FPS counter — on touch, shift left of the pause button */}
+            {!isGameOver && <FPSCounter isTouchMode={isTouchMode} />}
 
             {/* Round display */}
-            {!isGameOver && <RoundDisplay />}
+            {!isGameOver && <RoundDisplay isTouchMode={isTouchMode} />}
 
-            {/* Active power-ups */}
-            <PowerUpDisplay />
+            {/* Active power-ups — on touch, raised above action buttons */}
+            <PowerUpDisplay isTouchMode={isTouchMode} touchBottomSafe={TOUCH_BOTTOM_SAFE} />
 
             {/* Debug/Dev tools */}
             <Console onCommand={onCommand} />
@@ -202,9 +215,22 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
 
             {/* Main HUD container */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                {/* Player status panels - bottom left */}
+                {/* Player status panels - bottom left
+                    Touch: raised above joystick, capped width to not enter center */}
                 {!isGameOver && (
-                    <div className="absolute bottom-6 left-6 z-30 w-full pr-20 flex flex-col items-start select-none">
+                    <div
+                        className="absolute z-30 flex flex-col items-start select-none"
+                        style={isTouchMode ? {
+                            bottom: TOUCH_BOTTOM_SAFE,
+                            left: 8,
+                            maxWidth: `calc(50% - 8px)`,
+                        } : {
+                            bottom: 24,
+                            left: 24,
+                            width: '100%',
+                            paddingRight: 80,
+                        }}
+                    >
                         {/* Remote player (if co-op) */}
                         {gameMode !== 'SOLO' && connectionStatus === 'CONNECTED' && (
                             <PlayerStatus
@@ -213,6 +239,7 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
                                 pts={remotePoints || 0}
                                 perks={remotePerks}
                                 opacity={0.7}
+                                compact={isTouchMode}
                             />
                         )}
                         {/* Local player */}
@@ -223,12 +250,19 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
                             perks={perks}
                             opacity={1}
                             isLocal={true}
+                            compact={isTouchMode}
                         />
                     </div>
                 )}
 
-                {/* Ammo counter - bottom right */}
-                {!isGameOver && <AmmoCounter />}
+                {/* Ammo counter — on touch, raised above action buttons and shifted left of them */}
+                {!isGameOver && (
+                    <AmmoCounter
+                        isTouchMode={isTouchMode}
+                        touchBottomSafe={TOUCH_BOTTOM_SAFE}
+                        touchRightSafe={TOUCH_RIGHT_SAFE}
+                    />
+                )}
 
                 {/* Hover message (item info) */}
                 {hoverMsg && !isGameOver && !isSpectating && (
@@ -248,6 +282,9 @@ export const HUD = ({ onResume, onQuit, onCommand }: HUDProps) => {
             {isPaused && !isGameOver && onResume && (
                 <PauseScreen onResume={onResume} onQuit={onQuit} />
             )}
+
+            {/* Touch controls overlay */}
+            <TouchControls inputManager={inputManager ?? null} onPause={() => onPause?.()} />
         </>
     );
 };

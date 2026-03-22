@@ -8,6 +8,7 @@ interface MenuShellProps {
   onBack?: () => void;
   breadcrumb?: string;
   backLabel?: string;
+  pinBackHeaderTop?: boolean;
 }
 
 export const MenuShell = ({
@@ -17,12 +18,27 @@ export const MenuShell = ({
   onBack,
   breadcrumb,
   backLabel,
+  pinBackHeaderTop = false,
 }: MenuShellProps) => {
   const [ready, setReady] = useState(false);
+  const [isCompactHeight, setIsCompactHeight] = useState(
+    typeof window !== 'undefined' && window.innerHeight <= 560,
+  );
+
+  const shouldPinBackHeaderTop = pinBackHeaderTop || !showLogo || isCompactHeight;
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 80);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsCompactHeight(window.innerHeight <= 560);
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   return (
@@ -72,7 +88,9 @@ export const MenuShell = ({
             src="/logo.png"
             alt="DOM OF THE DEAD"
             style={{
-              width: 'clamp(390px, 39vw, 600px)',
+              width: isCompactHeight
+                ? 'clamp(250px, 34vw, 360px)'
+                : 'clamp(390px, 39vw, 600px)',
               filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.9))',
             }}
             draggable={false}
@@ -85,10 +103,14 @@ export const MenuShell = ({
         <div
           className="absolute"
           style={{
-            top: showLogo ? '12%' : '32px',
+            top: shouldPinBackHeaderTop ? 'max(12px, env(safe-area-inset-top))' : '12%',
             left: '7%',
-            marginTop: showLogo ? 'calc(clamp(390px, 39vw, 600px) * 0.45 + 18px)' : '0',
-            zIndex: 10,
+            marginTop: shouldPinBackHeaderTop
+              ? '0'
+              : showLogo
+              ? 'calc(clamp(390px, 39vw, 600px) * 0.45 + 18px)'
+              : '0',
+            zIndex: 30,
             opacity: ready ? 1 : 0,
             transition: 'opacity 0.5s ease 0.2s',
           }}

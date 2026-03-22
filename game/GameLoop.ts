@@ -260,12 +260,12 @@ export const createGameLoop = (deps: GameLoopDeps) => {
 
                 if (sm.isConsoleOpen) {
                     sm.isInternalPointerRelease = true;
-                    if (document.pointerLockElement) document.exitPointerLock();
+                    if (document.pointerLockElement && inputManager.shouldUsePointerLock()) document.exitPointerLock();
                     // Clear the flag after a short delay to ensure InputManager has seen it
                     if (consoleToggleTimeout !== null) clearTimeout(consoleToggleTimeout);
                     consoleToggleTimeout = setTimeout(() => { consoleToggleTimeout = null; sm.isInternalPointerRelease = false; }, 100);
                 } else {
-                    if (!sm.gameState.isPaused && !sm.gameState.isGameOver) {
+                    if (!sm.gameState.isPaused && !sm.gameState.isGameOver && inputManager.shouldUsePointerLock()) {
                         sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
                     }
                 }

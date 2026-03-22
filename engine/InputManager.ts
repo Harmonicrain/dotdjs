@@ -34,32 +34,33 @@ export enum GameAction {
   TOGGLE_CONSOLE = "TOGGLE_CONSOLE"
 }
 
-export type InputDevice = 'KM' | 'CONTROLLER';
+export type InputDevice = 'KM' | 'CONTROLLER' | 'TOUCH';
 
-export const INPUT_PROMPTS: Record<GameAction, { km: string; controller: string }> = {
-  [GameAction.INTERACT]: { km: 'F', controller: 'A' },
-  [GameAction.RELOAD]: { km: 'R', controller: 'X' },
-  [GameAction.KNIFE]: { km: 'V', controller: 'R3' },
-  [GameAction.SPRINT]: { km: 'SHIFT', controller: 'L3' },
-  [GameAction.JUMP]: { km: 'SPACE', controller: 'A' },
-  [GameAction.CROUCH]: { km: 'C', controller: 'B' },
-  [GameAction.AIM]: { km: 'RMB', controller: 'L2' },
-  [GameAction.FIRE]: { km: 'LMB', controller: 'R2' },
-  [GameAction.WEAPON_1]: { km: '1', controller: 'LB' },
-  [GameAction.WEAPON_2]: { km: '2', controller: 'RB' },
-  [GameAction.WEAPON_3]: { km: '3', controller: 'Y' },
-  [GameAction.WEAPON_4]: { km: '4', controller: 'X' },
-  [GameAction.WEAPON_NEXT]: { km: 'TAB', controller: 'Y' },
-  [GameAction.MOVE_FORWARD]: { km: 'W', controller: 'LS' },
-  [GameAction.MOVE_BACK]: { km: 'S', controller: 'LS' },
-  [GameAction.MOVE_LEFT]: { km: 'A', controller: 'LS' },
-  [GameAction.MOVE_RIGHT]: { km: 'D', controller: 'LS' },
-  [GameAction.TOGGLE_CONSOLE]: { km: '`', controller: 'START' },
+export const INPUT_PROMPTS: Record<GameAction, { km: string; controller: string; touch: string }> = {
+  [GameAction.INTERACT]: { km: 'F', controller: 'A', touch: 'HOLD' },
+  [GameAction.RELOAD]: { km: 'R', controller: 'X', touch: 'RELOAD' },
+  [GameAction.KNIFE]: { km: 'V', controller: 'R3', touch: 'KNIFE' },
+  [GameAction.SPRINT]: { km: 'SHIFT', controller: 'L3', touch: 'SPRINT' },
+  [GameAction.JUMP]: { km: 'SPACE', controller: 'A', touch: 'JUMP' },
+  [GameAction.CROUCH]: { km: 'C', controller: 'B', touch: 'CROUCH' },
+  [GameAction.AIM]: { km: 'RMB', controller: 'L2', touch: 'ADS' },
+  [GameAction.FIRE]: { km: 'LMB', controller: 'R2', touch: 'TAP' },
+  [GameAction.WEAPON_1]: { km: '1', controller: 'LB', touch: '1' },
+  [GameAction.WEAPON_2]: { km: '2', controller: 'RB', touch: '2' },
+  [GameAction.WEAPON_3]: { km: '3', controller: 'Y', touch: '3' },
+  [GameAction.WEAPON_4]: { km: '4', controller: 'X', touch: '4' },
+  [GameAction.WEAPON_NEXT]: { km: 'TAB', controller: 'Y', touch: 'SWAP' },
+  [GameAction.MOVE_FORWARD]: { km: 'W', controller: 'LS', touch: 'JS' },
+  [GameAction.MOVE_BACK]: { km: 'S', controller: 'LS', touch: 'JS' },
+  [GameAction.MOVE_LEFT]: { km: 'A', controller: 'LS', touch: 'JS' },
+  [GameAction.MOVE_RIGHT]: { km: 'D', controller: 'LS', touch: 'JS' },
+  [GameAction.TOGGLE_CONSOLE]: { km: '`', controller: 'START', touch: 'MENU' },
 };
 
 export const getInputPrompt = (action: GameAction, device: InputDevice): string => {
   const prompts = INPUT_PROMPTS[action];
   if (!prompts) return '?';
+  if (device === 'TOUCH') return prompts.touch;
   return device === 'CONTROLLER' ? prompts.controller : prompts.km;
 };
 
@@ -140,6 +141,13 @@ export class InputManager {
   private _movementVector = { x: 0, y: 0 };
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // TOUCH STATE - Only tracked/used when inputDevice === 'TOUCH'
+  // ═══════════════════════════════════════════════════════════════════════════════
+  private touchActionStates = new Map<GameAction, boolean>();
+  private touchLookAccumulator = { x: 0, y: 0 };
+  private touchMoveVector = { x: 0, y: 0 };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // DERIVED ACTION STATES - Computed from active device only
   // ═══════════════════════════════════════════════════════════════════════════════
   private actionStates = new Map<GameAction, boolean>();
@@ -182,7 +190,8 @@ export class InputManager {
     inputDevice: 'KM' as InputDevice,
     mouseSensitivity: 1.0,
     controllerSensitivity: 1.0,
-    controllerDeadzone: 0.15
+    controllerDeadzone: 0.15,
+    touchSensitivity: 5.0
   };
 
   constructor() {
@@ -215,11 +224,17 @@ export class InputManager {
       this.controllerButtons = [];
       this.controllerAxes = [];
       this.gamepadLook = { x: 0, y: 0 };
+      this.clearTouchState();
     } else if (updates.inputDevice === 'CONTROLLER') {
       this.activeKeys.clear();
       this.activeMouseButtons.clear();
       this.mouseMovement = { x: 0, y: 0 };
       this.mouseLook = { x: 0, y: 0 };
+      this.clearTouchState();
+    } else if (updates.inputDevice === 'TOUCH') {
+      this.clearKMState();
+      this.clearControllerState();
+      this.clearTouchState();
     }
   }
 
@@ -317,10 +332,11 @@ export class InputManager {
   // ═══════════════════════════════════════════════════════════════════════════════
   private _handleKeyDownEvent(e: KeyboardEvent) {
     // If using controller, KB input switches to KM mode
-    if (this.settings.inputDevice === 'CONTROLLER') {
+    if (this.settings.inputDevice === 'CONTROLLER' || this.settings.inputDevice === 'TOUCH') {
       console.log('[InputManager] Keyboard input detected, switching to KB/M mode');
       this.settings.inputDevice = 'KM';
       this.clearControllerState();
+      this.clearTouchState();
     }
     
     if (this.stateProxy?.isSpectating) return;
@@ -341,10 +357,14 @@ export class InputManager {
   }
 
   private _handleMouseDownEvent(e: MouseEvent) {
+    // Ignore synthesized mouse events while touch controls are active
+    if (this.settings.inputDevice === 'TOUCH') return;
+
     // If using controller, mouse input switches to KM mode
     if (this.settings.inputDevice === 'CONTROLLER') {
       this.settings.inputDevice = 'KM';
       this.clearControllerState();
+      this.clearTouchState();
     }
     
     const s = this.stateProxy;
@@ -436,14 +456,17 @@ export class InputManager {
     // Clear ALL input state on blur
     this.clearKMState();
     this.clearControllerState();
+    this.clearTouchState();
 
     const s = this.stateProxy;
-    if (s?.hasStarted && !s.isPaused && !s.isSpectating && !s.isGameOver && !s.isConsoleOpen && !s.isDebugActive) {
+    if (s?.hasStarted && !s.isPaused && !s.isSpectating && !s.isGameOver && !s.isConsoleOpen && !s.isDebugActive && this.settings.inputDevice !== 'TOUCH') {
       this.onPause?.(true);
     }
   }
 
   private _handlePointerLockChange() {
+    if (this.settings.inputDevice === 'TOUCH') return;
+
     const isLocked = document.pointerLockElement === this.canvas;
     const s = this.stateProxy;
     if (!s) return;
@@ -472,6 +495,7 @@ export class InputManager {
     if (document.visibilityState === 'hidden') {
       this.clearKMState();
       this.clearControllerState();
+      this.clearTouchState();
     }
   }
 
@@ -499,8 +523,36 @@ export class InputManager {
   public reset() {
     this.clearKMState();
     this.clearControllerState();
+    this.clearTouchState();
     this.actionStates.clear();
     this.previousActionStates.clear();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // TOUCH INPUT INJECTION - Called by React TouchControls component
+  // ═══════════════════════════════════════════════════════════════════════════════
+  public injectTouchLook(dx: number, dy: number): void {
+    this.touchLookAccumulator.x += dx;
+    this.touchLookAccumulator.y += dy;
+  }
+
+  public setTouchMoveVector(x: number, y: number): void {
+    this.touchMoveVector.x = x;
+    this.touchMoveVector.y = y;
+  }
+
+  public setTouchAction(action: GameAction, held: boolean): void {
+    this.touchActionStates.set(action, held);
+  }
+
+  public clearTouchState(): void {
+    this.touchActionStates.clear();
+    this.touchLookAccumulator = { x: 0, y: 0 };
+    this.touchMoveVector = { x: 0, y: 0 };
+  }
+
+  public shouldUsePointerLock(): boolean {
+    return this.settings.inputDevice !== 'TOUCH';
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -528,6 +580,10 @@ export class InputManager {
    * For controller: checks cached state (controller is polled, not event-driven)
    */
   public isFireInputActive(): boolean {
+    if (this.settings.inputDevice === 'TOUCH') {
+      return this.touchActionStates.get(GameAction.FIRE) || false;
+    }
+
     if (this.settings.inputDevice === 'KM') {
       // Check raw mouse button state for immediate response
       const fireBinding = KM_BINDINGS[GameAction.FIRE];
@@ -575,8 +631,37 @@ export class InputManager {
     // Process inputs based on active device ONLY
     if (this.settings.inputDevice === 'KM') {
       this.updateKMInputs();
+    } else if (this.settings.inputDevice === 'TOUCH') {
+      this.updateTouchInputs();
     } else {
       this.updateControllerInputs();
+    }
+  }
+
+  /**
+   * Process Touch inputs - ONLY called when inputDevice === 'TOUCH'
+   */
+  private updateTouchInputs() {
+    // Consume touch look accumulator into mouseLook (reuses the same channel
+    // that PlayerMovementSystem already reads)
+    this.mouseLook.x = this.touchLookAccumulator.x * this.settings.touchSensitivity;
+    this.mouseLook.y = this.touchLookAccumulator.y * this.settings.touchSensitivity;
+    this.touchLookAccumulator.x = 0;
+    this.touchLookAccumulator.y = 0;
+
+    // Zero out gamepad look since we're not using it
+    this.gamepadLook.x = 0;
+    this.gamepadLook.y = 0;
+    this.mouseMovement.x = 0;
+    this.mouseMovement.y = 0;
+
+    // Copy touch movement vector (already normalized by TouchControls)
+    this._movementVector.x = this.touchMoveVector.x;
+    this._movementVector.y = this.touchMoveVector.y;
+
+    // Copy touch action states
+    for (const action of Object.values(GameAction)) {
+      this.actionStates.set(action, this.touchActionStates.get(action) || false);
     }
   }
 

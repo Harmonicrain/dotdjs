@@ -79,7 +79,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 |--------|------|-------------|
 | `warehouse` | WAREHOUSE 115 | An abandoned storage facility with tight corridors. |
 | `map_test` | Test Arena | A large octagonal stone arena surrounded by gates. |
-| `wipmap` | BARN | Work in progress map. |
+| `wipmap` | WIPMAP | Work in progress map. |
 
 ---
 
@@ -151,7 +151,7 @@ maps/                      # Data-driven map definitions
 ├── _template/             # Starter template for new maps
 ├── warehouse/             # Warehouse 115 map
 ├── mapTest/               # Test arena map
-├── wipmap/                # Barn (WIP map)
+├── wipmap/                # WIPMAP (WIP map)
 ├── ADDING_MAPS.md         # Step-by-step guide for adding maps
 ├── MapTextureResolver.ts  # Texture loading for maps
 ├── types.ts               # MapConfiguration, MapGameplayConfig, etc.

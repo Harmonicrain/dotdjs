@@ -173,7 +173,10 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                 className="w-full h-full block outline-none touch-none"
                 tabIndex={1}
                 onClick={() => {
-                    if (hasStarted && !isLoading) canvasRef.current?.requestPointerLock();
+                    const settings = useGameStore.getState().settings;
+                    if (hasStarted && !isLoading && settings.inputDevice !== 'TOUCH') {
+                        canvasRef.current?.requestPointerLock();
+                    }
                 }}
             />
 
@@ -210,6 +213,8 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                     onResume={() => setPaused(false)}
                     onRestart={() => { quitToMenu(); startGame(); }}
                     onCommand={(cmd) => lifecycleRef.current?.game?.stateManager?.eventBus.emit('COMMAND_REQUEST', cmd)}
+                    inputManager={lifecycleRef.current?.game?.inputManager ?? null}
+                    onPause={() => setPaused(true)}
                 />
             )}
         </>

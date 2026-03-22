@@ -100,6 +100,8 @@ interface MenuPanelProps {
   title?: string;
   titleRight?: React.ReactNode;
   maxWidth?: string;
+  height?: string;
+  minHeight?: string;
 }
 
 export const MenuPanel = ({
@@ -107,12 +109,16 @@ export const MenuPanel = ({
   title,
   titleRight,
   maxWidth = '560px',
+  height,
+  minHeight,
 }: MenuPanelProps) => (
   <div
     style={{
       position: 'relative',
       width: '100%',
       maxWidth,
+      height,
+      minHeight,
       display: 'flex',
       flexDirection: 'column',
       border: '1px solid rgba(139,0,0,0.45)',
@@ -181,7 +187,7 @@ export const MenuPanel = ({
     )}
 
     {/* Content */}
-    <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+    <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1, minHeight: 0 }}>
       {children}
     </div>
   </div>
