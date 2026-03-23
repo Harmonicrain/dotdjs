@@ -102,14 +102,16 @@ export const MainMenu = ({
               fontWeight: 600,
               letterSpacing: '0.02em',
               lineHeight: 1,
-              color: isActive ? '#FF9A00' : '#FFFFFF',
+              color: isActive ? '#FF6A00' : 'rgba(200,200,200,0.85)',
               textShadow: isActive
-                ? '0 0 15px rgba(255,154,0,0.5), 0 0 30px rgba(255,100,0,0.2)'
-                : '2px 2px 4px rgba(0,0,0,0.8)',
+                ? '0 0 15px rgba(255,60,0,0.5), 0 0 30px rgba(255,30,0,0.25), 0 0 60px rgba(139,0,0,0.15)'
+                : '2px 2px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)',
               opacity: ready ? 1 : 0,
               transform: isActive ? 'scale(1.03)' : 'scale(1)',
               transformOrigin: 'left center',
-              animation: isActive ? 'text-pulse 2.5s ease-in-out infinite' : 'none',
+              animation: isActive
+                ? 'text-pulse 2.5s ease-in-out infinite, menu-text-flicker 25s ease-in-out infinite'
+                : 'none',
               transition: [
                 'color 0.1s ease',
                 'text-shadow 0.1s ease',

@@ -42,7 +42,7 @@ export const MenuShell = ({
   }, []);
 
   return (
-    <div className="absolute inset-0 z-50 overflow-hidden select-none pointer-events-auto">
+    <div className="absolute inset-0 z-50 overflow-hidden select-none pointer-events-auto menu-screen-flicker">
       {/* ── Background Image ──────────────────────────────────── */}
       <div
         className="absolute inset-0"
@@ -56,25 +56,50 @@ export const MenuShell = ({
       />
 
       {/* ── Cinematic Overlays ────────────────────────────────── */}
+      {/* Vignette - deeper and more oppressive */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.6) 100%)',
+          background: 'radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.85) 100%)',
           zIndex: 5,
         }}
       />
+      {/* Dark breathing overlay */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.03]"
+        className="absolute inset-0 pointer-events-none menu-dark-breathe"
+        style={{
+          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.4) 100%)',
+          zIndex: 5,
+        }}
+      />
+      {/* CRT scan lines */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.04]"
         style={{
           backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
           zIndex: 6,
         }}
       />
+      {/* Grunge / dirt overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(circle at 15% 85%, rgba(80,0,0,0.12) 0%, transparent 30%),' +
+            'radial-gradient(circle at 85% 15%, rgba(80,0,0,0.08) 0%, transparent 25%),' +
+            'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.15) 0%, transparent 60%)',
+          zIndex: 6,
+        }}
+      />
+      {/* Film grain noise */}
+      <div className="menu-grain" />
+      {/* VHS scanline bar */}
+      <div className="menu-vhs-bar" />
 
       {/* ── Logo ──────────────────────────────────────────────── */}
       {showLogo && (
         <div
-          className="absolute pointer-events-none"
+          className="absolute pointer-events-none menu-chroma-shift"
           style={{
             top: '12%',
             left: '7%',
@@ -87,11 +112,12 @@ export const MenuShell = ({
           <img
             src="/logo.png"
             alt="DOM OF THE DEAD"
+            className="animate-title-glow"
             style={{
               width: isCompactHeight
                 ? 'clamp(250px, 34vw, 360px)'
                 : 'clamp(390px, 39vw, 600px)',
-              filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.9))',
+              filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.95)) drop-shadow(0 0 30px rgba(139,0,0,0.3))',
             }}
             draggable={false}
           />
