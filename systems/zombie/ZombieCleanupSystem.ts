@@ -66,7 +66,9 @@ export const createZombieCleanupSystem = (ctx: IZombieCleanupContext): System =>
                 }
 
                 // --- OUT OF BOUNDS / STUCK CLEANUP (Authority Only) ---
-                if (isAuthority && !ctx.gameState.isPaused) {
+                // In multiplayer, pause only affects local player UI — game logic continues
+                const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+                if (isAuthority && !(ctx.gameState.isPaused && !isMultiplayer)) {
                     const isStuckTimeout = (now - z.spawnTime > zc.STUCK_TIMEOUT) && !z.isCrawling && z.type === 'ZOMBIE';
                     if (z.mesh.position.y < -10 || isStuckTimeout) {
                         // Remove from Recast Crowd before releasing mesh

@@ -200,7 +200,10 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         },
         update: (dt: number, now: number) => {
             const isDebugActive = ctx.debugSelection.isActive;
-            if (!ctx.gameState.hasStarted || (ctx.gameState.isPaused && !isDebugActive)) return;
+            // In multiplayer, pause only affects local player UI — game logic continues
+            const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+            const effectivelyPaused = ctx.gameState.isPaused && !isMultiplayer;
+            if (!ctx.gameState.hasStarted || (effectivelyPaused && !isDebugActive)) return;
 
             const scene = ctx.scene;
             const engine = ctx.gameEngine;

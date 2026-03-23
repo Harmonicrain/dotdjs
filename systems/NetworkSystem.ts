@@ -134,7 +134,14 @@ export const createNetworkSystem = (ctx: INetworkContext): System => {
                     s.x = z.mesh.position.x;
                     s.y = z.mesh.position.y;
                     s.z = z.mesh.position.z;
-                    s.rot = z.mesh.rotation.y;
+                    // rotationQuaternion takes precedence over rotation in Babylon.js;
+                    // extract yaw from the quaternion when it exists (set by applyRotationSmoothing)
+                    if (z.mesh.rotationQuaternion) {
+                        const q = z.mesh.rotationQuaternion;
+                        s.rot = Math.atan2(2 * (q.y * q.w + q.x * q.z), 1 - 2 * (q.x * q.x + q.y * q.y));
+                    } else {
+                        s.rot = z.mesh.rotation.y;
+                    }
                     s.isBurning = z.isBurning;
                     s.health = z.health;
                     s.maxHealth = z.maxHealth;

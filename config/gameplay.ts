@@ -184,6 +184,10 @@ export const DEFAULT_SETTINGS = {
   controllerSensitivity: 1.0,
   controllerDeadzone: 0.15,
   touchSensitivity: 5.0,
+  masterVolume: 1.0,
+  weaponVolume: 1.0,
+  zombieVolume: 1.0,
+  effectsVolume: 1.0,
 };
 
 // Speeds are per-frame (approx 1/60th of a second) relative to 1 unit = 1 meter

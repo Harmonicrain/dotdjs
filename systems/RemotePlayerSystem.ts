@@ -26,7 +26,9 @@ export const createRemotePlayerSystem = (ctx: IRemoteContext): System => {
         name: 'remotePlayer',
 
         update: (_dt: number, now: number) => {
-            if (!ctx.gameState.hasStarted || ctx.gameState.isPaused) return;
+            // In multiplayer, pause only affects local player UI — game logic continues
+            const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+            if (!ctx.gameState.hasStarted || (ctx.gameState.isPaused && !isMultiplayer)) return;
 
             const remoteVisual = ctx.remote.visuals;
             if (!remoteVisual) return;

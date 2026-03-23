@@ -33,7 +33,9 @@ export const createZombieSpawnSystem = (ctx: ISpawnAIContext): System => {
     return {
         name: 'zombieSpawnAI',
         update: (dt: number, _now: number) => {
-            if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
+            // In multiplayer, pause only affects local player UI — game logic continues
+            const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+            if (ctx.gameState.isDebugMode || (ctx.gameState.isPaused && !isMultiplayer)) return;
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
             if (!isAuthority) return;
 

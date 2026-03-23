@@ -288,7 +288,11 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                 }
             }
 
-            const isLogicFrozen = sm.gameState.isPaused || sm.isConsoleOpen || sm.debugSelection.isActive;
+            // In multiplayer, pause only affects local player UI — game logic keeps running
+            // so the host pausing doesn't freeze the world for other players.
+            const isMultiplayer = currentGameMode !== 'SOLO';
+            const isPausedForLogic = sm.gameState.isPaused && !isMultiplayer;
+            const isLogicFrozen = isPausedForLogic || sm.isConsoleOpen || sm.debugSelection.isActive;
             sm.gameState.isDebugMode = isLogicFrozen;
             sm.ui.setIsDebugMode(isLogicFrozen);
             sm.ui.setIsDebugActive(sm.debugSelection.isActive);
@@ -298,7 +302,7 @@ export const createGameLoop = (deps: GameLoopDeps) => {
                 sm.navPlugin.timeFactor = isLogicFrozen ? 0 : 1;
             }
 
-            if (sm.gameState.isPaused || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
+            if (isPausedForLogic || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
                 return;
             }
 

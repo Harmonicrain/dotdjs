@@ -21,6 +21,7 @@ import { InputManager } from '../engine/InputManager';
 import { SystemManager } from '../engine/SystemManager';
 import { loadTextureConfig } from '../maps/MapTextureResolver';
 import { createGameLoop } from './GameLoop';
+import { useGameStore } from '../store/useGameStore';
 import type { PlayerFields, GameFields } from '../store/useGameStore';
 import { resetPlayerWeapons } from '../engine/weaponResetUtils';
 
@@ -174,6 +175,18 @@ export class Game {
 
         const soundManager = new SoundManager(this.scene);
         sm.soundManager = soundManager;
+
+        // Apply saved volume settings from store and subscribe to changes
+        const applyVolumeSettings = (s: { masterVolume: number; weaponVolume: number; zombieVolume: number; effectsVolume: number }) => {
+            soundManager.setMasterVolume(s.masterVolume);
+            soundManager.setCategoryVolume('weapon', s.weaponVolume);
+            soundManager.setCategoryVolume('zombie', s.zombieVolume);
+            soundManager.setCategoryVolume('effects', s.effectsVolume);
+        };
+        applyVolumeSettings(useGameStore.getState().settings);
+        useGameStore.subscribe((state) => {
+            applyVolumeSettings(state.settings);
+        });
 
         const zombieManager = new ZombieManager(
             this.scene,

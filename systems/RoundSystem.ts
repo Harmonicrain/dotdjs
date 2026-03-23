@@ -111,7 +111,10 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
         name: 'round',
         update: (dt: number, now: number) => {
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-            if (!isAuthority || !ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isGameOver || ctx.gameState.isDebugMode) return;
+            // In multiplayer, pause only affects local player UI — game logic continues
+            const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+            const effectivelyPaused = ctx.gameState.isPaused && !isMultiplayer;
+            if (!isAuthority || !ctx.gameState.hasStarted || effectivelyPaused || ctx.gameState.isGameOver || ctx.gameState.isDebugMode) return;
 
             const gs = ctx.gameState;
             const rc = ctx.configManager.round;

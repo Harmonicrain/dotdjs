@@ -6,7 +6,7 @@ interface SettingsMenuProps {
   onBack?: () => void;
 }
 
-type SettingsCategoryId = 'PLAYER' | 'DISPLAY' | 'GAMEPLAY' | 'CONTROLS';
+type SettingsCategoryId = 'PLAYER' | 'DISPLAY' | 'GAMEPLAY' | 'AUDIO' | 'CONTROLS';
 
 const RESOLUTION_SCALES = [
   { value: 0.5, label: '0.5×' },
@@ -42,6 +42,11 @@ const SETTINGS_CATEGORIES: {
     id: 'GAMEPLAY',
     label: 'GAMEPLAY',
     description: 'Core in-game camera behavior.',
+  },
+  {
+    id: 'AUDIO',
+    label: 'AUDIO',
+    description: 'Volume controls for weapons, zombies, and effects.',
   },
   {
     id: 'CONTROLS',
@@ -383,6 +388,56 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
             onChange={(v) => updateSettings({ fov: v })}
           />
         </SettingRow>
+      );
+    }
+
+    if (selectedCategory === 'AUDIO') {
+      return (
+        <>
+          <SettingRow>
+            <RowHeader label="Master Volume" value={`${Math.round(settings.masterVolume * 100)}%`} />
+            <StyledSlider
+              min={0}
+              max={1}
+              step={0.05}
+              value={settings.masterVolume}
+              onChange={(v) => updateSettings({ masterVolume: v })}
+            />
+          </SettingRow>
+
+          <SettingRow>
+            <RowHeader label="Weapon Sounds" value={`${Math.round(settings.weaponVolume * 100)}%`} />
+            <StyledSlider
+              min={0}
+              max={1}
+              step={0.05}
+              value={settings.weaponVolume}
+              onChange={(v) => updateSettings({ weaponVolume: v })}
+            />
+          </SettingRow>
+
+          <SettingRow>
+            <RowHeader label="Zombie Sounds" value={`${Math.round(settings.zombieVolume * 100)}%`} />
+            <StyledSlider
+              min={0}
+              max={1}
+              step={0.05}
+              value={settings.zombieVolume}
+              onChange={(v) => updateSettings({ zombieVolume: v })}
+            />
+          </SettingRow>
+
+          <SettingRow>
+            <RowHeader label="Effects & Power-Ups" value={`${Math.round(settings.effectsVolume * 100)}%`} />
+            <StyledSlider
+              min={0}
+              max={1}
+              step={0.05}
+              value={settings.effectsVolume}
+              onChange={(v) => updateSettings({ effectsVolume: v })}
+            />
+          </SettingRow>
+        </>
       );
     }
 

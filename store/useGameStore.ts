@@ -79,6 +79,10 @@ export interface ExtendedSettings {
   graphicsQuality: GraphicsQuality;
   fov: number;
   showFPS: boolean;
+  masterVolume: number;
+  weaponVolume: number;
+  zombieVolume: number;
+  effectsVolume: number;
 }
 
 export interface GameFields {

@@ -236,7 +236,10 @@ export const getTargetPosition = (
  */
 export function isZombieSystemActive(ctx: { gameModeRef: { current: string }, gameState: { isDebugMode?: boolean, isPaused: boolean } }): boolean {
     const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-    return isAuthority && !ctx.gameState.isDebugMode && !ctx.gameState.isPaused;
+    // In multiplayer, pause only affects local player UI — game logic continues
+    const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+    const effectivelyPaused = ctx.gameState.isPaused && !isMultiplayer;
+    return isAuthority && !ctx.gameState.isDebugMode && !effectivelyPaused;
 }
 
 /**

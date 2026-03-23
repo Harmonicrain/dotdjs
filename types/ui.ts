@@ -281,4 +281,8 @@ export type GameMessage =
     | { type: 'SELF_REVIVE'; playerName: string }
     | { type: 'HOST_LOADED' }
     | { type: 'POINTS_UPDATE'; points: number; totalEarned: number }
-    | { type: 'INTERACT_REJECT'; interactionType: string; points: number };
+    | { type: 'INTERACT_REJECT'; interactionType: string; points: number }
+    | { type: 'WALL_BUY_CONFIRM'; weaponId: string }
+    | { type: 'PERK_CONFIRM'; perkId: string; perkType: string }
+    | { type: 'PACK_A_PUNCH_CONFIRM'; weaponId: string }
+    | { type: 'BOX_TAKE_CONFIRM'; weaponId: string };

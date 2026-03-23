@@ -4,6 +4,7 @@ import { GameMessage, PowerUpType, DoorState, ZombieSyncData } from '../types/in
 import { StoredPos } from '../types/network';
 import { StateManager } from '../state/StateManager';
 import { GameFields, PlayerFields, RemoteFields } from '../store/useGameStore';
+import { handleWeaponPickup } from '../systems/interaction/weaponPickupUtils';
 
 export interface NetworkHandlerActions {
     updateGame: (updates: Partial<GameFields>) => void;
@@ -248,6 +249,8 @@ export const createNetworkMessageHandler = (
                     const newPoints = clientPoints - perkMsg.cost;
                     cachedClient.clientPoints = newPoints;
                     sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                    // Tell the CLIENT to actually apply the perk
+                    sm.send({ type: 'PERK_CONFIRM', perkId: perkMsg.perkId, perkType: perkMsg.perkType });
                 } else {
                     sm.send({ type: 'INTERACT_REJECT', interactionType: 'PERK', points: clientPoints });
                 }
@@ -262,6 +265,8 @@ export const createNetworkMessageHandler = (
                     const newPoints = clientPoints - wbMsg.cost;
                     cachedClient.clientPoints = newPoints;
                     sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                    // Tell the CLIENT to actually pick up / refill the weapon
+                    sm.send({ type: 'WALL_BUY_CONFIRM', weaponId: wbMsg.weaponId });
                 } else {
                     sm.send({ type: 'INTERACT_REJECT', interactionType: 'WALL_BUY', points: clientPoints });
                 }
@@ -276,6 +281,8 @@ export const createNetworkMessageHandler = (
                     const newPoints = clientPoints - papMsg.cost;
                     cachedClient.clientPoints = newPoints;
                     sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
+                    // Tell the CLIENT to actually upgrade the weapon
+                    sm.send({ type: 'PACK_A_PUNCH_CONFIRM', weaponId: papMsg.weaponId });
                 } else {
                     sm.send({ type: 'INTERACT_REJECT', interactionType: 'PACK_A_PUNCH', points: clientPoints });
                 }
@@ -324,7 +331,11 @@ export const createNetworkMessageHandler = (
                             sm.send({ type: 'INTERACT_REJECT', interactionType: 'BOX', points: clientPoints });
                         }
                     } else {
-                        sm.mysteryBoxSystem.interact(playerName);
+                        const takeResult = sm.mysteryBoxSystem.interact(playerName);
+                        // If the CLIENT took a weapon, send it back so they can add it to inventory
+                        if (typeof takeResult === 'string' && takeResult !== 'NO_POINTS') {
+                            sm.send({ type: 'BOX_TAKE_CONFIRM', weaponId: takeResult });
+                        }
                     }
                 }
                 break;
@@ -398,6 +409,55 @@ export const createNetworkMessageHandler = (
                 // HOST rejected an interaction — sync CLIENT points to HOST's authoritative value
                 sm.gameState.points = msg.points;
                 sm.setPoints(msg.points);
+                break;
+
+            case 'WALL_BUY_CONFIRM':
+                // HOST confirmed the wall buy — give the CLIENT the weapon
+                handleWeaponPickup(sm, msg.weaponId);
+                break;
+
+            case 'PERK_CONFIRM': {
+                // HOST confirmed the perk purchase — apply it on the CLIENT
+                const perkId = msg.perkId;
+                const perkType = msg.perkType;
+                sm.gameState.perkStates[perkId] = true;
+                sm.setPerks(sm.gameState.perkStates);
+                if (perkType === 'juggernog') {
+                    const juggHealth = sm.configManager.gameplay.PLAYER_JUGG_HEALTH;
+                    sm.gameState.maxHealth = juggHealth;
+                    sm.gameState.health = juggHealth;
+                    sm.setHealth(juggHealth);
+                }
+                break;
+            }
+
+            case 'PACK_A_PUNCH_CONFIRM': {
+                // HOST confirmed Pack-a-Punch — upgrade the CLIENT's weapon
+                const weapon = sm.gameState.weapons.find(w => w.id === msg.weaponId);
+                if (weapon && !weapon.isPacked) {
+                    const upgradeConfig = sm.configManager.upgradedWeapons[weapon.id];
+                    if (upgradeConfig) {
+                        Object.assign(weapon, upgradeConfig);
+                        weapon.currentAmmo = weapon.clipSize;
+                        weapon.currentReserve = weapon.maxReserve;
+                        weapon.isPacked = true;
+                        const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
+                        if (activeWeapon === weapon) {
+                            sm.setAmmo(weapon.currentAmmo);
+                            sm.setReserveAmmo(weapon.currentReserve);
+                            sm.setWeaponName(weapon.name);
+                            sm.setWeaponId(weapon.id);
+                        }
+                        sm.setInteractionMsg("WEAPON UPGRADED!");
+                        sm.timerManager.schedule('pap_msg_clear', sm.configManager.visuals.HUD_MSG_DURATION || 2000, () => sm.setInteractionMsg(null));
+                    }
+                }
+                break;
+            }
+
+            case 'BOX_TAKE_CONFIRM':
+                // HOST confirmed mystery box take — give the CLIENT the weapon
+                handleWeaponPickup(sm, msg.weaponId);
                 break;
 
             case 'RESPAWN':
