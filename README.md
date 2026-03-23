@@ -41,9 +41,11 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 ### 💰 Economy & Progression
 *   **Points System**: Earn points for hits (10), kills (80), headshots (+20 bonus), repairs (10, capped at 50/round), and revives (50).
 *   **Perks** (default costs, can be overridden per map):
-    *   **Juggernog** (2500 pts): Increases health from 100 to 250.
+    *   **Juggernog** (2000 pts): Increases health from 100 to 250.
     *   **Speed Cola** (3000 pts): Reduces reload times significantly.
     *   **Quick Revive** (1500 pts): Faster revives and solo self-revive capability.
+    *   **Double Tap Root Beer** (2000 pts): Increases fire rate by ~33%.
+    *   **Mule Kick** (4000 pts): Allows carrying a third weapon.
 *   **Mystery Box**: Random weapon generator (costs 950 points).
 *   **Power System**: Unlockable map areas, Pack-a-Punch machine, and perks.
 *   **Pack-a-Punch** (4500 pts): Upgrades current weapon. Ammo refill costs 2500 pts.
@@ -54,6 +56,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 *   **Double Points**: 2x point multiplier (30 second duration).
 *   **Nuke**: Kills all active zombies instantly (+400 points).
 *   **Carpenter**: Repairs all window barriers (+200 points).
+*   **Fire Sale**: Reduces Mystery Box cost to 10 points and opens all box locations (30 second duration).
 
 ### 🌐 Multiplayer
 *   **P2P Networking**: Host/Client architecture using **PeerJS**.
@@ -89,6 +92,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 
 ### Core Imports & Libraries
 *   **[@babylonjs/core](https://www.npmjs.com/package/@babylonjs/core)**: 3D rendering and physics engine.
+*   **[@babylonjs/addons](https://www.npmjs.com/package/@babylonjs/addons)**: Additional Babylon.js utilities and helpers.
 *   **[@babylonjs/loaders](https://www.npmjs.com/package/@babylonjs/loaders)**: GLTF/GLB asset support.
 *   **[@recast-navigation/core](https://www.npmjs.com/package/@recast-navigation/core)**: Navigation mesh runtime.
 *   **[@recast-navigation/generators](https://www.npmjs.com/package/@recast-navigation/generators)**: Navigation mesh generation.
@@ -280,6 +284,7 @@ Open the debug console with **`** (backtick) and enter commands:
 | `/debug` | Toggle debug mode (freeze logic, inspect objects) |
 | `/debug_controls` | Toggle input/jitter debugging overlay |
 | `/debug_pbr` | Generate PBR material and lighting report |
+| `/render_stats` | Toggle render stats overlay (draw calls, materials, shadows, lights) |
 | `/pos` | Show player position and rotation |
 | `/tp <x> <y> <z>` | Teleport to coordinates |
 | `/points <amt>` | Add points |
@@ -287,8 +292,8 @@ Open the debug console with **`** (backtick) and enter commands:
 | `/ammo` | Refill all ammo |
 | `/round <n>` | Set current round |
 | `/kill_all` | Kill all active zombies |
-| `/powerup <type>` | Spawn powerup (instakill, max_ammo, double_points, nuke, carpenter) |
-| `/show_zones` | Toggle zone mesh visibility |
+| `/perk <id>` | Grant a perk (juggernog, speedCola, quickRevive, doubleTap, muleKick) |
+| `/powerup <type>` | Spawn powerup (instakill, max_ammo, double_points, nuke, carpenter, fire_sale) |
 | `/show_navmesh` | Toggle or create navmesh debug mesh |
 | `/show_pathfinding` | Toggle zombie path visualization (green=zombie, orange=hellhound) |
 | `/wireframe` | Toggle scene wireframe mode |
@@ -312,7 +317,7 @@ Open the debug console with **`** (backtick) and enter commands:
     ```
 
 3.  **Open Browser**:
-    Navigate to `http://localhost:5173`.
+    Navigate to `http://localhost:3000`.
 
 4.  **Build for Production**:
     ```bash
