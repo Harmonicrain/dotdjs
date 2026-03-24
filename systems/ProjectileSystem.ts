@@ -244,7 +244,10 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
             up,
             forward,
             weaponName: activeWeapon?.name || 'unknown',
+            weaponId: activeWeapon?.id || 'unknown',
             isAds,
+            hipPos: { x: activeWeapon?.hipPos?.x ?? 0, y: activeWeapon?.hipPos?.y ?? 0 },
+            barrelLength: activeWeapon?.barrelLength ?? 0,
         });
     };
 

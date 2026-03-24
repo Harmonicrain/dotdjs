@@ -45,7 +45,7 @@ export const semiAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: -0.0001, y: -0.2170, z: 0.7400 },
       barrelLength: 0.7,
       reloadTime: 2200,
-      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 }
+      hipFireOriginCorrection: { up: 0.1493, right: 0.0589 }
     },
     upgrade: {
       name: "Punisher 30",

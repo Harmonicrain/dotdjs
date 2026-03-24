@@ -56,7 +56,10 @@ export interface BulletDebugInfo {
     up: number;
     forward: number;
     weaponName: string;
+    weaponId: string;
     isAds: boolean;
+    hipPos: { x: number; y: number };
+    barrelLength: number;
 }
 
 /** State for the weapon ADS position debug tool (/weapon_ads_debug command) */
