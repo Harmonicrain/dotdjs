@@ -14,11 +14,11 @@ export const WarehouseMapDefinition: MapDefinition = {
     assetUrls: {
         models: {
             zombie: "/models/zombie.glb",
-            juggernog: "/models/juggernog.glb",
-            speed_cola: "/models/speedcola.glb",
-            quick_revive: "/models/quickrevive.glb",
-            pack_a_punch: "/models/packapunch.glb",
-            power_switch: "/models/switch.glb"
+            juggernog: "/models/perks/juggernog.glb",
+            speed_cola: "/models/perks/speedcola.glb",
+            quick_revive: "/models/perks/quickrevive.glb",
+            pack_a_punch: "/models/perks/packapunch.glb",
+            power_switch: "/models/furniture/switch.glb"
         },
         textures: {
             wall: "/textures/warehouse_walls.png",
@@ -122,8 +122,8 @@ export const WarehouseMapDefinition: MapDefinition = {
         double_tap:   { scaling: [-1.50,   1.50,   1.50  ] },
         pack_a_punch: { scaling: [-1.5,     1.5,     1.5    ] },
         power_switch: { scaling: [-0.0025,  0.0025,  0.0025 ] },
-        m1911_fps:    { scaling: [ 0.00012, 0.00012, 0.00012] },
-        m1911_world:  { scaling: [ 0.00012, 0.00012, 0.00012] },
+        m1911_fps:    { scaling: [ 0.6, 0.6, 0.6] },
+        m1911_world:  { scaling: [ 0.6, 0.6, 0.6] },
     },
     
     config: {

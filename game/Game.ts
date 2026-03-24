@@ -309,6 +309,8 @@ export class Game {
             zombies: sm.zombies,
             gameModeRef: sm.gameModeRef,
             debugSelection: sm.debugSelection,
+            bulletDebug: sm.bulletDebug,
+            setBulletDebugInfo: (v) => sm.ui.setBulletDebugInfo(v),
             send: (msg) => sm.send(msg),
             addPoints: (amt) => sm.addPoints(amt),
             hasDoublePoints: () => sm.hasDoublePoints(),
@@ -851,6 +853,8 @@ export class Game {
             rifle: meshes.rifle,
             shotgun: meshes.shotgun,
             famas: meshes.famas,
+            fn_fal: meshes.fn_fal,
+            m1_garand: meshes.m1_garand,
             ray_gun: meshes.ray_gun,
         };
         this.knifeMesh = meshes.knife as BABYLON.AbstractMesh;

@@ -285,4 +285,6 @@ export type GameMessage =
     | { type: 'WALL_BUY_CONFIRM'; weaponId: string }
     | { type: 'PERK_CONFIRM'; perkId: string; perkType: string }
     | { type: 'PACK_A_PUNCH_CONFIRM'; weaponId: string }
-    | { type: 'BOX_TAKE_CONFIRM'; weaponId: string };
+    | { type: 'BOX_TAKE_CONFIRM'; weaponId: string }
+    | { type: 'CLIENT_ZOMBIE_HIT'; zombieId: string; damage: number; isHeadshot: boolean; isLegHit: boolean; meshName: string }
+    | { type: 'CLIENT_EXPLOSION_HIT'; x: number; y: number; z: number; splashRadius: number; splashDamage: number; selfDamageMultiplier?: number; isPacked: boolean };

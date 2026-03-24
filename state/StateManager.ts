@@ -2,7 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { GAME_CONFIG, WEAPON_CONFIGS } from '../config';
 import { GameStateData, WeaponState, MysteryBox, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
 import { MysteryBoxSystem } from '../types/systems';
-import { DebugSelectionState, ShowPathfindingState, ScaleWeaponModeState, DebugControlsModeState, RenderStatsModeState, DEFAULT_DEBUG_SELECTION, DEFAULT_SHOW_PATHFINDING, DEFAULT_SCALE_WEAPON_MODE, DEFAULT_DEBUG_CONTROLS_MODE, DEFAULT_RENDER_STATS_MODE } from '../types/debug';
+import { DebugSelectionState, ShowPathfindingState, ScaleWeaponModeState, DebugControlsModeState, RenderStatsModeState, BulletDebugState, WeaponAdsDebugState, DEFAULT_DEBUG_SELECTION, DEFAULT_SHOW_PATHFINDING, DEFAULT_SCALE_WEAPON_MODE, DEFAULT_DEBUG_CONTROLS_MODE, DEFAULT_RENDER_STATS_MODE, DEFAULT_BULLET_DEBUG, DEFAULT_WEAPON_ADS_DEBUG } from '../types/debug';
 import { GameEngine } from '../game/GameEngine';
 import { TimerManager } from '../engine/TimerManager';
 import { ZoneSystem } from '../systems/ZoneSystem';
@@ -64,6 +64,8 @@ export class StateManager {
     public scaleWeaponMode: ScaleWeaponModeState = { ...DEFAULT_SCALE_WEAPON_MODE };
     public debugControlsMode: DebugControlsModeState = { ...DEFAULT_DEBUG_CONTROLS_MODE };
     public renderStatsMode: RenderStatsModeState = { ...DEFAULT_RENDER_STATS_MODE };
+    public bulletDebug: BulletDebugState = { ...DEFAULT_BULLET_DEBUG };
+    public weaponAdsDebug: WeaponAdsDebugState = { ...DEFAULT_WEAPON_ADS_DEBUG };
 
     // Level Data
     public staticLevelMeshes: Set<BABYLON.AbstractMesh> = new Set();

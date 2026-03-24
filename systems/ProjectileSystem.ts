@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { GameMessage, PowerUpType, GameStateData, Zombie, Projectile, HellhoundState } from '../types/index';
+import { BulletDebugState, BulletDebugInfo } from '../types/debug';
 import { EventBus } from '../engine/EventBus';
 import { System } from '../types/systems';
 import { COMBAT_CONFIG } from '../config';
@@ -42,6 +43,8 @@ export interface IProjectileContext {
         isActive: boolean;
         selectedMesh: BABYLON.AbstractMesh | null;
     };
+    bulletDebug: BulletDebugState;
+    setBulletDebugInfo(v: BulletDebugInfo | null): void;
     send(data: GameMessage): void;
     addPoints(amount: number): void;
     hasDoublePoints(): boolean;
@@ -181,6 +184,86 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
     };
     ctx.eventBus.on('REMOTE_SHOOT', handleRemoteShoot);
 
+    // ── Bullet Debug: WASD keyboard movement ──────────────────────────────────
+    const _bdRight = new BABYLON.Vector3();
+    const _bdUp = new BABYLON.Vector3();
+    const _bdFwd = new BABYLON.Vector3();
+    const _bdOffset = new BABYLON.Vector3();
+
+    // Track which keys are held for smooth continuous movement
+    const bdKeys: Record<string, boolean> = {};
+    const onBdKeyDown = (evt: KeyboardEvent) => { bdKeys[evt.key.toLowerCase()] = true; };
+    const onBdKeyUp = (evt: KeyboardEvent) => { bdKeys[evt.key.toLowerCase()] = false; };
+
+    /** Move the frozen bullet based on held keys. Called each frame. */
+    const updateBulletDebugMovement = (dt: number) => {
+        const bd = ctx.bulletDebug;
+        if (!bd.frozenProjectile) return;
+
+        // Shift = fast mode, no shift = normal (precise)
+        const baseSpeed = bdKeys['shift'] ? 0.02 : 0.005;
+        const speed = baseSpeed * dt;
+
+        const cam = ctx.camera;
+        cam.getDirectionToRef(BABYLON.Vector3.Right(), _bdRight);
+        cam.getDirectionToRef(BABYLON.Vector3.Up(), _bdUp);
+        cam.getDirectionToRef(BABYLON.Vector3.Forward(), _bdFwd);
+
+        let moved = false;
+        if (bdKeys['d']) { bd.frozenProjectile.position.addInPlace(_bdRight.scale(speed)); moved = true; }
+        if (bdKeys['a']) { bd.frozenProjectile.position.addInPlace(_bdRight.scale(-speed)); moved = true; }
+        if (bdKeys['w']) { bd.frozenProjectile.position.addInPlace(_bdUp.scale(speed)); moved = true; }
+        if (bdKeys['s']) { bd.frozenProjectile.position.addInPlace(_bdUp.scale(-speed)); moved = true; }
+        if (bdKeys['e']) { bd.frozenProjectile.position.addInPlace(_bdFwd.scale(speed)); moved = true; }
+        if (bdKeys['q']) { bd.frozenProjectile.position.addInPlace(_bdFwd.scale(-speed)); moved = true; }
+
+        if (moved) updateBulletDebugOverlay();
+    };
+
+    /** Compute camera-relative offset and push to UI overlay. */
+    const updateBulletDebugOverlay = () => {
+        const bd = ctx.bulletDebug;
+        if (!bd.frozenProjectile) return;
+
+        const cam = ctx.camera;
+        _bdOffset.copyFrom(bd.frozenProjectile.position).subtractInPlace(cam.position);
+
+        cam.getDirectionToRef(BABYLON.Vector3.Right(), _bdRight);
+        cam.getDirectionToRef(BABYLON.Vector3.Up(), _bdUp);
+        cam.getDirectionToRef(BABYLON.Vector3.Forward(), _bdFwd);
+
+        const right = BABYLON.Vector3.Dot(_bdOffset, _bdRight);
+        const up = BABYLON.Vector3.Dot(_bdOffset, _bdUp);
+        const forward = BABYLON.Vector3.Dot(_bdOffset, _bdFwd);
+
+        const activeWeapon = ctx.gameState.weapons[ctx.gameState.activeWeaponIndex];
+        const isAds = ctx.gameState.isAiming && !ctx.gameState.isReloading;
+
+        ctx.setBulletDebugInfo({
+            right,
+            up,
+            forward,
+            weaponName: activeWeapon?.name || 'unknown',
+            isAds,
+        });
+    };
+
+    let bulletDebugListenersAttached = false;
+    const attachBulletDebugListeners = () => {
+        if (bulletDebugListenersAttached) return;
+        window.addEventListener('keydown', onBdKeyDown);
+        window.addEventListener('keyup', onBdKeyUp);
+        bulletDebugListenersAttached = true;
+    };
+    const detachBulletDebugListeners = () => {
+        if (!bulletDebugListenersAttached) return;
+        window.removeEventListener('keydown', onBdKeyDown);
+        window.removeEventListener('keyup', onBdKeyUp);
+        // Clear all held keys
+        for (const k in bdKeys) bdKeys[k] = false;
+        bulletDebugListenersAttached = false;
+    };
+
     // ── Pick predicates using O(1) metadata/set lookups ───────────────────────
     const staticMeshes = ctx.staticLevelMeshes;
     const localPickPredicate = (mesh: BABYLON.AbstractMesh): boolean => {
@@ -197,6 +280,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
         name: 'projectile',
         dispose: () => {
             ctx.eventBus.off('REMOTE_SHOOT', handleRemoteShoot);
+            detachBulletDebugListeners();
         },
         update: (dt: number, now: number) => {
             const isDebugActive = ctx.debugSelection.isActive;
@@ -210,6 +294,54 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
             if (!scene || !engine) return;
 
             const projectiles = engine.activeProjectiles;
+
+            // ── Bullet Debug Mode ──────────────────────────────────────────
+            const bd = ctx.bulletDebug;
+            if (bd.isActive) {
+                attachBulletDebugListeners();
+
+                // Freeze any new (non-frozen) local projectiles
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    const p = projectiles[i];
+                    if (p.isRemote) continue;
+                    // If this projectile is NOT the current frozen one, it's new — freeze it
+                    if (p.mesh !== bd.frozenProjectile) {
+                        // Dispose the previous frozen bullet
+                        if (bd.frozenProjectile) {
+                            // Remove the old frozen projectile from active list
+                            for (let j = projectiles.length - 1; j >= 0; j--) {
+                                if (projectiles[j].mesh === bd.frozenProjectile) {
+                                    if (projectiles[j].trailParticleSystem) {
+                                        projectiles[j].trailParticleSystem!.dispose();
+                                    }
+                                    projectiles[j].mesh.setEnabled(false);
+                                    engine.projectilePool.release(projectiles[j]);
+                                    projectiles.splice(j, 1);
+                                    break;
+                                }
+                            }
+                        }
+                        // Freeze the new one
+                        p.speed = 0;
+                        p.life = 999999;
+                        p.mesh.isPickable = true; // Allow picking for drag
+                        p.mesh.scaling.setAll(3.0); // Make it easier to see and click
+                        bd.frozenProjectile = p.mesh;
+                        updateBulletDebugOverlay();
+                    }
+                }
+
+                // Process WASD movement + update overlay each frame
+                if (bd.frozenProjectile) {
+                    updateBulletDebugMovement(dt);
+                    updateBulletDebugOverlay();
+                }
+
+                // Don't process normal projectile logic in bullet debug mode
+                return;
+            } else {
+                detachBulletDebugListeners();
+            }
 
             // Skip all work when there are no projectiles
             if (projectiles.length === 0) return;
@@ -264,14 +396,28 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                             // Handle explosive projectile hit on zombie
                             if (p.isExplosive && p.splashRadius && p.splashDamage) {
                                 ctx.visualManager.createPlasmaExplosion(pick.pickedPoint!, p.isPacked);
-                                handleExplosion(
-                                    pick.pickedPoint!,
-                                    p.splashRadius,
-                                    p.splashDamage,
-                                    p.selfDamageMultiplier,
-                                    ctx,
-                                    p
-                                );
+                                if (isAuthority) {
+                                    handleExplosion(
+                                        pick.pickedPoint!,
+                                        p.splashRadius,
+                                        p.splashDamage,
+                                        p.selfDamageMultiplier,
+                                        ctx,
+                                        p
+                                    );
+                                } else {
+                                    // CLIENT: send explosion info to HOST for authoritative damage
+                                    ctx.send({
+                                        type: 'CLIENT_EXPLOSION_HIT',
+                                        x: pick.pickedPoint!.x,
+                                        y: pick.pickedPoint!.y,
+                                        z: pick.pickedPoint!.z,
+                                        splashRadius: p.splashRadius,
+                                        splashDamage: p.splashDamage,
+                                        selfDamageMultiplier: p.selfDamageMultiplier,
+                                        isPacked: !!p.isPacked,
+                                    });
+                                }
                             } else if (isAuthority) {
                                 const z = pick.pickedMesh.metadata?.zombie as Zombie | undefined;
                                 if (z) {
@@ -319,6 +465,21 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                                             ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos, p.direction);
                                         }
                                     }
+                                }
+                            } else {
+                                // CLIENT: send hit info to HOST for authoritative damage
+                                const z = pick.pickedMesh.metadata?.zombie as Zombie | undefined;
+                                if (z && !z.isDead) {
+                                    const isHeadshot = pick.pickedMesh.name.includes("head") || pick.pickedMesh.name.includes("Head");
+                                    const isLegHit = pick.pickedMesh.name.includes("leg");
+                                    ctx.send({
+                                        type: 'CLIENT_ZOMBIE_HIT',
+                                        zombieId: z.id,
+                                        damage: p.damage,
+                                        isHeadshot,
+                                        isLegHit,
+                                        meshName: pick.pickedMesh.name,
+                                    });
                                 }
                             }
                         } else {

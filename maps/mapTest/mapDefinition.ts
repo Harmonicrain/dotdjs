@@ -103,10 +103,10 @@ export const MapTestDefinition: MapDefinition = {
         quick_revive: { scaling: [-0.03,    0.03,    0.03   ] },
         pack_a_punch: { scaling: [-1.5,     1.5,     1.5    ] },
         power_switch: { scaling: [-0.0025,  0.0025,  0.0025 ] },
-        m1911_fps:    { scaling: [ 0.00012, 0.00012, 0.00012] },
-        m1911_world:  { scaling: [ 0.00012, 0.00012, 0.00012] },
-        ray_gun_fps:  { scaling: [ 0.3615,  0.3615,  0.3615 ] },
-        ray_gun_world:{ scaling: [ 0.482,   0.482,   0.482  ] },
+        m1911_fps:    { scaling: [ 0.6, 0.6, 0.6] },
+        m1911_world:  { scaling: [ 0.6, 0.6, 0.6] },
+        ray_gun_fps:  { scaling: [ 1,  1,  1 ] },
+        ray_gun_world:{ scaling: [ 1.3333,   1.3333,   1.3333  ] },
     },
     
     config: {

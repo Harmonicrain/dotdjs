@@ -73,6 +73,12 @@ export const createWorldWeapon = (scene: BABYLON.Scene, weaponId: string, parent
     else if (weaponId === 'ray_gun') {
         loadWeaponModel(scene, root, MODELS.RAY_GUN, 'ray_gun_world', modelOverride, false, promises);
     }
+    else if (weaponId === 'fn_fal') {
+        loadWeaponModel(scene, root, MODELS.FN_FAL, 'fn_fal_world', modelOverride, false, promises);
+    }
+    else if (weaponId === 'm1_garand') {
+        loadWeaponModel(scene, root, MODELS.M1_GARAND, 'm1_garand_world', modelOverride, false, promises);
+    }
 
     return root;
 };
@@ -124,6 +130,24 @@ export const createWeapons = (scene: BABYLON.Scene, camera: BABYLON.Camera, mode
 
     loadWeaponModel(scene, famasRoot, MODELS.FAMAS, 'famas_fps', modelOverride, true, promises);
     weaponMap['famas'] = famasRoot;
+
+    // FN FAL
+    const fnFalRoot = new BABYLON.TransformNode("fps_fn_fal", scene);
+    fnFalRoot.parent = camera;
+    fnFalRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
+    fnFalRoot.setEnabled(false);
+
+    loadWeaponModel(scene, fnFalRoot, MODELS.FN_FAL, 'fn_fal_fps', modelOverride, true, promises);
+    weaponMap['fn_fal'] = fnFalRoot;
+
+    // M1 Garand
+    const m1GarandRoot = new BABYLON.TransformNode("fps_m1_garand", scene);
+    m1GarandRoot.parent = camera;
+    m1GarandRoot.position = new BABYLON.Vector3(0.25, -0.25, 0.5);
+    m1GarandRoot.setEnabled(false);
+
+    loadWeaponModel(scene, m1GarandRoot, MODELS.M1_GARAND, 'm1_garand_fps', modelOverride, true, promises);
+    weaponMap['m1_garand'] = m1GarandRoot;
 
     // Ray Gun
     const rayGunRoot = new BABYLON.TransformNode("fps_ray_gun", scene);

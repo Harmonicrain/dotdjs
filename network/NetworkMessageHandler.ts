@@ -223,6 +223,87 @@ export const createNetworkMessageHandler = (
                 sm.eventBus.emit('REMOTE_SHOOT', msg);
                 break;
 
+            case 'CLIENT_ZOMBIE_HIT': {
+                // HOST applies CLIENT's zombie hit authoritatively
+                const hitZombie = sm.zombies.find(z => z.id === msg.zombieId);
+                if (hitZombie && !hitZombie.isDead) {
+                    hitZombie.lastHitTime = Date.now();
+
+                    let multiplier = 1.0;
+                    if (msg.isHeadshot) multiplier = 1.5;
+                    else if (msg.isLegHit) multiplier = 0.7;
+
+                    const isInstaKill = sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]
+                        && sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
+                    const dmg = isInstaKill ? hitZombie.maxHealth : (msg.damage * multiplier);
+                    hitZombie.health -= dmg;
+
+                    if (msg.isLegHit && !hitZombie.isCrawling && hitZombie.type === 'ZOMBIE') {
+                        if (dmg > 40 || hitZombie.health < 40) {
+                            hitZombie.isCrawling = true;
+                            hitZombie.speed = 0.015;
+                        }
+                    }
+
+                    // Award hit points to the CLIENT
+                    const hitPts = msg.isHeadshot ? 20 : 10;
+                    const hasDouble = sm.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS]
+                        && sm.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS]! > Date.now();
+                    const hitAmount = hasDouble ? hitPts * 2 : hitPts;
+                    cachedClient.clientPoints += hitAmount;
+                    cachedClient.clientTotalEarned += hitAmount;
+                    sm.send({ type: 'HIT_CONFIRM', amount: hitAmount });
+
+                    if (hitZombie.health <= 0 && !hitZombie.isDead) {
+                        if (hitZombie.type === 'HELLHOUND') {
+                            sm.hellhoundManager.onHellhoundDeath(hitZombie, hitZombie.mesh.position, 'CLIENT');
+                        } else {
+                            const headPos = hitZombie.headMesh ? hitZombie.headMesh.absolutePosition : undefined;
+                            sm.zombieManager.onZombieDeath(hitZombie, hitZombie.mesh.position, 'CLIENT', msg.isHeadshot, headPos);
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 'CLIENT_EXPLOSION_HIT': {
+                // HOST applies CLIENT's explosive hit authoritatively
+                const impactPoint = new BABYLON.Vector3(msg.x, msg.y, msg.z);
+                const splashRadiusSq = msg.splashRadius * msg.splashRadius;
+                const isInstaKillExp = sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]
+                    && sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
+
+                for (const z of sm.zombies) {
+                    if (z.isDead) continue;
+                    const distSq = BABYLON.Vector3.DistanceSquared(impactPoint, z.mesh.position);
+                    if (distSq <= splashRadiusSq) {
+                        const dist = Math.sqrt(distSq);
+                        const damageRatio = 1 - (dist / msg.splashRadius);
+                        const finalDamage = isInstaKillExp ? z.maxHealth : (msg.splashDamage * damageRatio);
+
+                        z.lastHitTime = Date.now();
+                        z.health -= finalDamage;
+
+                        if (dist > msg.splashRadius * 0.3 && !z.isCrawling && z.type === 'ZOMBIE') {
+                            if (finalDamage > 40 || z.health < 40) {
+                                z.isCrawling = true;
+                                z.speed = 0.015;
+                            }
+                        }
+
+                        if (z.health <= 0 && !z.isDead) {
+                            if (z.type === 'HELLHOUND') {
+                                sm.hellhoundManager.onHellhoundDeath(z, z.mesh.position, 'CLIENT');
+                            } else {
+                                const blastDir = z.mesh.position.subtract(impactPoint).normalize();
+                                sm.zombieManager.onZombieDeath(z, z.mesh.position, 'CLIENT', false, undefined, blastDir);
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
             case 'INTERACT_DOOR': {
                 // HOST validates CLIENT has enough points before opening
                 const doorState = sm.gameState.doorStates[msg.doorId];

@@ -16,7 +16,7 @@ export const fullAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: 0, y: -0.28, z: 0.55 },
       barrelLength: 0.65,
       reloadTime: 2200,
-      hipFireOriginCorrection: { up: 0.15, right: 0.0 }
+      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 }
     },
     upgrade: {
       name: "Spatz-447",
@@ -43,6 +43,7 @@ export const fullAutoWeapons: WeaponDefinition[] = [
       hipPos: { x: 0.25, y: -0.18, z: 0.45 },
       adsPos: { x: 0, y: -0.14, z: 0.45 },
       barrelLength: 0.5,
+      hipFireOriginCorrection: { right: -0.0268, up: 0.0306 },
       reloadTime: 2000
     },
     upgrade: {

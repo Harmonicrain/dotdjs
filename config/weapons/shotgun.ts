@@ -16,6 +16,7 @@ export const shotgunWeapons: WeaponDefinition[] = [
       hipPos: { x: 0.25, y: -0.20, z: 0.45 },
       adsPos: { x: 0, y: -0.112, z: 0.35 },
       barrelLength: 0.6,
+      hipFireOriginCorrection: { right: -0.0823, up: 0.0875 },
       reloadTime: 2500
     },
     upgrade: {

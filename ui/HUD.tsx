@@ -16,6 +16,7 @@ import { HUDOverlayEffects } from './components/HUDOverlayEffects';
 import { DownedOverlay } from './components/DownedOverlay';
 import { Console } from './components/Console';
 import { DebugInfoWindow } from './components/DebugInfoWindow';
+import { BulletDebugOverlay } from './components/BulletDebugOverlay';
 import { DebugControlsOverlay } from './components/DebugControlsOverlay';
 import { ScaleWeaponOverlay } from './components/ScaleWeaponOverlay';
 import { DeveloperStats } from './components/DeveloperStats';
@@ -23,6 +24,7 @@ import { HitMarker } from './components/HitMarker';
 import { KillFeed } from './components/KillFeed';
 import { FPSCounter } from './components/FPSCounter';
 import { RenderStatsOverlay } from './components/RenderStatsOverlay';
+import { WeaponAdsDebugOverlay } from './components/WeaponAdsDebugOverlay';
 import { TouchControls } from './components/TouchControls';
 import { InputManager } from '../engine/InputManager';
 
@@ -198,9 +200,11 @@ export const HUD = ({ onResume, onQuit, onCommand, inputManager, onPause }: HUDP
             {/* Debug/Dev tools */}
             <Console onCommand={onCommand} />
             <DebugInfoWindow />
+            <BulletDebugOverlay />
             <DebugControlsOverlay />
             <ScaleWeaponOverlay />
             <RenderStatsOverlay />
+            <WeaponAdsDebugOverlay />
             <DeveloperStats />
 
             {/* Spectating overlay */}

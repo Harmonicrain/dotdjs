@@ -44,9 +44,43 @@ export interface RenderStatsModeState {
     isActive: boolean;
 }
 
+/** State for the bullet spawn debug tool (/bullet_debug command) */
+export interface BulletDebugState {
+    isActive: boolean;
+    frozenProjectile: BABYLON.AbstractMesh | null;
+}
+
+/** UI-safe data for the bullet debug overlay (no Babylon references) */
+export interface BulletDebugInfo {
+    right: number;
+    up: number;
+    forward: number;
+    weaponName: string;
+    isAds: boolean;
+}
+
+/** State for the weapon ADS position debug tool (/weapon_ads_debug command) */
+export interface WeaponAdsDebugState {
+    isActive: boolean;
+    adsPos: { x: number; y: number; z: number };
+    originalAdsPos: { x: number; y: number; z: number } | null;
+}
+
+/** UI-safe data for the weapon ADS debug overlay (no Babylon references) */
+export interface WeaponAdsDebugInfo {
+    x: number;
+    y: number;
+    z: number;
+    weaponName: string;
+    weaponId: string;
+    step: number;
+}
+
 /** Default values for all debug state fields */
 export const DEFAULT_DEBUG_SELECTION: DebugSelectionState = { isActive: false, selectedMesh: null };
 export const DEFAULT_SHOW_PATHFINDING: ShowPathfindingState = { isActive: false, pathMeshes: [], lastUpdate: 0, observer: null };
 export const DEFAULT_SCALE_WEAPON_MODE: ScaleWeaponModeState = { isActive: false, weaponId: '', scale: { x: 1, y: 1, z: 1 }, originalScale: null, step: 0.01, axis: 'all' };
 export const DEFAULT_DEBUG_CONTROLS_MODE: DebugControlsModeState = { isActive: false, lastFpsUpdate: 0, frameCount: 0, fps: 0 };
 export const DEFAULT_RENDER_STATS_MODE: RenderStatsModeState = { isActive: false };
+export const DEFAULT_BULLET_DEBUG: BulletDebugState = { isActive: false, frozenProjectile: null };
+export const DEFAULT_WEAPON_ADS_DEBUG: WeaponAdsDebugState = { isActive: false, adsPos: { x: 0, y: 0, z: 0 }, originalAdsPos: null };

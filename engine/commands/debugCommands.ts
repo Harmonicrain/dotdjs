@@ -46,6 +46,65 @@ export const DEBUG_COMMANDS: CommandMap = {
         console.log('[DEBUG_CONTROLS] Disabled');
         return 'Debug Controls: OFF';
     },
+    'bullet_debug': (args, sm) => {
+        sm.bulletDebug.isActive = !sm.bulletDebug.isActive;
+
+        if (sm.bulletDebug.isActive) {
+            // Freeze game logic via the existing debug selection path
+            sm.debugSelection.isActive = true;
+            return 'Bullet Debug: ON. Fire to freeze a bullet in place.\nClick+drag to reposition. Shift+drag for depth.\nOverlay shows camera-relative offset (right, up, forward).';
+        }
+
+        // Clean up frozen projectile
+        if (sm.bulletDebug.frozenProjectile) {
+            sm.bulletDebug.frozenProjectile.dispose();
+            sm.bulletDebug.frozenProjectile = null;
+        }
+        sm.debugSelection.isActive = false;
+        sm.debugSelection.selectedMesh = null;
+        sm.ui.setDebugInfo(null);
+        sm.ui.setBulletDebugInfo(null);
+        return 'Bullet Debug: OFF. Logic resumed.';
+    },
+    'weapon_ads_debug': (args, sm) => {
+        sm.weaponAdsDebug.isActive = !sm.weaponAdsDebug.isActive;
+
+        if (sm.weaponAdsDebug.isActive) {
+            const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
+            if (!activeWeapon) {
+                sm.weaponAdsDebug.isActive = false;
+                return 'No active weapon found.';
+            }
+            // Snapshot current adsPos
+            const ads = activeWeapon.adsPos;
+            sm.weaponAdsDebug.adsPos = { x: ads.x, y: ads.y, z: ads.z };
+            sm.weaponAdsDebug.originalAdsPos = { x: ads.x, y: ads.y, z: ads.z };
+            // Freeze game logic so WASD doesn't move the player
+            sm.debugSelection.isActive = true;
+            // Force ADS
+            sm.gameState.isAiming = true;
+            sm.ui.setWeaponAdsDebugInfo({
+                x: ads.x, y: ads.y, z: ads.z,
+                weaponName: activeWeapon.name,
+                weaponId: activeWeapon.id,
+                step: 0.005,
+            });
+            return 'Weapon ADS Debug: ON — Logic frozen.\nA/D — move left/right (x)\nW/S — move up/down (y)\nE/Q — move forward/back (z)\nShift — fine mode (0.001)\nValues update live in overlay.';
+        }
+
+        // Restore original adsPos
+        const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
+        if (activeWeapon && sm.weaponAdsDebug.originalAdsPos) {
+            const orig = sm.weaponAdsDebug.originalAdsPos;
+            activeWeapon.adsPos = { x: orig.x, y: orig.y, z: orig.z };
+        }
+        sm.weaponAdsDebug.originalAdsPos = null;
+        // Unfreeze game logic
+        sm.debugSelection.isActive = false;
+        sm.debugSelection.selectedMesh = null;
+        sm.ui.setWeaponAdsDebugInfo(null);
+        return 'Weapon ADS Debug: OFF. Original adsPos restored. Logic resumed.';
+    },
     'render_stats': (args, sm) => {
         sm.renderStatsMode.isActive = !sm.renderStatsMode.isActive;
 

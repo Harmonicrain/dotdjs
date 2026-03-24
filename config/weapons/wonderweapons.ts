@@ -16,7 +16,7 @@ export const wonderWeapons: WeaponDefinition[] = [
       adsPos: { x: -0.001, y: -0.189, z: 0.5 },
       barrelLength: 0.8,
       reloadTime: 2500,
-      hipFireOriginCorrection: { up: -0.10, right: 0.15 },
+      hipFireOriginCorrection: { up: -0.0082, right: 0.2310 },
       isExplosive: true,
       splashRadius: 6,
       splashDamage: 1000,

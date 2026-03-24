@@ -190,6 +190,11 @@ export const createMockContext = (overrides: Partial<GameStateData> = {}) => {
         debugSelection: {
             isActive: false,
             selectedMesh: null
-        }
+        },
+        bulletDebug: {
+            isActive: false,
+            frozenProjectile: null,
+        },
+        setBulletDebugInfo: vi.fn(),
     };
 };

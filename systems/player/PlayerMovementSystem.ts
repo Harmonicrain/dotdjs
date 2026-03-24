@@ -63,7 +63,7 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             _cacheConsecutiveMisses = 0;
         },
         update: (dt: number) => {
-            if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen) return;
+            if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen || ctx.gameState.isDebugMode) return;
 
             const camera = ctx.camera;
             const inputManager = ctx.inputManager;

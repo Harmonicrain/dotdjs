@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { PowerUpType, DoorState, DebugInfo } from '../types/index';
+import { BulletDebugInfo, WeaponAdsDebugInfo } from '../types/debug';
 import { WEAPON_CONFIGS, DEFAULT_SETTINGS as BASE_SETTINGS } from '../config';
 
 const startWeapon = WEAPON_CONFIGS[0];
@@ -110,6 +111,8 @@ export interface GameFields {
   isDebugMode: boolean;
   isDebugActive: boolean;
   debugInfo: DebugInfo | null;
+  bulletDebugInfo: BulletDebugInfo | null;
+  weaponAdsDebugInfo: WeaponAdsDebugInfo | null;
   scaleWeaponMode: ScaleWeaponModeData | null;
   currentZone: number;
   playerPosition: { x: number; y: number; z: number; rot: number };
@@ -213,6 +216,8 @@ export const useGameStore = create<GameStore>((set) => ({
   isDebugMode: false,
   isDebugActive: false,
   debugInfo: null,
+  bulletDebugInfo: null,
+  weaponAdsDebugInfo: null,
   scaleWeaponMode: null,
   currentZone: 0,
   playerPosition: { x: 0, y: 0, z: 0, rot: 0 },

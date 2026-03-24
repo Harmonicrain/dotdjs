@@ -1,5 +1,6 @@
 
 import { GameStateData, PowerUpType, DebugInfo } from '../types/index';
+import { BulletDebugInfo, WeaponAdsDebugInfo } from '../types/debug';
 import { PlayerFields, GameFields, ScaleWeaponModeData, DebugControlsData, RenderStatsData, KillEvent, useGameStore } from '../store/useGameStore';
 
 type UpdatePlayer = (updates: Partial<PlayerFields>) => void;
@@ -327,6 +328,14 @@ export class UIBridge {
             cached.position.z === v.position.z) return;
         this.uiCache.debugInfo = v;
         this._updateGame({ debugInfo: v });
+    }
+
+    public setBulletDebugInfo(v: BulletDebugInfo | null) {
+        this._updateGame({ bulletDebugInfo: v });
+    }
+
+    public setWeaponAdsDebugInfo(v: WeaponAdsDebugInfo | null) {
+        this._updateGame({ weaponAdsDebugInfo: v });
     }
 
     public setScaleWeaponMode(v: ScaleWeaponModeData | null) {
