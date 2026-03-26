@@ -65,7 +65,6 @@ const _aimRay = new BABYLON.Ray(BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(
  * Uses MapConfigManager for map-specific tuning.
  */
 export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
-
     const switchWeapon = (idx: number) => {
         if (idx < ctx.gameState.weapons.length && idx !== ctx.gameState.activeWeaponIndex) {
             // Cancel any in-progress reload
@@ -141,8 +140,19 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
         ctx.gameState.shots++;
         ctx.setShotsFired(ctx.gameState.shots);
 
-        // Play weapon sound
-        ctx.soundManager?.play('M1911');
+        // Play weapon sound (per-weapon, falls back to M1911)
+        ctx.soundManager?.play(weapon.fireSound ?? 'M1911');
+
+        // Apply weapon model kick (visual only — crosshair stays centered)
+        if (weapon.recoil) {
+            const r = weapon.recoil;
+            const adsMult = ctx.gameState.isAiming ? r.adsMultiplier : 1.0;
+            // Trigger weapon mesh kick (consumed by WeaponViewSystem)
+            ctx.gameState.weaponKickTrigger = { kickBackZ: r.kickBackZ * adsMult, kickRotX: r.kickRotX * adsMult };
+            // Subtle screen shake
+            const vertKick = (r.verticalMin + Math.random() * (r.verticalMax - r.verticalMin)) * adsMult;
+            ctx.gameState.screenShakeIntensity = Math.max(ctx.gameState.screenShakeIntensity, vertKick * 0.15);
+        }
 
         if (ctx.camera && ctx.gameEngine) {
             const spread = ctx.gameState.isAiming ? 0 : cc.HIP_FIRE_SPREAD;
@@ -239,9 +249,9 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                     _pelletDir.z += (Math.random() - 0.5) * 0.005;
                     _pelletDir.normalize();
                 }
+                const owner = ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST';
                 _bulletVel.copyFrom(_pelletDir);
                 _bulletVel.scaleInPlace(cc.PROJECTILE_SPEED);
-                // Inherit player velocity even in ADS to prevent visual "drag" or "curving" when strafing
                 if (ctx.gameState.currentVelocity) {
                     _bulletVel.addInPlace(ctx.gameState.currentVelocity);
                 }
@@ -254,7 +264,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                     weapon.damage,
                     false,
                     weapon.isPacked,
-                    ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST',
+                    owner,
                     weapon.isExplosive,
                     weapon.splashRadius,
                     weapon.splashDamage,
@@ -268,7 +278,7 @@ export const createPlayerCombatSystem = (ctx: ICombatContext): System => {
                     }
                 }
                 if (ctx.gameModeRef.current !== 'SOLO') {
-                    ctx.send({ type: 'SHOOT', origin: { x: _muzzlePos.x, y: _muzzlePos.y, z: _muzzlePos.z }, dir: { x: _bulletVel.x, y: _bulletVel.y, z: _bulletVel.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner: ctx.gameModeRef.current === 'CLIENT' ? 'CLIENT' : 'HOST', speed: finalSpeed, splashRadius: weapon.splashRadius, splashDamage: weapon.splashDamage, selfDamageMultiplier: weapon.selfDamageMultiplier });
+                    ctx.send({ type: 'SHOOT', origin: { x: _muzzlePos.x, y: _muzzlePos.y, z: _muzzlePos.z }, dir: { x: _bulletVel.x, y: _bulletVel.y, z: _bulletVel.z }, isPacked: weapon.isPacked, damage: weapon.damage, isExplosive: weapon.isExplosive, owner, speed: finalSpeed, splashRadius: weapon.splashRadius, splashDamage: weapon.splashDamage, selfDamageMultiplier: weapon.selfDamageMultiplier });
                 }
             }
 

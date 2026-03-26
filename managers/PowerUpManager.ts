@@ -8,6 +8,7 @@ import { MapConfigManager } from './MapConfigManager';
 interface UISetters {
     setAmmo: (v: number) => void;
     setReserveAmmo: (v: number) => void;
+    setActivePowerUps: (v: Partial<Record<PowerUpType, number>>) => void;
 }
 
 export class PowerUpManager {
@@ -75,6 +76,7 @@ export class PowerUpManager {
             this.addPoints(pc.CARPENTER_POINTS);
         } else {
             this.gameState.activePowerUps[type] = endTime;
+            this.sm.setActivePowerUps({ ...this.gameState.activePowerUps });
         }
 
         if (!fromNetwork && this.gameModeRef.current !== 'SOLO') {

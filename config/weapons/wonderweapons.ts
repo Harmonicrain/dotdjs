@@ -21,6 +21,7 @@ export const wonderWeapons: WeaponDefinition[] = [
       splashRadius: 6,
       splashDamage: 1000,
       selfDamageMultiplier: 0.5,
+      recoil: { verticalMin: 0.020, verticalMax: 0.030, horizontalRange: 0.006, recoverySpeed: 2.5, adsMultiplier: 0.5, kickBackZ: 0.08, kickRotX: 0.05 }
     },
     upgrade: {
       name: "Porter's X2",

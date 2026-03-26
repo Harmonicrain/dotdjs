@@ -30,6 +30,11 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
     const _tempLerpTarget = new BABYLON.Vector3();
     const LERP_FACTOR = 0.2;
 
+    // Weapon mesh recoil kick state
+    let weaponKickZ = 0;
+    let weaponKickRotX = 0;
+    const KICK_DECAY = 0.15; // per-frame lerp factor toward zero (matches LERP_FACTOR)
+
     // ── Weapon ADS Debug keyboard state ──
     const _adsDebugKeys: Record<string, boolean> = {};
     let _adsDebugListenersAttached = false;
@@ -140,11 +145,29 @@ export const createWeaponViewSystem = (ctx: IWeaponViewContext): System => {
                     finalTargetY += Math.sin(now * 0.02) * 0.01;
                 }
 
-                // Position Lerp (frame-rate independent)
+                // Consume weapon kick trigger from CombatSystem
+                if (ctx.gameState.weaponKickTrigger) {
+                    weaponKickZ = -ctx.gameState.weaponKickTrigger.kickBackZ;
+                    weaponKickRotX = ctx.gameState.weaponKickTrigger.kickRotX;
+                    ctx.gameState.weaponKickTrigger = null;
+                }
+
+                // Decay weapon kick toward zero
+                const kickDecay = frameIndependentLerp(KICK_DECAY, dt);
+                weaponKickZ *= (1 - kickDecay);
+                weaponKickRotX *= (1 - kickDecay);
+                // Zero out tiny residuals
+                if (Math.abs(weaponKickZ) < 0.0005) weaponKickZ = 0;
+                if (Math.abs(weaponKickRotX) < 0.0005) weaponKickRotX = 0;
+
+                // Position Lerp (frame-rate independent) + weapon kick offset
                 const lerpAmount = frameIndependentLerp(LERP_FACTOR, dt);
-                _tempLerpTarget.copyFromFloats(finalTargetX, finalTargetY, targetPos.z);
+                _tempLerpTarget.copyFromFloats(finalTargetX, finalTargetY, targetPos.z + weaponKickZ);
                 BABYLON.Vector3.LerpToRef(mesh.position, _tempLerpTarget, lerpAmount, mesh.position);
                 ctx.camera.fov = BABYLON.Scalar.Lerp(ctx.camera.fov, targetFov, lerpAmount);
+
+                // Apply rotational kick (upward tilt on fire)
+                mesh.rotation.x = weaponKickRotX;
 
                 mesh.setEnabled(!ctx.gameState.isSpectating && !ctx.gameState.isGameOver);
             }

@@ -17,7 +17,8 @@ export const shotgunWeapons: WeaponDefinition[] = [
       adsPos: { x: 0, y: -0.112, z: 0.35 },
       barrelLength: 0.6,
       hipFireOriginCorrection: { right: -0.0823, up: 0.0875 },
-      reloadTime: 2500
+      reloadTime: 2500,
+      recoil: { verticalMin: 0.040, verticalMax: 0.060, horizontalRange: 0.010, recoverySpeed: 2.0, adsMultiplier: 0.6, kickBackZ: 0.12, kickRotX: 0.08 }
     },
     upgrade: {
       name: "Hades",

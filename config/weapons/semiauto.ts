@@ -17,7 +17,8 @@ export const semiAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: 0.0077, y: -0.1996, z: 0.74 },
       barrelLength: 0.7,
       reloadTime: 2400,
-      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 }
+      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 },
+      recoil: { verticalMin: 0.018, verticalMax: 0.028, horizontalRange: 0.004, recoverySpeed: 3.5, adsMultiplier: 0.45, kickBackZ: 0.05, kickRotX: 0.035 }
     },
     upgrade: {
       name: "EPC WN",
@@ -45,7 +46,8 @@ export const semiAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: -0.0001, y: -0.2170, z: 0.7400 },
       barrelLength: 0.7,
       reloadTime: 2200,
-      hipFireOriginCorrection: { up: 0.1493, right: 0.0589 }
+      hipFireOriginCorrection: { up: 0.1493, right: 0.0589 },
+      recoil: { verticalMin: 0.012, verticalMax: 0.020, horizontalRange: 0.003, recoverySpeed: 4.0, adsMultiplier: 0.4, kickBackZ: 0.045, kickRotX: 0.03 }
     },
     upgrade: {
       name: "Punisher 30",

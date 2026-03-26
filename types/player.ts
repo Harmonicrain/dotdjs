@@ -29,6 +29,18 @@ export interface WeaponConfig {
     selfDamageMultiplier?: number;
     /** Custom projectile speed override (default uses COMBAT_CONFIG) */
     projectileSpeedOverride?: number;
+    /** Sound name to play on fire (defaults to 'M1911' for backward compat) */
+    fireSound?: string;
+    /** Per-weapon recoil configuration for camera kick and weapon mesh kick */
+    recoil?: {
+        verticalMin: number;    // min upward camera kick per shot (radians)
+        verticalMax: number;    // max upward camera kick per shot
+        horizontalRange: number; // +/- horizontal camera drift per shot
+        recoverySpeed: number;  // how fast camera returns (radians/sec)
+        adsMultiplier: number;  // recoil reduction when ADS (0.4 = 60% less)
+        kickBackZ: number;      // weapon mesh backward kick distance
+        kickRotX: number;       // weapon mesh upward tilt (radians)
+    };
 }
 
 export type WeaponUpgrade = Partial<WeaponConfig> & { name: string };

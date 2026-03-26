@@ -90,6 +90,11 @@ export const createMockGameState = (): GameStateData => ({
     verticalVelocity: 0,
     currentVelocity: BABYLON.Vector3.Zero(),
     externalForce: BABYLON.Vector3.Zero(),
+    recoilOffsetX: 0,
+    recoilOffsetY: 0,
+    recoilRecoverySpeed: 3.0,
+    screenShakeIntensity: 0,
+    weaponKickTrigger: null,
 
     // WorldState
     doorStates: {},

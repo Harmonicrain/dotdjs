@@ -506,6 +506,17 @@ export class Game {
         sm.gameState.pendingPowerUps = [];
 
         sm.setActivePowerUps({});
+
+        // Dispose the shared power-up HighlightLayer to prevent stale post-process
+        // state from blocking scene.whenReadyAsync() on the next map load.
+        const hlKey = '__dotd_powerupHighlightLayer';
+        const hl = this.scene?.metadata?.[hlKey];
+        if (hl instanceof BABYLON.HighlightLayer) {
+            hl.dispose();
+        }
+        if (this.scene?.metadata) {
+            delete this.scene.metadata[hlKey];
+        }
     }
 
     /** Clear all projectiles */
@@ -581,6 +592,11 @@ export class Game {
         sm.gameState.repairPointsRound = 0;
         sm.gameState.externalForce = BABYLON.Vector3.Zero();
         sm.gameState.currentVelocity = BABYLON.Vector3.Zero();
+        sm.gameState.recoilOffsetX = 0;
+        sm.gameState.recoilOffsetY = 0;
+        sm.gameState.recoilRecoverySpeed = 3.0;
+        sm.gameState.screenShakeIntensity = 0;
+        sm.gameState.weaponKickTrigger = null;
 
         sm.gameState.quickRevivesRemaining = GAME_CONFIG.MAX_QUICK_REVIVES_SOLO;
 

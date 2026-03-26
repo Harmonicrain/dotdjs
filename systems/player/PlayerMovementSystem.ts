@@ -89,6 +89,7 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             if (gamepadLook.y !== 0) targetRotationX += gamepadLook.y * CONTROLLER_CONFIG.SENSITIVITY_Y * dt;
 
             // Clamp target pitch to prevent camera flip
+            const gs = ctx.gameState;
             const PITCH_LIMIT = 1.5;
             if (targetRotationX > PITCH_LIMIT) targetRotationX = PITCH_LIMIT;
             if (targetRotationX < -PITCH_LIMIT) targetRotationX = -PITCH_LIMIT;
@@ -96,6 +97,15 @@ export const createPlayerMovementSystem = (ctx: IMovementContext): System => {
             // Smoothly interpolate camera rotation towards target
             camera.rotation.x += (targetRotationX - camera.rotation.x) * CAMERA_SMOOTHING;
             camera.rotation.y += (targetRotationY - camera.rotation.y) * CAMERA_SMOOTHING;
+
+            // Screen shake — applied AFTER smooth interpolation so it stays jittery
+            if (gs.screenShakeIntensity > 0.0005) {
+                camera.rotation.x += (Math.random() - 0.5) * gs.screenShakeIntensity;
+                camera.rotation.y += (Math.random() - 0.5) * gs.screenShakeIntensity * 0.5;
+                gs.screenShakeIntensity *= 0.85;
+            } else {
+                gs.screenShakeIntensity = 0;
+            }
 
             // Notify debug controls of camera state
             if (ctx.onDebugControlsUpdate) {

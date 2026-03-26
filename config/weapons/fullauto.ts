@@ -16,7 +16,8 @@ export const fullAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: 0, y: -0.28, z: 0.55 },
       barrelLength: 0.65,
       reloadTime: 2200,
-      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 }
+      hipFireOriginCorrection: { up: 0.2135, right: -0.0898 },
+      recoil: { verticalMin: 0.008, verticalMax: 0.015, horizontalRange: 0.008, recoverySpeed: 4.0, adsMultiplier: 0.4, kickBackZ: 0.04, kickRotX: 0.03 }
     },
     upgrade: {
       name: "Spatz-447",
@@ -44,7 +45,8 @@ export const fullAutoWeapons: WeaponDefinition[] = [
       adsPos: { x: 0, y: -0.14, z: 0.45 },
       barrelLength: 0.5,
       hipFireOriginCorrection: { right: -0.0268, up: 0.0306 },
-      reloadTime: 2000
+      reloadTime: 2000,
+      recoil: { verticalMin: 0.006, verticalMax: 0.012, horizontalRange: 0.010, recoverySpeed: 5.0, adsMultiplier: 0.35, kickBackZ: 0.03, kickRotX: 0.025 }
     },
     upgrade: {
       name: "G16-GL35",

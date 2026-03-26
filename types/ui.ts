@@ -115,6 +115,16 @@ export interface PhysicsState {
     currentVelocity: BABYLON.Vector3;
     /** External force applied by other systems (e.g., knockback). Applied and decayed by PlayerMovementSystem. */
     externalForce: BABYLON.Vector3;
+    /** Accumulated camera recoil pitch offset (radians, decays over time) */
+    recoilOffsetX: number;
+    /** Accumulated camera recoil yaw offset (radians, decays over time) */
+    recoilOffsetY: number;
+    /** Current recoil recovery speed (radians/sec), set per weapon */
+    recoilRecoverySpeed: number;
+    /** Screen shake intensity (decays per frame) */
+    screenShakeIntensity: number;
+    /** Weapon mesh kick trigger — set true by CombatSystem, consumed by WeaponViewSystem */
+    weaponKickTrigger: { kickBackZ: number; kickRotX: number } | null;
 }
 
 export interface WorldState {
