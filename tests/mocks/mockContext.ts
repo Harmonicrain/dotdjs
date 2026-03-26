@@ -134,6 +134,23 @@ export const createMockContext = (overrides: Partial<GameStateData> = {}) => {
         } as any,
         zombies: [] as Zombie[],
         gameModeRef: { current: 'SOLO' },
+        remote: {
+            pos: BABYLON.Vector3.Zero(),
+            rot: 0,
+            pitch: 0,
+            name: 'RemotePlayer',
+            weaponId: 'pistol',
+            gameState: {
+                health: 100,
+                points: 500,
+                perks: {},
+                isDowned: false,
+                kills: 0,
+                shots: 0,
+            },
+            visuals: null,
+            interpolationBuffer: { clear: vi.fn(), push: vi.fn() },
+        },
         crowdRef: { current: undefined as BABYLON.ICrowd | undefined },
         inputManager: {
             isDown: vi.fn(() => false),

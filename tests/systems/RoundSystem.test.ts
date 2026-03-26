@@ -95,6 +95,38 @@ describe('RoundSystem', () => {
         expect(ctx.gameState.nextRoundTime).toBe(5000 + 10000); // INTERMISSION_MS is 10000
     });
 
+    it('should not respawn a healthy client between rounds', () => {
+        ctx.gameModeRef.current = 'HOST';
+        ctx.isConnected = vi.fn(() => true);
+        ctx.remote.gameState.isDowned = false;
+        ctx.remote.gameState.health = 100;
+        ctx.gameState.round = 1;
+        ctx.gameState.zombiesToSpawn = 0;
+        ctx.gameState.zombiesAlive = 0;
+        ctx.gameState.isIntermission = false;
+        ctx.gameState.hasStarted = true;
+
+        system.update(16, 5000);
+
+        expect(ctx.send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'RESPAWN' }));
+    });
+
+    it('should respawn a downed client between rounds', () => {
+        ctx.gameModeRef.current = 'HOST';
+        ctx.isConnected = vi.fn(() => true);
+        ctx.remote.gameState.isDowned = true;
+        ctx.remote.gameState.health = 0;
+        ctx.gameState.round = 1;
+        ctx.gameState.zombiesToSpawn = 0;
+        ctx.gameState.zombiesAlive = 0;
+        ctx.gameState.isIntermission = false;
+        ctx.gameState.hasStarted = true;
+
+        system.update(16, 5000);
+
+        expect(ctx.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'RESPAWN', round: 2 }));
+    });
+
     it('should increment kill count on ZOMBIE_DEATH event', () => {
         ctx.gameState.zombiesKilledInRound = 0;
         ctx.gameState.zombiesAlive = 1;

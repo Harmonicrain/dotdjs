@@ -542,6 +542,9 @@ export const createNetworkMessageHandler = (
                 break;
 
             case 'RESPAWN':
+                if (!sm.gameState.isDowned && !sm.gameState.isSpectating && sm.gameState.health > 0) {
+                    break;
+                }
                 actions.updateGame({ round: msg.round });
                 sm.eventBus.emit('RESPAWN_REQUEST', { round: msg.round, points: msg.points });
                 actions.updateGame({ isSpectating: false });

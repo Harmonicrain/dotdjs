@@ -409,6 +409,7 @@ export class Game {
         this.systemManager.register(createRoundSystem({
             gameState: sm.gameState,
             gameModeRef: sm.gameModeRef,
+            remote: sm.remote,
             eventBus: sm.eventBus,
             timerManager: sm.timerManager,
             zombieManager: sm.zombieManager,

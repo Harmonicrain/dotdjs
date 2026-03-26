@@ -9,6 +9,12 @@ import { MapConfigManager } from '../managers/MapConfigManager';
 export interface IRoundContext {
     gameState: GameStateData;
     gameModeRef: { current: string };
+    remote: {
+        gameState: {
+            health: number;
+            isDowned: boolean;
+        };
+    };
     eventBus: EventBus;
     timerManager: TimerManager;
     zombieManager: ZombieManager;
@@ -34,6 +40,11 @@ export interface IRoundContext {
  * handling intermissions, and calculating round-based difficulty scaling.
  */
 export const createRoundSystem = (ctx: IRoundContext): System => {
+    const shouldRespawnRemotePlayer = () => {
+        if (ctx.gameModeRef.current !== 'HOST') return false;
+        return ctx.remote.gameState.isDowned || ctx.remote.gameState.health <= 0;
+    };
+
      
     // Handler for zombie death events - named for proper disposal
     const zombieDeathHandler = () => {
@@ -172,7 +183,7 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
                 gs.nextRoundTime = now + rc.INTERMISSION_MS;
                 
                 // Handle Respawn for dead teammates in COOP
-                if (ctx.gameModeRef.current === 'HOST') {
+                if (shouldRespawnRemotePlayer()) {
                     ctx.send({ type: 'RESPAWN', round: gs.round + 1, points: rc.RESPAWN_POINTS_BASE + ((gs.round + 1) * rc.RESPAWN_POINTS_PER_ROUND) });
                 }
             }
