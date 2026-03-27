@@ -33,6 +33,7 @@ export interface CachedHostState {
     hostName: string;
     hostPerks: Record<string, boolean>;
     hostIsDowned: boolean;
+    hostIsSpectating: boolean;
     hostKills: number;
     hostShots: number;
     zombies: ZombieSyncData[];
@@ -61,6 +62,7 @@ export interface CachedClientState {
     clientTotalEarned: number;
     clientPerks: Record<string, boolean>;
     clientIsDowned: boolean;
+    clientIsSpectating: boolean;
     clientName: string;
     clientKills: number;
     clientShots: number;
@@ -75,7 +77,7 @@ function defaultHostCache(startPoints = 0, name = 'Unknown'): CachedHostState {
         doors: {}, hostPos: ZERO_POS(),
         activeWeaponIndex: 0, activeWeaponId: 'pistol',
         hostHealth: 100, hostPoints: startPoints, hostTotalEarned: startPoints,
-        hostName: name, hostPerks: {}, hostIsDowned: false,
+        hostName: name, hostPerks: {}, hostIsDowned: false, hostIsSpectating: false,
         hostKills: 0, hostShots: 0, zombies: [], windowStates: {},
         activeZombiesCount: 0, totalRoundZombies: 0,
         zombiesSpawned: 0, zombiesKilledInRound: 0,
@@ -89,7 +91,7 @@ function defaultClientCache(startPoints = 0, name = 'Unknown'): CachedClientStat
     return {
         pos: ZERO_POS(), activeWeaponIndex: 0, activeWeaponId: 'pistol',
         clientHealth: 100, clientPoints: startPoints, clientTotalEarned: startPoints,
-        clientPerks: {}, clientIsDowned: false, clientName: name,
+        clientPerks: {}, clientIsDowned: false, clientIsSpectating: false, clientName: name,
         clientKills: 0, clientShots: 0,
     };
 }
@@ -141,6 +143,7 @@ function syncRemoteGameState(
     health: number,
     points: number,
     isDowned: boolean,
+    isSpectating: boolean,
     kills: number,
     shots: number,
     perks: Record<string, boolean>
@@ -148,6 +151,7 @@ function syncRemoteGameState(
     sm.remote.gameState.health = health;
     sm.remote.gameState.points = points;
     sm.remote.gameState.isDowned = isDowned;
+    sm.remote.gameState.isSpectating = isSpectating;
     sm.remote.gameState.kills = kills;
     sm.remote.gameState.shots = shots;
     sm.remote.gameState.perks = perks;
@@ -179,6 +183,7 @@ export const createNetworkMessageHandler = (
         stateManager.remote.gameState.points = startPoints;
         stateManager.remote.gameState.health = 100;
         stateManager.remote.gameState.isDowned = false;
+        stateManager.remote.gameState.isSpectating = false;
         stateManager.remote.gameState.kills = 0;
         stateManager.remote.gameState.shots = 0;
         stateManager.remote.gameState.perks = {};
@@ -542,7 +547,7 @@ export const createNetworkMessageHandler = (
                 break;
 
             case 'RESPAWN':
-                if (!sm.gameState.isDowned && !sm.gameState.isSpectating && sm.gameState.health > 0) {
+                if (!sm.gameState.isSpectating) {
                     break;
                 }
                 actions.updateGame({ round: msg.round });
@@ -606,6 +611,7 @@ export const createNetworkMessageHandler = (
                     'doors', 'hostPos', 'activeWeaponIndex', 'activeWeaponId',
                     'hostHealth', 'hostPoints', 'hostTotalEarned', 'hostName',
                     'hostPerks', 'hostIsDowned', 'hostKills', 'hostShots',
+                    'hostIsSpectating',
                     'windowStates', 'activeZombiesCount', 'totalRoundZombies',
                     'zombiesSpawned', 'zombiesKilledInRound', 'round',
                     'powerOn', 'isDogRound', 'activePowerUps', 'mysteryBox'
@@ -666,6 +672,7 @@ export const createNetworkMessageHandler = (
                     cachedHost.hostHealth,
                     cachedHost.hostPoints,
                     cachedHost.hostIsDowned,
+                    cachedHost.hostIsSpectating,
                     cachedHost.hostKills,
                     cachedHost.hostShots,
                     cachedHost.hostPerks
@@ -702,6 +709,7 @@ export const createNetworkMessageHandler = (
                     'pos', 'activeWeaponIndex', 'activeWeaponId',
                     'clientHealth', 'clientPoints', 'clientTotalEarned',
                     'clientPerks', 'clientIsDowned', 'clientName',
+                    'clientIsSpectating',
                     'clientKills', 'clientShots'
                 ]);
 
@@ -713,6 +721,7 @@ export const createNetworkMessageHandler = (
                     cachedClient.clientHealth,
                     cachedClient.clientPoints,
                     cachedClient.clientIsDowned,
+                    cachedClient.clientIsSpectating,
                     cachedClient.clientKills,
                     cachedClient.clientShots,
                     cachedClient.clientPerks

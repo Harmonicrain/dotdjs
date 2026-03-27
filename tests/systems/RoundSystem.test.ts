@@ -98,8 +98,7 @@ describe('RoundSystem', () => {
     it('should not respawn a healthy client between rounds', () => {
         ctx.gameModeRef.current = 'HOST';
         ctx.isConnected = vi.fn(() => true);
-        ctx.remote.gameState.isDowned = false;
-        ctx.remote.gameState.health = 100;
+        ctx.remote.gameState.isSpectating = false;
         ctx.gameState.round = 1;
         ctx.gameState.zombiesToSpawn = 0;
         ctx.gameState.zombiesAlive = 0;
@@ -111,11 +110,27 @@ describe('RoundSystem', () => {
         expect(ctx.send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'RESPAWN' }));
     });
 
-    it('should respawn a downed client between rounds', () => {
+    it('should not respawn a downed client between rounds', () => {
         ctx.gameModeRef.current = 'HOST';
         ctx.isConnected = vi.fn(() => true);
         ctx.remote.gameState.isDowned = true;
-        ctx.remote.gameState.health = 0;
+        ctx.remote.gameState.isSpectating = false;
+        ctx.gameState.round = 1;
+        ctx.gameState.zombiesToSpawn = 0;
+        ctx.gameState.zombiesAlive = 0;
+        ctx.gameState.isIntermission = false;
+        ctx.gameState.hasStarted = true;
+
+        system.update(16, 5000);
+
+        expect(ctx.send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'RESPAWN' }));
+    });
+
+    it('should respawn a spectating client between rounds', () => {
+        ctx.gameModeRef.current = 'HOST';
+        ctx.isConnected = vi.fn(() => true);
+        ctx.remote.gameState.isDowned = false;
+        ctx.remote.gameState.isSpectating = true;
         ctx.gameState.round = 1;
         ctx.gameState.zombiesToSpawn = 0;
         ctx.gameState.zombiesAlive = 0;

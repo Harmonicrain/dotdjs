@@ -22,6 +22,7 @@ export class RemotePlayerState {
         health: 100, points: 500,
         perks: {},
         isDowned: false,
+        isSpectating: false,
         kills: 0, shots: 0
     };
 

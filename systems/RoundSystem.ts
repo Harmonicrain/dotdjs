@@ -11,8 +11,7 @@ export interface IRoundContext {
     gameModeRef: { current: string };
     remote: {
         gameState: {
-            health: number;
-            isDowned: boolean;
+            isSpectating: boolean;
         };
     };
     eventBus: EventBus;
@@ -42,7 +41,7 @@ export interface IRoundContext {
 export const createRoundSystem = (ctx: IRoundContext): System => {
     const shouldRespawnRemotePlayer = () => {
         if (ctx.gameModeRef.current !== 'HOST') return false;
-        return ctx.remote.gameState.isDowned || ctx.remote.gameState.health <= 0;
+        return ctx.remote.gameState.isSpectating;
     };
 
      

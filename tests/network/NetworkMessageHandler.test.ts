@@ -50,10 +50,23 @@ describe('NetworkMessageHandler', () => {
         expect(actions.updateGame).not.toHaveBeenCalledWith(expect.objectContaining({ round: 2 }));
     });
 
-    it('applies respawn messages when the local client is downed', () => {
+    it('ignores respawn messages when the local client is only downed', () => {
         const emitSpy = vi.spyOn(sm.eventBus, 'emit');
         sm.gameState.health = 0;
         sm.gameState.isDowned = true;
+        sm.gameState.isSpectating = false;
+
+        handler({ type: 'RESPAWN', round: 2, points: 1000 });
+
+        expect(emitSpy).not.toHaveBeenCalledWith('RESPAWN_REQUEST', expect.anything());
+        expect(actions.updateGame).not.toHaveBeenCalledWith(expect.objectContaining({ round: 2 }));
+    });
+
+    it('applies respawn messages when the local client is spectating', () => {
+        const emitSpy = vi.spyOn(sm.eventBus, 'emit');
+        sm.gameState.health = 0;
+        sm.gameState.isDowned = false;
+        sm.gameState.isSpectating = true;
 
         handler({ type: 'RESPAWN', round: 2, points: 1000 });
 

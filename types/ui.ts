@@ -214,6 +214,7 @@ export type GameMessage =
         hostName?: string;
         hostPerks?: Record<string, boolean>;
         hostIsDowned?: boolean;
+        hostIsSpectating?: boolean;
         hostKills?: number;
         hostShots?: number;
         /** Only zombies that moved or are new since the last tick. */
@@ -253,6 +254,7 @@ export type GameMessage =
         clientTotalEarned?: number;
         clientPerks?: Record<string, boolean>;
         clientIsDowned?: boolean;
+        clientIsSpectating?: boolean;
         clientName?: string;
         clientKills?: number;
         clientShots?: number;

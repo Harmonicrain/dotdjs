@@ -36,6 +36,7 @@ export interface HostSnapshot {
     hostName: string;
     hostPerks: Record<string, boolean>;
     hostIsDowned: boolean;
+    hostIsSpectating: boolean;
     hostKills: number;
     hostShots: number;
     /** Per-zombie position cache keyed by zombie id. */
@@ -62,6 +63,7 @@ export interface ClientSnapshot {
     clientTotalEarned: number;
     clientPerks: Record<string, boolean>;
     clientIsDowned: boolean;
+    clientIsSpectating: boolean;
     clientName: string;
     clientKills: number;
     clientShots: number;
@@ -194,6 +196,7 @@ export class NetworkDeltaCompressor {
         hostName: string;
         hostPerks: Record<string, boolean>;
         hostIsDowned: boolean;
+        hostIsSpectating: boolean;
         hostKills: number;
         hostShots: number;
         zombies: ZombieSyncData[];
@@ -242,6 +245,7 @@ export class NetworkDeltaCompressor {
                 hostName: full.hostName,
                 hostPerks: { ...full.hostPerks },
                 hostIsDowned: !!full.hostIsDowned,
+                hostIsSpectating: !!full.hostIsSpectating,
                 hostKills: full.hostKills,
                 hostShots: full.hostShots,
                 zombiePositions,
@@ -276,6 +280,7 @@ export class NetworkDeltaCompressor {
                 hostName: full.hostName,
                 hostPerks: full.hostPerks,
                 hostIsDowned: full.hostIsDowned,
+                hostIsSpectating: full.hostIsSpectating,
                 hostKills: full.hostKills,
                 hostShots: full.hostShots,
                 zombies: full.zombies.map(z => ({
@@ -335,6 +340,10 @@ export class NetworkDeltaCompressor {
         if (!!full.hostIsDowned !== snap.hostIsDowned) {
             delta.hostIsDowned = full.hostIsDowned;
             snap.hostIsDowned = !!full.hostIsDowned;
+        }
+        if (!!full.hostIsSpectating !== snap.hostIsSpectating) {
+            delta.hostIsSpectating = full.hostIsSpectating;
+            snap.hostIsSpectating = !!full.hostIsSpectating;
         }
         if (full.hostKills !== snap.hostKills) {
             delta.hostKills = full.hostKills;
@@ -466,6 +475,7 @@ export class NetworkDeltaCompressor {
         clientTotalEarned: number;
         clientPerks: Record<string, boolean>;
         clientIsDowned: boolean;
+        clientIsSpectating: boolean;
         clientName: string;
         clientKills: number;
         clientShots: number;
@@ -487,6 +497,7 @@ export class NetworkDeltaCompressor {
                 clientTotalEarned: full.clientTotalEarned,
                 clientPerks: { ...full.clientPerks },
                 clientIsDowned: !!full.clientIsDowned,
+                clientIsSpectating: !!full.clientIsSpectating,
                 clientName: full.clientName,
                 clientKills: full.clientKills,
                 clientShots: full.clientShots,
@@ -506,6 +517,7 @@ export class NetworkDeltaCompressor {
         if (full.clientPoints !== snap.clientPoints) { delta.clientPoints = full.clientPoints; snap.clientPoints = full.clientPoints; }
         if (full.clientTotalEarned !== snap.clientTotalEarned) { delta.clientTotalEarned = full.clientTotalEarned; snap.clientTotalEarned = full.clientTotalEarned; }
         if (!!full.clientIsDowned !== snap.clientIsDowned) { delta.clientIsDowned = full.clientIsDowned; snap.clientIsDowned = !!full.clientIsDowned; }
+        if (!!full.clientIsSpectating !== snap.clientIsSpectating) { delta.clientIsSpectating = full.clientIsSpectating; snap.clientIsSpectating = !!full.clientIsSpectating; }
         if (full.clientName !== snap.clientName) { delta.clientName = full.clientName; snap.clientName = full.clientName; }
         if (full.clientKills !== snap.clientKills) { delta.clientKills = full.clientKills; snap.clientKills = full.clientKills; }
         if (full.clientShots !== snap.clientShots) { delta.clientShots = full.clientShots; snap.clientShots = full.clientShots; }

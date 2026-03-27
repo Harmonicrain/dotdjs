@@ -58,6 +58,7 @@ export interface RemoteGameState {
   points: number;
   perks: Record<string, boolean>;
   isDowned: boolean;
+  isSpectating: boolean;
   kills: number;
   shots: number;
 }
