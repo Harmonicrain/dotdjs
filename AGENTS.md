@@ -23,10 +23,12 @@
 ### Running Locally
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:3000
 npm run build      # production bundle
+npm run preview    # local production preview
 npm run test       # run tests in watch mode
 npm run test:run   # run tests once (CI mode)
+npm run test:ui    # open Vitest UI
 ```
 Verify changes by running the test suite AND by playing the game.
 
@@ -78,6 +80,7 @@ Typed pub/sub for cross-system communication (`engine/EventBus.ts`). All event t
 | `COMMAND_REQUEST` | `string` | Console command entered |
 | `COMMAND_CLOSE_CONSOLE` | `null` | Console should close |
 | `REMOTE_SHOOT` | `ShootMessage` | Remote player fired |
+| `PLAYER_HIT` | `{ zombieId, damage }` | Local hit confirmation / UI hooks |
 | `RESPAWN_REQUEST` | `{ round, points }` | Player requests respawn |
 | `REVIVE_EVENT` | `ReviveEvent` | Revive started/cancelled/complete |
 | `NET_GAME_STATE_UPDATE` | `CachedHostState` | Network state received |
@@ -86,12 +89,12 @@ Typed pub/sub for cross-system communication (`engine/EventBus.ts`). All event t
 
 ### Networking Authority Model
 - **Host** is the authoritative source for game logic (spawning, damage, rounds).
-- **Client** is a "dumb terminal" that relays input and renders state.
+- **Client** is host-authoritative but not purely passive: it renders locally, handles touch/controller UI, spawns immediate local visuals, and reports hits/requests back to the host.
 - All authority-dependent systems must early-return for non-authority:
 ```typescript
 if (gameModeRef.current === 'CLIENT') return;
 ```
-- Network messages flow: `send()` → PeerJS → `NetworkMessageHandler` → `EventBus`
+- Network messages flow: `send()` → PeerJS → `NetworkMessageHandler`, which may update `StateManager` directly, bridge data into UI actions, and/or emit `EventBus` events for systems.
 - Delta compression via `NetworkDeltaCompressor` at 20 Hz (`SYNC_CONFIG.NETWORK_TICK_MS = 50`).
 
 ---
@@ -110,16 +113,19 @@ config/                    # Global gameplay defaults
     └── index.ts           # Exports WEAPON_CONFIGS[] and UPGRADED_WEAPON_CONFIGS{}
 
 engine/                    # Custom engine core
-├── CommandRegistry.ts     # Debug console commands (/debug, /give, /tp, etc.)
+├── CommandRegistry.ts     # Console command dispatcher
 ├── EventBus.ts            # Typed pub/sub event system
 ├── GeometryUtils.ts       # Mesh/geometry creation utilities
-├── InputManager.ts        # Keyboard, mouse, controller input (action-based)
+├── InputManager.ts        # Input coordinator; delegates to engine/input/*
 ├── LevelBuilder.ts        # Builds map geometry, doors, windows, lights from MapDefinition
 ├── MathUtils.ts           # Math helpers
 ├── MinHeap.ts             # Priority queue for pathfinding
 ├── ObjectPool.ts          # Generic object pool for performance
 ├── SystemManager.ts       # ECS system registration, priority sorting, update loop
-└── TimerManager.ts        # Scheduled one-shot event handling
+├── TimerManager.ts        # Scheduled one-shot event handling
+├── weaponResetUtils.ts    # Weapon reset helpers for session teardown / revive flows
+├── commands/              # Debug, visual, cheat, and /help console commands
+└── input/                 # Keyboard/mouse, controller, and touch handlers + shared types
 
 game/                      # Lifecycle and render loop
 ├── Game.ts                # Main orchestrator — creates everything, registers systems
@@ -146,7 +152,7 @@ maps/                      # Data-driven map definitions
 ├── _template/             # Starter template for new maps
 ├── warehouse/             # Warehouse 115 map
 ├── mapTest/               # Test arena map
-├── wipmap/                # Barn (WIP map)
+├── wipmap/                # WIPMAP test map
 ├── ADDING_MAPS.md         # Step-by-step guide for adding maps
 ├── MapTextureResolver.ts  # Texture loading for maps
 ├── types.ts               # MapConfiguration, MapGameplayConfig, etc.
@@ -160,7 +166,7 @@ factories/                  # Mesh factories (procedural geometry)
 ├── gameplay/              # Power switch, power-up meshes
 ├── mysterybox/            # Mystery Box mesh
 ├── packapunch/            # Pack-a-Punch machine mesh
-└── perks/                 # Perk machine meshes (Juggernog, Speed Cola, Quick Revive)
+└── perks/                 # Perk machine meshes (Juggernog, Speed Cola, Quick Revive, Double Tap, Mule Kick)
 
 network/                   # P2P networking
 ├── InterpolationBuffer.ts # Remote entity position smoothing
@@ -181,6 +187,7 @@ systems/                   # Modular ECS-style logic systems
 ├── InteractionSystem.ts   # Player world interactions (doors, wallbuys, perks, etc.)
 ├── MysteryBoxSystem.ts    # Mystery Box state machine
 ├── NetworkSystem.ts       # Multiplayer sync (sends state/input at 20Hz)
+├── PackAPunchSystem.ts    # Event-driven PaP upgrade flow (manual init, not SystemManager)
 ├── PowerUpSystem.ts       # Power-up spawning, pickup, active effect lifecycle
 ├── ProjectileSystem.ts    # Bullet/projectile physics and hit detection
 ├── RemotePlayerSystem.ts  # Remote player interpolation rendering
@@ -228,8 +235,8 @@ ui/                        # React-based HUD and menus
 ├── GameScene.tsx           # Canvas wrapper + game initialization
 ├── GameMenuManager.tsx    # Menu state management (main menu, pause, game over)
 ├── GameMenus.tsx          # Menu entry point
-├── components/            # 20 HUD components (AmmoCounter, Crosshair, RoundDisplay, etc.)
-└── menus/                 # MainMenu, HostLobby, JoinLobby
+├── components/            # HUD, debug, pause, touch, and game-over overlays
+└── menus/                 # MainMenu, MultiplayerMenu, MapSelect, HostLobby, JoinLobby, SettingsMenu
 ```
 
 ---
@@ -251,14 +258,14 @@ interface System {
 ```
 
 ### System Factory Pattern
-Every system is a factory function that receives a context object and returns a `System`:
+Most systems are factory functions that receive a context object and return a `System`:
 ```typescript
 export const createXxxSystem = (ctx: IXxxContext): System => {
     // Private state here (closures)
     return {
         name: 'xxx',
         update: (dt: number, now: number) => {
-            // PAUSE GUARD FIRST (see Section 5)
+            // PAUSE GUARD FIRST (see Section 6)
             if (ctx.gameState.isPaused || ctx.gameState.isDebugMode) return;
             // ... system logic
         },
@@ -269,14 +276,18 @@ export const createXxxSystem = (ctx: IXxxContext): System => {
 };
 ```
 
+Exceptions:
+- `MysteryBoxSystem` is not a `System` and is updated manually from `game/GameLoop.ts`.
+- `PackAPunchSystem` is event-driven and exposes `init()` / `dispose()` instead of `update()`.
+
 ### Adding a New System — Checklist
 1. Create file in `systems/` (or `systems/player/`, `systems/zombie/`)
 2. Export factory function `createXxxSystem`
 3. Add export to `systems/index.ts`
-4. Register in `Game.ts` → `initializeSystems()` with `systemManager.register(...)`
+4. Register in `Game.ts` → `initializeSystems()` with `systemManager.register(...)` unless it is a manual/event-driven exception like `MysteryBoxSystem` or `PackAPunchSystem`
 5. Add authority guard if HOST-only logic
-6. Add pause guard (see Section 5)
-7. Add `lastTickTime` compensation if using timers (see Section 5)
+6. Add pause guard (see Section 6)
+7. Add `lastTickTime` compensation if using timers (see Section 6)
 8. Add `dispose()` to clean up EventBus handlers
 
 ### State Update Flow
@@ -345,43 +356,39 @@ vi.mock('../../store/useGameStore', () => ({
 
 > **This is the #1 area where AI assistants introduce bugs.** Every rule below must be followed exactly.
 
-### 5a. Pause Guards in `update()`
+### 6a. Pause Guards in `update()`
 
-Every system's `update()` must early-return when the game is paused. The exact guard depends on the system type:
+Pause behavior is **mode-dependent** in this project:
+- **SOLO**: pause freezes game logic.
+- **HOST/CLIENT**: pause is local UI only; world simulation continues.
+- **Console open** or **debug selection active** still freeze logic via `game/GameLoop.ts`.
 
-**Player systems** (movement, combat, downed):
+Use these current patterns:
+
+**Player movement / view systems**
 ```typescript
 if (!ctx.gameState.hasStarted || ctx.gameState.isPaused || ctx.gameState.isSpectating
     || ctx.gameState.isGameOver || ctx.gameState.isConsoleOpen) return;
 ```
 
-**Zombie systems** (AI, spawning, hellhounds, window AI):
+`PlayerMovementSystem` also guards `isDebugMode`; `PlayerCombatSystem` currently does not guard console/debug, so match the surrounding subsystem when editing.
+
+**Projectile and round systems** (multiplayer-aware pause)
 ```typescript
-if (ctx.gameState.isDebugMode || ctx.gameState.isPaused) return;
+const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+const effectivelyPaused = ctx.gameState.isPaused && !isMultiplayer;
+if (!ctx.gameState.hasStarted || (effectivelyPaused && !isDebugActive)) return;
 ```
 
-**Round system** (full authority + state guard):
+**Zombie systems**
 ```typescript
-if (!isAuthority || !ctx.gameState.hasStarted || ctx.gameState.isPaused
-    || ctx.gameState.isGameOver || ctx.gameState.isDebugMode) return;
+const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
+if (ctx.gameState.isDebugMode || (ctx.gameState.isPaused && !isMultiplayer)) return;
 ```
 
-**Projectile system** (special — debug mode allows projectiles):
-```typescript
-if (!ctx.gameState.hasStarted || (ctx.gameState.isPaused && !isDebugActive)) return;
-```
+If you add a new system, follow the pause semantics of the nearest comparable system instead of assuming `isPaused` always freezes multiplayer logic.
 
-| System Type | `hasStarted` | `isPaused` | `isDebugMode` | `isGameOver` | `isSpectating` | `isConsoleOpen` | Authority |
-|-------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Player      | ✅ | ✅ | — | ✅ | ✅ | ✅ | — |
-| Zombie      | — | ✅ | ✅ | — | — | — | — |
-| Round       | ✅ | ✅ | ✅ | ✅ | — | — | ✅ |
-| Projectile  | ✅ | ✅* | — | — | — | — | — |
-| Cleanup     | — | — | ✅ | — | — | — | — |
-
-\* Projectile pauses unless debug selection is active.
-
-### 5b. `lastTickTime` Timer Compensation
+### 6b. `lastTickTime` Timer Compensation
 
 Systems that use timestamps for durations/timeouts **MUST** compensate for pause gaps. When the game unpauses, `now - lastTickTime` will be huge — without compensation, all timers expire instantly.
 
@@ -405,19 +412,21 @@ update: (dt: number, now: number) => {
 **Currently using this pattern**: `PowerUpSystem`, `ZombieCleanupSystem`
 **When to add it**: ANY new system that tracks time-based durations, timeouts, or cooldowns.
 
-### 5c. GameLoop Freeze Logic
+### 6c. GameLoop Freeze Logic
 
 `GameLoop.ts` has a central freeze that blocks `systemManager.updateAll()`:
 ```typescript
-const isLogicFrozen = sm.gameState.isPaused || sm.isConsoleOpen || sm.debugSelection.isActive;
-if (sm.gameState.isPaused || (sm.isConsoleOpen && !sm.debugSelection.isActive)) return;
+const isMultiplayer = currentGameMode !== 'SOLO';
+const isPausedForLogic = sm.gameState.isPaused && !isMultiplayer;
+const isLogicFrozen = isPausedForLogic || sm.isConsoleOpen || sm.debugSelection.isActive;
+if (isPausedForLogic || (sm.isConsoleOpen && !sm.debugSelection.isActive)) return;
 ```
 But systems **MUST STILL** have their own guards because:
-- Some systems are called **outside** SystemManager (e.g., `mysteryBoxSystem.update(dt)`)
+- Some systems are called **outside** SystemManager (e.g., `mysteryBoxSystem.update(dt)`, event-driven `packAPunchSystem` flows)
 - The freeze conditions don't cover all states (e.g., `isGameOver`, `isSpectating`)
 - NavPlugin is independently frozen: `sm.navPlugin.timeFactor = isLogicFrozen ? 0 : 1`
 
-### 5d. Babylon.js Dispose Rules
+### 6d. Babylon.js Dispose Rules
 
 **Meshes** — always dispose when removing. Check `isDisposed()` for shared items:
 ```typescript
@@ -451,7 +460,7 @@ scene.lights.forEach(l => {
 });
 ```
 
-### 5e. Particle System Lifecycle
+### 6e. Particle System Lifecycle
 ```
 Create:  pool.acquire() or new ParticleSystem()
 Start:   ps.start()
@@ -460,7 +469,7 @@ Reset:   ps.reset()            — returns to pool for reuse
 Dispose: ps.dispose(false)     — only on full teardown, false = keep shared texture
 ```
 
-### 5f. `resetSession()` Cleanup Chain
+### 6f. `resetSession()` Cleanup Chain
 
 `Game.resetSession()` handles full session teardown. When adding new persistent state, you MUST add cleanup here:
 
@@ -472,7 +481,7 @@ Dispose: ps.dispose(false)     — only on full teardown, false = keep shared te
 6. `_resetGameStateFlags()` — reset ALL boolean flags, points, health, weapons to defaults
 7. `_resetMysteryBox()` — reset box state machine to `BOX_IDLE`
 
-### 5g. EventBus Handler Cleanup
+### 6g. EventBus Handler Cleanup
 
 Systems that call `eventBus.on()` **MUST** clean up in `dispose()`:
 ```typescript
@@ -484,7 +493,7 @@ ctx.eventBus.off('ZOMBIE_DEATH', handler);
 ```
 Failure to do this causes orphaned handlers that accumulate across level reloads.
 
-### 5h. Zombie Mesh Pooling
+### 6h. Zombie Mesh Pooling
 
 Zombies use an acquire/release pool pattern. NEVER call `mesh.dispose()` directly:
 ```typescript
@@ -505,7 +514,7 @@ if (crowd && z.crowdAgentIndex !== undefined) {
 
 ---
 
-## 6. Key Entity Types
+## 7. Key Entity Types
 
 ### `Zombie` (`types/entities.ts`)
 Core fields: `id`, `mesh`, `headMesh`, `health`, `maxHealth`, `speed`, `state` (ZombieState enum), `isDead`, `type` ('ZOMBIE' | 'HELLHOUND'), `targetWindowId`, `crowdAgentIndex`, `spawnTime`, `missingLimbs`, `isCrawling`.
@@ -517,15 +526,15 @@ Fields: `mesh`, `direction`, `speed`, `damage`, `life`, `isRemote`, `isPacked`, 
 The root type for data-driven maps. Contains: `meta`, `geometry[]`, `zones[]`, `interactables` (doors, windows, perks, wallbuys, mysteryBoxes, powerSwitch, packAPunch), `spawns`, `navigation`, `config?` (per-map overrides), `environment?`.
 
 ### `WeaponConfig` / `WeaponState` (`types/player.ts`)
-Config: `id`, `name`, `clipSize`, `maxReserve`, `fireRate`, `automatic`, `damage`, `hipPos`, `adsPos`, `reloadTime`, `isExplosive?`.
-State extends Config with: `currentAmmo`, `currentReserve`, `mesh`, `isPacked`.
+Config: `id`, `name`, `clipSize`, `maxReserve`, `fireRate`, `automatic`, `damage`, `scale`, `pellets`, `hipPos`, `adsPos`, `barrelLength`, `reloadTime`, `hipFireOriginCorrection?`, `isExplosive?`, `splashRadius?`, `splashDamage?`, `selfDamageMultiplier?`, `projectileSpeedOverride?`, `fireSound?`, `recoil?`.
+State extends Config with: `currentAmmo`, `currentReserve`, `mesh`, `isPacked`, `packedName?`.
 
 ### `GameStateData` (`types/ui.ts`)
 Union of `GameFlowState & RoundState & PlayerState & PhysicsState & WorldState & AssetsState`. This is the master state object on `StateManager`.
 
 ---
 
-## 7. Step-by-Step Guides
+## 8. Step-by-Step Guides
 
 ### Adding a New Weapon
 1. Create config file in `config/weapons/` (copy existing like `pistol.ts`)
@@ -567,10 +576,10 @@ See `maps/ADDING_MAPS.md` for full guide. Summary:
 
 ---
 
-## 8. Pattern Conventions
+## 9. Pattern Conventions
 
 ### Manager Dependency Injection
-All managers use `setDependencies()` for late-bound callbacks that can't be passed at construction time (due to circular references or ordering). When creating a new manager, follow this pattern:
+Some managers use `setDependencies()` for late-bound callbacks that can't be passed at construction time (due to circular references or ordering). When creating a new manager that needs late binding, follow this pattern:
 ```typescript
 public setDependencies(cb1: ..., cb2: ...) { ... }
 ```
@@ -588,6 +597,7 @@ Self-cleaning observers (e.g. `onDisposeObservable.addOnce`) are appropriate for
 - Use `createMaterial()` from `GeometryUtils.ts` for PBR materials with textures on level geometry (handles uScale, vScale, roughness, markDirty-on-load).
 - Use `createPBRMaterialWithTexture()` in `LevelBuilder.ts` for materials that need custom metallic/environment intensity.
 - Use inline `new PBRMaterial()`/`new StandardMaterial()` for simple materials without textures or with special setup (void, metal, frame).
+- Use `resourceManager.getMaterial(name, factory)` to cache shared materials.
 
 ### HUD Component Update Strategy
 - **Standard React model** (store selector triggers re-render): Use for all HUD components that update at gameplay frequency (<10/sec). Example: `AmmoCounter`, `RoundDisplay`, `PlayerStatus`.
@@ -607,13 +617,13 @@ All perk factories share common post-load and error-fallback logic via `factorie
 
 ---
 
-## 9. Config Reference
+## 10. Config Reference
 
 ### `GAME_CONFIG` (config/gameplay.ts)
 Movement: `WALK_SPEED`, `SPRINT_SPEED`, `JUMP_FORCE`, `GRAVITY`
 Health: `PLAYER_BASE_HEALTH` (100), `PLAYER_JUGG_HEALTH` (250), `DAMAGE_IMMUNITY_MS` (500)
-Costs: `JUGGERNOG_COST`, `SPEED_COLA_COST`, `QUICK_REVIVE_COST`, `PACK_A_PUNCH_COST`
-Points: `POINTS_KILL` (80), `POINTS_HEADSHOT` (20), `POINTS_HIT` (10)
+Costs: `JUGGERNOG_COST`, `SPEED_COLA_COST`, `QUICK_REVIVE_COST`, `DOUBLE_TAP_COST`, `MULE_KICK_COST`, `PACK_A_PUNCH_COST`, `PACK_A_PUNCH_AMMO_COST`
+Points: `POINTS_KILL` (80), `POINTS_HEADSHOT` (20), `POINTS_HIT` (10), `POINTS_REPAIR` (10)
 
 ### `ROUND_CONFIG`
 Zombies per round 1-5: `[6, 8, 12, 16, 22]`, then +3 per round.
@@ -627,14 +637,14 @@ Network tick: 50ms (20 Hz). Full sync forced every 5000ms. Interpolation buffer:
 
 ---
 
-## 9. Common Mistakes — Do NOT
+## 11. Common Mistakes — Do NOT
 
 | ❌ Do NOT | ✅ Do Instead |
 |-----------|--------------|
 | Import React in engine/state/systems files | Keep engine code React-free; use UIBridge |
 | Mutate Zustand store directly from engine | Use `StateManager.setXxx()` → `UIBridge` |
-| Forget pause guard at top of `update()` | Add the appropriate guard (see Section 5a) |
-| Forget `lastTickTime` compensation for timers | Add the pattern from Section 5b |
+| Forget pause guard at top of `update()` | Add the appropriate guard (see Section 6a) |
+| Forget `lastTickTime` compensation for timers | Add the pattern from Section 6b) |
 | Forget to re-export new systems from `systems/index.ts` | Add export line in `systems/index.ts` |
 | Forget to clean up EventBus handlers in `dispose()` | Call `eventBus.off()` for every `eventBus.on()` |
 | Call `z.mesh.dispose()` on zombies | Use `releaseZombieMesh()` / `releaseHellhoundMesh()` |
@@ -643,12 +653,12 @@ Network tick: 50ms (20 Hz). Full sync forced every 5000ms. Interpolation buffer:
 | Modify `GameStateData` without updating `types/ui.ts` | The type is a union of slices in `types/ui.ts` |
 | Forget authority check for HOST-only logic | Guard with `if (gameMode === 'CLIENT') return` |
 | Use hardcoded config values | Use `MapConfigManager` for per-map fallback |
-| Create materials without registering in ResourceManager | Use `resourceManager.getOrCreateMaterial()` |
+| Create materials without registering in ResourceManager | Use `resourceManager.getMaterial(name, factory)` |
 | Forget to add new persistent state cleanup in `resetSession()` | Add cleanup step in `Game.ts` |
 
 ---
 
-## 10. File Quick-Reference
+## 12. File Quick-Reference
 
 | I want to... | Edit this file |
 |--------------|----------------|
@@ -674,7 +684,7 @@ Network tick: 50ms (20 Hz). Full sync forced every 5000ms. Interpolation buffer:
 
 ---
 
-## 11. System Registration Order
+## 13. System Registration Order
 
 Systems are registered in `Game.initializeSystems()` in this specific order for a reason:
 
@@ -699,6 +709,7 @@ Systems are registered in `Game.initializeSystems()` in this specific order for 
 19. **ReviveSystem** — cooperative revive
 
 **MysteryBoxSystem** is NOT registered with SystemManager — it's called directly in `GameLoop.ts`.
+**PackAPunchSystem** is also not registered with SystemManager — `Game.ts` creates it and calls `init()` manually.
 
 ---
 

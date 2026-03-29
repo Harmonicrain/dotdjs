@@ -20,7 +20,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 *   **Weapon System**: 
     *   **Starting Pistol**: M1911 (Pack-a-Punch: "PAIN")
     *   **Shotgun**: Olympia (Pack-a-Punch: "Hades")
-    *   **Rifles**: STG-44 (Pack-a-Punch: "Spatz-447"), FAMAS (Pack-a-Punch: "G16-GL35")
+    *   **Rifles**: STG-44 (Pack-a-Punch: "Spatz-447"), FAMAS (Pack-a-Punch: "G16-GL35"), FN FAL (Pack-a-Punch: "EPC WN"), M1 Garand (Pack-a-Punch: "Punisher 30")
     *   **Wonder Weapons**: Ray Gun (Pack-a-Punch: "Porter's X2") - explosive projectiles with splash damage
     *   **Pack-a-Punch**: Weapon upgrade system changing stats, projectiles, and fire modes.
     *   **Wall Buys**: Purchase weapons and ammo from chalk outlines on walls.
@@ -64,6 +64,11 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 *   **Spectator Mode**: Watch the host play if you fall in battle until the next round respawn.
 *   **Downed/Revive System**: Cooperative revive mechanics with revive points reward.
 
+### ⚙️ Settings & Input
+*   **Settings Menu**: Player name, fullscreen, resolution scale, graphics quality, FOV, FPS toggle, and per-category audio sliders.
+*   **Multiple Input Schemes**: Keyboard/mouse, controller, and mobile touch controls are all supported.
+*   **Touch HUD**: On-screen joystick, fire, ADS, reload, knife, jump, interact, swap, crouch, and pause controls for touch devices.
+
 ### 🎨 Visuals & Audio
 *   **PBR Materials**: Realistic lighting using Physically Based Rendering.
 *   **Atmosphere**: Dynamic lighting and post-processing (Bloom, Tone Mapping).
@@ -78,7 +83,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 | Map ID | Name | Description |
 |--------|------|-------------|
 | `warehouse` | WAREHOUSE 115 | An abandoned storage facility with tight corridors. |
-| `map_test` | Test Arena | A large octagonal stone arena surrounded by gates. |
+| `map_test` | MAP TEST | A large octagonal stone arena surrounded by gates. |
 | `wipmap` | WIPMAP | Work in progress map. |
 
 ---
@@ -88,7 +93,7 @@ The project supports Peer-to-Peer multiplayer via WebRTC, allowing users to host
 ### Languages
 *   **TypeScript** (Strictly typed with `strict: true`)
 *   **React 19 / JSX** (UI, HUD Components)
-*   **HTML5 / CSS3** (Tailwind CSS for UI)
+*   **HTML5 / CSS3** (custom styles, UI utility classes, and inline component styling)
 
 ### Core Imports & Libraries
 *   **[@babylonjs/core](https://www.npmjs.com/package/@babylonjs/core)**: 3D rendering and physics engine.
@@ -115,16 +120,19 @@ config/                    # Global gameplay defaults
     └── index.ts           # Exports WEAPON_CONFIGS[] and UPGRADED_WEAPON_CONFIGS{}
 
 engine/                    # Custom engine core
-├── CommandRegistry.ts     # Debug console commands (/debug, /give, /tp, etc.)
+├── CommandRegistry.ts     # Console command dispatcher
 ├── EventBus.ts            # Typed pub/sub event system
 ├── GeometryUtils.ts       # Mesh/geometry creation utilities
-├── InputManager.ts        # Keyboard, mouse, controller input (action-based)
+├── InputManager.ts        # Input coordinator; delegates to engine/input/*
 ├── LevelBuilder.ts        # Builds map geometry, doors, windows, lights from MapDefinition
 ├── MathUtils.ts           # Math helpers
 ├── MinHeap.ts             # Priority queue for pathfinding
 ├── ObjectPool.ts          # Generic object pool for performance
 ├── SystemManager.ts       # ECS system registration, priority sorting, update loop
-└── TimerManager.ts        # Scheduled one-shot event handling
+├── TimerManager.ts        # Scheduled one-shot event handling
+├── weaponResetUtils.ts    # Weapon reset helpers for teardown / revive flows
+├── commands/              # Debug, visual, cheat, and system console commands
+└── input/                 # Keyboard/mouse, controller, and touch handlers + shared types
 
 game/                      # Lifecycle and render loop
 ├── Game.ts                # Main orchestrator — creates everything, registers systems
@@ -165,7 +173,7 @@ factories/                  # Mesh factories (procedural geometry)
 ├── gameplay/              # Power switch, power-up meshes
 ├── mysterybox/            # Mystery Box mesh
 ├── packapunch/            # Pack-a-Punch machine mesh
-└── perks/                 # Perk machine meshes (Juggernog, Speed Cola, Quick Revive)
+└── perks/                 # Perk machine meshes (Juggernog, Speed Cola, Quick Revive, Double Tap, Mule Kick)
 
 network/                   # P2P networking
 ├── InterpolationBuffer.ts # Remote entity position smoothing
@@ -186,6 +194,7 @@ systems/                   # Modular ECS-style logic systems
 ├── InteractionSystem.ts   # Player world interactions (doors, wallbuys, perks, etc.)
 ├── MysteryBoxSystem.ts    # Mystery Box state machine
 ├── NetworkSystem.ts       # Multiplayer sync (sends state/input at 20Hz)
+├── PackAPunchSystem.ts    # Event-driven PaP upgrade flow (manual init, not SystemManager)
 ├── PowerUpSystem.ts       # Power-up spawning, pickup, active effect lifecycle
 ├── ProjectileSystem.ts    # Bullet/projectile physics and hit detection
 ├── RemotePlayerSystem.ts  # Remote player interpolation rendering
@@ -233,8 +242,8 @@ ui/                        # React-based HUD and menus
 ├── GameScene.tsx           # Canvas wrapper + game initialization
 ├── GameMenuManager.tsx    # Menu state management (main menu, pause, game over)
 ├── GameMenus.tsx          # Menu entry point
-├── components/            # 20 HUD components (AmmoCounter, Crosshair, RoundDisplay, etc.)
-└── menus/                 # MainMenu, HostLobby, JoinLobby
+├── components/            # HUD, debug, pause, touch, and game-over overlays
+└── menus/                 # MainMenu, MultiplayerMenu, MapSelect, HostLobby, JoinLobby, SettingsMenu
 ```
 
 ---
@@ -273,6 +282,11 @@ ui/                        # React-based HUD and menus
 | **Y/Triangle** | Next weapon |
 | **START** | Toggle console |
 
+### Touch
+- Left virtual joystick: move and auto-sprint at high stick tilt
+- Right-side look zone: camera look
+- On-screen actions: FIRE, ADS, RELOAD, KNIFE, JUMP, USE, SWAP, CROUCH, PAUSE
+
 ---
 
 ## 🐛 Debug Commands
@@ -283,12 +297,14 @@ Open the debug console with **`** (backtick) and enter commands:
 |---------|-------------|
 | `/debug` | Toggle debug mode (freeze logic, inspect objects) |
 | `/debug_controls` | Toggle input/jitter debugging overlay |
+| `/bullet_debug` | Freeze and inspect projectile offsets for shot alignment debugging |
+| `/weapon_ads_debug` | Freeze gameplay and tune weapon ADS positions with a live overlay |
 | `/debug_pbr` | Generate PBR material and lighting report |
 | `/render_stats` | Toggle render stats overlay (draw calls, materials, shadows, lights) |
 | `/pos` | Show player position and rotation |
 | `/tp <x> <y> <z>` | Teleport to coordinates |
 | `/points <amt>` | Add points |
-| `/give <weapon_id>` | Give weapon (pistol, shotgun, rifle, famas, ray_gun) |
+| `/give <weapon_id>` | Give weapon (pistol, shotgun, rifle, famas, fn_fal, m1_garand, ray_gun) |
 | `/ammo` | Refill all ammo |
 | `/round <n>` | Set current round |
 | `/kill_all` | Kill all active zombies |
@@ -324,14 +340,26 @@ Open the debug console with **`** (backtick) and enter commands:
     npm run build
     ```
 
+5.  **Preview Production Build**:
+    ```bash
+    npm run preview
+    ```
+
+6.  **Run Tests**:
+    ```bash
+    npm run test       # watch mode
+    npm run test:run   # single run
+    npm run test:ui    # Vitest UI
+    ```
+
 ---
 
 ## 🏗️ Architecture Notes
 
 ### Hybrid ECS (Entity-Component-System)
-- Logic is grouped into single-responsibility Systems that export an `update(dt)` method.
+- Logic is grouped into single-responsibility Systems that typically export an `update(dt, now)` method.
 - Entities are typed objects (e.g., `Zombie`, `Projectile`), not pure IDs.
-- New systems must be registered in `game/Game.ts` via `SystemManager`.
+- Most new systems are registered in `game/Game.ts` via `SystemManager`; `MysteryBoxSystem` and `PackAPunchSystem` are manual exceptions.
 
 ### State Management
 - **StateManager** (`state/StateManager.ts`) is the "Single Source of Truth" for all game state.
@@ -340,7 +368,7 @@ Open the debug console with **`** (backtick) and enter commands:
 
 ### Networking Authority
 - **Host** is the authoritative source for game logic (spawning, damage, round progression).
-- **Clients** are "dumb terminals" that relay input and render state.
+- **Clients** are host-authoritative but still handle local rendering, touch/controller UX, immediate visuals, and hit/request reporting.
 - All simulation systems must early-return on non-authority clients.
 
 ---
