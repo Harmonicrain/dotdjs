@@ -78,4 +78,26 @@ describe('StateManager', () => {
         expect(stateManager.gameState.isDowned).toBe(true);
         expect(stateManager.gameState.isGameOver).toBe(false);
     });
+
+    it('should pause sounds only in solo mode', () => {
+        const soundManager = {
+            pauseAll: vi.fn(),
+            resumeAll: vi.fn(),
+        };
+        stateManager.soundManager = soundManager as any;
+
+        stateManager.gameModeRef.current = 'SOLO';
+        stateManager.setPaused(true);
+
+        expect(soundManager.pauseAll).toHaveBeenCalledTimes(1);
+
+        soundManager.pauseAll.mockClear();
+        soundManager.resumeAll.mockClear();
+
+        stateManager.gameModeRef.current = 'HOST';
+        stateManager.setPaused(true);
+
+        expect(soundManager.pauseAll).not.toHaveBeenCalled();
+        expect(soundManager.resumeAll).toHaveBeenCalledTimes(1);
+    });
 });

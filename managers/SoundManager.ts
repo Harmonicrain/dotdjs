@@ -14,6 +14,7 @@ const SOUND_CATEGORIES: Record<string, SoundCategory> = {
 export class SoundManager {
     private sounds: Map<string, BABYLON.Sound> = new Map();
     private activeSoundCounts: Map<string, number> = new Map();
+    private pausedSoundNames = new Set<string>();
     private scene: BABYLON.Scene;
     private audioInitialized = false;
 
@@ -163,20 +164,27 @@ export class SoundManager {
     }
 
     public pauseAll() {
-        if (BABYLON.Engine.audioEngine && BABYLON.Engine.audioEngine.masterGain) {
-            BABYLON.Engine.audioEngine.masterGain.gain.value = 0;
-        }
+        this.pausedSoundNames.clear();
+        this.sounds.forEach((sound, name) => {
+            if (!sound.isPlaying) return;
+            sound.pause();
+            this.pausedSoundNames.add(name);
+        });
     }
 
     public resumeAll() {
-        if (BABYLON.Engine.audioEngine && BABYLON.Engine.audioEngine.masterGain) {
-            BABYLON.Engine.audioEngine.masterGain.gain.value = this.masterVolume;
-        }
+        this.pausedSoundNames.forEach((name) => {
+            const sound = this.sounds.get(name);
+            if (!sound) return;
+            sound.play();
+        });
+        this.pausedSoundNames.clear();
     }
 
     public stopAll() {
         this.sounds.forEach(s => s.stop());
         this.activeSoundCounts.clear();
+        this.pausedSoundNames.clear();
     }
 
     /** Between-game cleanup — stops all active sounds but keeps loaded assets. */
@@ -190,5 +198,6 @@ export class SoundManager {
         this.sounds.forEach(s => s.dispose());
         this.sounds.clear();
         this.activeSoundCounts.clear();
+        this.pausedSoundNames.clear();
     }
 }

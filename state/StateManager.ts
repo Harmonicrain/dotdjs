@@ -236,12 +236,14 @@ export class StateManager {
     public updateZoneSystem(zones: ZoneDefinition[], doors: DoorConnection[]) { this.zoneSystem.load(zones, doors); }
     public setPaused(paused: boolean) {
         this.gameState.isPaused = paused;
-        
-        // Pause/Resume Babylon engine systems
-        this.scene.animationsEnabled = !paused;
-        this.scene.particlesEnabled = !paused;
 
-        if (paused) {
+        const shouldFreezeForPause = paused && this.gameModeRef.current === 'SOLO';
+
+        // Multiplayer pause is local UI only; solo pause freezes simulation visuals.
+        this.scene.animationsEnabled = !shouldFreezeForPause;
+        this.scene.particlesEnabled = !shouldFreezeForPause;
+
+        if (shouldFreezeForPause) {
             this.timerManager.pauseAll();
             this.soundManager?.pauseAll();
         } else {
