@@ -21,7 +21,6 @@ interface GameMenuManagerProps {
   roomId: string;
   remotePlayerName: string;
   isClientReady: boolean;
-  isMapLoaded: boolean;
 
   // Actions
   onStartSolo: (mapId: string, name: string) => void;
@@ -30,7 +29,6 @@ interface GameMenuManagerProps {
   onJoinInit: (joinId: string) => void;
   onClientReady: (name: string) => void;
   onAbort: () => void;
-  onGameReset: () => void;
 }
 
 export const GameMenuManager = ({
@@ -40,14 +38,12 @@ export const GameMenuManager = ({
   roomId,
   remotePlayerName,
   isClientReady,
-  isMapLoaded,
   onStartSolo,
   onHostInit,
   onHostStart,
   onJoinInit,
   onClientReady,
   onAbort,
-  onGameReset,
 }: GameMenuManagerProps) => {
   const [menuState, setMenuState] = useState<MenuState>('MAIN');
   const [mapSelectMode, setMapSelectMode] = useState<MapSelectMode>('solo');

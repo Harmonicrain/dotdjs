@@ -231,7 +231,6 @@ export class StateManager {
     }
 
     public initializePerk(perkId: string) { this.gameState.perkStates[perkId] = false; }
-    public isDoorOpen(doorId: string): boolean { return this.gameState.doorStates[doorId]?.isOpen ?? false; }
     public getPerkState(perkId: string): boolean { return this.gameState.perkStates[perkId] ?? false; }
     public updateZoneSystem(zones: ZoneDefinition[], doors: DoorConnection[]) { this.zoneSystem.load(zones, doors); }
     public setPaused(paused: boolean) {

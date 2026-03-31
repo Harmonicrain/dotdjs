@@ -1,12 +1,12 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { MAPS, DEFAULT_MAP_ID, GAME_CONFIG, WEAPON_CONFIGS } from '../config';
-import { MAP_DEFINITIONS } from '../managers/MapRegistry';
+import { MAPS } from '../config';
+import { createMenuStoreState, createSessionStartStoreState } from '../game/sessionStateUtils';
 import { useMultiplayer } from '../network/useMultiplayer';
 import { HUD } from './HUD';
 import { GameMenuManager } from './GameMenuManager';
 import { LoadingScreen } from './components/LoadingScreen';
-import { useGameStore } from '../store/useGameStore';
+import { ExtendedSettings, useGameStore } from '../store/useGameStore';
 import { GameLifecycle } from '../game/GameLifecycle';
 import { createNetworkMessageHandler } from '../network/NetworkMessageHandler';
 import { GameMessage } from '../types/index';
@@ -22,6 +22,8 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
     const updatePlayer = useGameStore(s => s.updatePlayer);
     const updateGame   = useGameStore(s => s.updateGame);
     const updateRemote = useGameStore(s => s.updateRemote);
+    const updateSettings = useGameStore(s => s.updateSettings);
+    const settings = useGameStore(s => s.settings);
 
     const [hasStarted,      setHasStarted]      = useState(false);
     const [isLoading,       setIsLoading]        = useState(false);
@@ -66,6 +68,18 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
         }
     }, [connectionStatus, updateGame]);
 
+    useEffect(() => {
+        const game = lifecycleRef.current?.game;
+        const sm = game?.stateManager;
+        if (!game || !sm) return;
+
+        game.inputManager.updateSettings(settings);
+        sm.soundManager?.setMasterVolume(settings.masterVolume);
+        sm.soundManager?.setCategoryVolume('weapon', settings.weaponVolume);
+        sm.soundManager?.setCategoryVolume('zombie', settings.zombieVolume);
+        sm.soundManager?.setCategoryVolume('effects', settings.effectsVolume);
+    }, [settings]);
+
     // ── Start / Stop ──────────────────────────────────────────────────────
     const startGame = useCallback(async (
         overrideMode?: 'SOLO' | 'HOST' | 'CLIENT',
@@ -75,18 +89,11 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
         const mode  = overrideMode ?? gameMode;
         const mapId = overrideMapId ?? selectedMap;
 
-        updatePlayer({ playerName, health: GAME_CONFIG.PLAYER_BASE_HEALTH, isDowned: false, perks: {} });
-        updateGame({ gameMode: mode, isDogRound: false, isSpectating: false, isGameOver: false, round: 0, showFade: true, isPaused: false });
-        const mapDef = MAP_DEFINITIONS[mapId] ?? MAP_DEFINITIONS[DEFAULT_MAP_ID];
-        const startPoints = mapDef.config?.gameplay?.STARTING_POINTS ?? GAME_CONFIG.STARTING_POINTS;
-        updatePlayer({ points: startPoints });
-        if (mode !== 'SOLO') {
-            updateRemote({ 
-                remotePoints: startPoints, 
-                remoteTotalEarnedPoints: startPoints,
-                remoteHealth: GAME_CONFIG.PLAYER_BASE_HEALTH,
-                remotePerks: {}
-            });
+        const sessionState = createSessionStartStoreState(mapId, mode, playerName);
+        updatePlayer(sessionState.player);
+        updateGame(sessionState.game);
+        if (sessionState.remote) {
+            updateRemote(sessionState.remote);
         }
 
         await lifecycleRef.current?.start(mapId, mode, playerName);
@@ -134,18 +141,10 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
         const canvas = canvasRef.current;
 
         // Reset UI to defaults
-        updateGame({ isPaused: false, isGameOver: false, isSpectating: false, activePowerUps: {}, interactionMsg: null, hoverMsg: null, showFade: false, activeZombiesCount: 0, round: 1 });
-        const startWeapon = WEAPON_CONFIGS[0];
-        updatePlayer({ 
-            health: GAME_CONFIG.PLAYER_BASE_HEALTH, 
-            points: GAME_CONFIG.STARTING_POINTS, 
-            ammo: startWeapon.clipSize, 
-            reserveAmmo: startWeapon.maxReserve, 
-            activeWeaponIndex: 0, 
-            perks: {}, 
-            isDowned: false, 
-            weaponName: startWeapon.name 
-        });
+        const menuState = createMenuStoreState();
+        updateGame(menuState.game);
+        updatePlayer(menuState.player);
+        updateRemote(menuState.remote);
 
         const lifecycle = new GameLifecycle();
         lifecycleRef.current = lifecycle;
@@ -155,6 +154,7 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
             onStartedChange:   setHasStarted,
             onMapLoadedChange: setIsMapLoaded,
             onSetPaused:       (paused: boolean) => updateGame({ isPaused: paused }),
+            onInputDeviceChange: (device: ExtendedSettings['inputDevice']) => updateSettings({ inputDevice: device }),
         });
 
         return () => {
@@ -190,7 +190,6 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                     roomId={roomId}
                     remotePlayerName={remoteNameLocal}
                     isClientReady={isClientReady}
-                    isMapLoaded={isMapLoaded}
                     onStartSolo={(mapId, name) => startGame('SOLO', mapId, name || 'Player')}
                     onHostInit={initializeHost}
                     onHostStart={(mapId, name) => {
@@ -203,7 +202,6 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                         send?.({ type: 'READY', name: name || 'Player' });
                     }}
                     onAbort={cleanup}
-                    onGameReset={onGameReset}
                 />
             )}
 
@@ -211,7 +209,6 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
                 <HUD
                     onQuit={quitToMenu}
                     onResume={() => setPaused(false)}
-                    onRestart={() => { quitToMenu(); startGame(); }}
                     onCommand={(cmd) => lifecycleRef.current?.game?.stateManager?.eventBus.emit('COMMAND_REQUEST', cmd)}
                     inputManager={lifecycleRef.current?.game?.inputManager ?? null}
                     onPause={() => setPaused(true)}

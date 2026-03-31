@@ -1,10 +1,12 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { GameMessage, PowerUpType, DoorState, ZombieSyncData } from '../types/index';
-import { StoredPos } from '../types/network';
+import { GameMessage, PowerUpType, ZombieSyncData } from '../types/index';
+import { StoredPos, CachedClientState, CachedHostState } from '../types/network';
 import { StateManager } from '../state/StateManager';
 import { GameFields, PlayerFields, RemoteFields } from '../store/useGameStore';
 import { handleWeaponPickup } from '../systems/interaction/weaponPickupUtils';
+import { applyPackAPunchUpgrade } from '../systems/packAPunchUtils';
+import { applyExplosionHit, applyProjectileHit } from '../systems/zombie/zombieDamageUtils';
 
 export interface NetworkHandlerActions {
     updateGame: (updates: Partial<GameFields>) => void;
@@ -17,55 +19,6 @@ export interface NetworkHandlerActions {
     startGameLocal: (overrideMode?: string, overrideMapId?: string) => void;
 
     setInteractionMsg: (msg: string | null) => void;
-}
-
-// ── Cached full-state types ───────────────────────────────────────────────────
-
-export interface CachedHostState {
-    [key: string]: any;
-    doors: Record<string, DoorState>;
-    hostPos: StoredPos;
-    activeWeaponIndex: number;
-    activeWeaponId: string;
-    hostHealth: number;
-    hostPoints: number;
-    hostTotalEarned: number;
-    hostName: string;
-    hostPerks: Record<string, boolean>;
-    hostIsDowned: boolean;
-    hostIsSpectating: boolean;
-    hostKills: number;
-    hostShots: number;
-    zombies: ZombieSyncData[];
-    windowStates: Record<string, number>;
-    activeZombiesCount: number;
-    totalRoundZombies: number;
-    zombiesSpawned: number;
-    zombiesKilledInRound: number;
-    round: number;
-    powerOn: boolean;
-    isDogRound: boolean;
-    activePowerUps: PowerUpType[];
-    mysteryBox: {
-        state: number; locIndex: number; lidAngle: number;
-        weaponId: string | null; rollIndex: number; owner: string | null;
-    };
-}
-
-export interface CachedClientState {
-    [key: string]: any;
-    pos: StoredPos;
-    activeWeaponIndex: number;
-    activeWeaponId: string;
-    clientHealth: number;
-    clientPoints: number;
-    clientTotalEarned: number;
-    clientPerks: Record<string, boolean>;
-    clientIsDowned: boolean;
-    clientIsSpectating: boolean;
-    clientName: string;
-    clientKills: number;
-    clientShots: number;
 }
 
 // ── Default factories ─────────────────────────────────────────────────────────
@@ -82,7 +35,7 @@ function defaultHostCache(startPoints = 0, name = 'Unknown'): CachedHostState {
         activeZombiesCount: 0, totalRoundZombies: 0,
         zombiesSpawned: 0, zombiesKilledInRound: 0,
         round: 1,
-        powerOn: false, isDogRound: false, activePowerUps: [],
+        powerOn: false, isDogRound: false, isGameOver: false, activePowerUps: [],
         mysteryBox: { state: 0, locIndex: 0, lidAngle: 0, weaponId: null, rollIndex: 0, owner: null },
     };
 }
@@ -232,41 +185,14 @@ export const createNetworkMessageHandler = (
                 // HOST applies CLIENT's zombie hit authoritatively
                 const hitZombie = sm.zombies.find(z => z.id === msg.zombieId);
                 if (hitZombie && !hitZombie.isDead) {
-                    hitZombie.lastHitTime = Date.now();
-
-                    let multiplier = 1.0;
-                    if (msg.isHeadshot) multiplier = 1.5;
-                    else if (msg.isLegHit) multiplier = 0.7;
-
-                    const isInstaKill = sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]
-                        && sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
-                    const dmg = isInstaKill ? hitZombie.maxHealth : (msg.damage * multiplier);
-                    hitZombie.health -= dmg;
-
-                    if (msg.isLegHit && !hitZombie.isCrawling && hitZombie.type === 'ZOMBIE') {
-                        if (dmg > 40 || hitZombie.health < 40) {
-                            hitZombie.isCrawling = true;
-                            hitZombie.speed = 0.015;
-                        }
-                    }
-
-                    // Award hit points to the CLIENT
-                    const hitPts = msg.isHeadshot ? 20 : 10;
-                    const hasDouble = sm.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS]
-                        && sm.gameState.activePowerUps[PowerUpType.DOUBLE_POINTS]! > Date.now();
-                    const hitAmount = hasDouble ? hitPts * 2 : hitPts;
-                    cachedClient.clientPoints += hitAmount;
-                    cachedClient.clientTotalEarned += hitAmount;
-                    sm.send({ type: 'HIT_CONFIRM', amount: hitAmount });
-
-                    if (hitZombie.health <= 0 && !hitZombie.isDead) {
-                        if (hitZombie.type === 'HELLHOUND') {
-                            sm.hellhoundManager.onHellhoundDeath(hitZombie, hitZombie.mesh.position, 'CLIENT');
-                        } else {
-                            const headPos = hitZombie.headMesh ? hitZombie.headMesh.absolutePosition : undefined;
-                            sm.zombieManager.onZombieDeath(hitZombie, hitZombie.mesh.position, 'CLIENT', msg.isHeadshot, headPos);
-                        }
-                    }
+                    applyProjectileHit(sm, {
+                        zombie: hitZombie,
+                        damage: msg.damage,
+                        owner: 'CLIENT',
+                        isHeadshot: msg.isHeadshot,
+                        isLegHit: msg.isLegHit,
+                        hitMeshName: msg.meshName,
+                    });
                 }
                 break;
             }
@@ -274,37 +200,15 @@ export const createNetworkMessageHandler = (
             case 'CLIENT_EXPLOSION_HIT': {
                 // HOST applies CLIENT's explosive hit authoritatively
                 const impactPoint = new BABYLON.Vector3(msg.x, msg.y, msg.z);
-                const splashRadiusSq = msg.splashRadius * msg.splashRadius;
-                const isInstaKillExp = sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]
-                    && sm.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
 
                 for (const z of sm.zombies) {
-                    if (z.isDead) continue;
-                    const distSq = BABYLON.Vector3.DistanceSquared(impactPoint, z.mesh.position);
-                    if (distSq <= splashRadiusSq) {
-                        const dist = Math.sqrt(distSq);
-                        const damageRatio = 1 - (dist / msg.splashRadius);
-                        const finalDamage = isInstaKillExp ? z.maxHealth : (msg.splashDamage * damageRatio);
-
-                        z.lastHitTime = Date.now();
-                        z.health -= finalDamage;
-
-                        if (dist > msg.splashRadius * 0.3 && !z.isCrawling && z.type === 'ZOMBIE') {
-                            if (finalDamage > 40 || z.health < 40) {
-                                z.isCrawling = true;
-                                z.speed = 0.015;
-                            }
-                        }
-
-                        if (z.health <= 0 && !z.isDead) {
-                            if (z.type === 'HELLHOUND') {
-                                sm.hellhoundManager.onHellhoundDeath(z, z.mesh.position, 'CLIENT');
-                            } else {
-                                const blastDir = z.mesh.position.subtract(impactPoint).normalize();
-                                sm.zombieManager.onZombieDeath(z, z.mesh.position, 'CLIENT', false, undefined, blastDir);
-                            }
-                        }
-                    }
+                    applyExplosionHit(sm, {
+                        zombie: z,
+                        impactPoint,
+                        splashRadius: msg.splashRadius,
+                        splashDamage: msg.splashDamage,
+                        owner: 'CLIENT',
+                    });
                 }
                 break;
             }
@@ -520,23 +424,16 @@ export const createNetworkMessageHandler = (
             case 'PACK_A_PUNCH_CONFIRM': {
                 // HOST confirmed Pack-a-Punch — upgrade the CLIENT's weapon
                 const weapon = sm.gameState.weapons.find(w => w.id === msg.weaponId);
-                if (weapon && !weapon.isPacked) {
-                    const upgradeConfig = sm.configManager.upgradedWeapons[weapon.id];
-                    if (upgradeConfig) {
-                        Object.assign(weapon, upgradeConfig);
-                        weapon.currentAmmo = weapon.clipSize;
-                        weapon.currentReserve = weapon.maxReserve;
-                        weapon.isPacked = true;
-                        const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
-                        if (activeWeapon === weapon) {
-                            sm.setAmmo(weapon.currentAmmo);
-                            sm.setReserveAmmo(weapon.currentReserve);
-                            sm.setWeaponName(weapon.name);
-                            sm.setWeaponId(weapon.id);
-                        }
-                        sm.setInteractionMsg("WEAPON UPGRADED!");
-                        sm.timerManager.schedule('pap_msg_clear', sm.configManager.visuals.HUD_MSG_DURATION || 2000, () => sm.setInteractionMsg(null));
+                if (weapon && applyPackAPunchUpgrade(weapon, sm.configManager)) {
+                    const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
+                    if (activeWeapon === weapon) {
+                        sm.setAmmo(weapon.currentAmmo);
+                        sm.setReserveAmmo(weapon.currentReserve);
+                        sm.setWeaponName(weapon.name);
+                        sm.setWeaponId(weapon.id);
                     }
+                    sm.setInteractionMsg("WEAPON UPGRADED!");
+                    sm.timerManager.schedule('pap_msg_clear', sm.configManager.visuals.HUD_MSG_DURATION || 2000, () => sm.setInteractionMsg(null));
                 }
                 break;
             }
@@ -600,11 +497,16 @@ export const createNetworkMessageHandler = (
                 const isFull: boolean = !!msg._full;
 
                 // Gap detection: if seq jumped and this isn't a full sync, our delta
-                // chain is broken. Reset the cache and wait for the next full sync.
+                // chain is broken. Ignore deltas until the next full sync arrives.
                 if (seq !== undefined && lastHostSeq !== -1 && seq > lastHostSeq + 1 && !isFull) {
-                    cachedHost = defaultHostCache();
+                    lastHostSeq = seq;
+                    break;
                 }
                 if (seq !== undefined) lastHostSeq = seq;
+
+                if (isFull) {
+                    cachedHost = defaultHostCache(cachedHost.hostPoints, cachedHost.hostName);
+                }
 
                 // ── Merge delta fields into the cached host state ──────────────
                 mergeIfDefined(cachedHost, msg, [
@@ -614,7 +516,7 @@ export const createNetworkMessageHandler = (
                     'hostIsSpectating',
                     'windowStates', 'activeZombiesCount', 'totalRoundZombies',
                     'zombiesSpawned', 'zombiesKilledInRound', 'round',
-                    'powerOn', 'isDogRound', 'activePowerUps', 'mysteryBox'
+                    'powerOn', 'isDogRound', 'isGameOver', 'activePowerUps', 'mysteryBox'
                 ]);
 
                 // ── Sync door states to client game state ───────────────────────
@@ -642,6 +544,7 @@ export const createNetworkMessageHandler = (
                     zombiesKilledInRound: cachedHost.zombiesKilledInRound,
                     zombiesToSpawn: cachedHost.totalRoundZombies - cachedHost.zombiesSpawned,
                     powerOn: cachedHost.powerOn,
+                    isGameOver: cachedHost.isGameOver,
                 });
                 if (isFull && msg.zombies !== undefined) {
                     // Full sync – replace entire list
@@ -700,9 +603,14 @@ export const createNetworkMessageHandler = (
 
                 // Gap detection for client → host direction
                 if (seq !== undefined && lastClientSeq !== -1 && seq > lastClientSeq + 1 && !isFull) {
-                    cachedClient = defaultClientCache();
+                    lastClientSeq = seq;
+                    break;
                 }
                 if (seq !== undefined) lastClientSeq = seq;
+
+                if (isFull) {
+                    cachedClient = defaultClientCache(cachedClient.clientPoints, cachedClient.clientName);
+                }
 
                 // Merge delta fields
                 mergeIfDefined(cachedClient, msg, [

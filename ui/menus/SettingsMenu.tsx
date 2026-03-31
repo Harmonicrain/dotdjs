@@ -2,10 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore, GraphicsQuality } from '../../store/useGameStore';
 import { MenuPanel } from './MenuPrimitives';
 
-interface SettingsMenuProps {
-  onBack?: () => void;
-}
-
 type SettingsCategoryId = 'PLAYER' | 'DISPLAY' | 'GAMEPLAY' | 'AUDIO' | 'CONTROLS';
 
 const RESOLUTION_SCALES = [
@@ -202,7 +198,7 @@ const ChoiceButton = ({
 );
 
 // ── Main component ─────────────────────────────────────────────
-export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
+export const SettingsMenu = () => {
   const settings = useGameStore((s) => s.settings);
   const playerName = useGameStore((s) => s.playerName);
   const updateSettings = useGameStore((s) => s.updateSettings);
@@ -225,18 +221,6 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
-
-  useEffect(() => {
-    if (!onBack) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onBack();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onBack]);
 
   const selectedCategoryIndex = SETTINGS_CATEGORIES.findIndex((c) => c.id === selectedCategory);
 
@@ -672,7 +656,7 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
           <div
             style={{
               display: 'flex',
-              justifyContent: onBack ? 'space-between' : 'flex-end',
+              justifyContent: 'flex-end',
               alignItems: 'center',
               margin: '-28px',
               marginTop: '0',
@@ -682,36 +666,6 @@ export const SettingsMenu = ({ onBack }: SettingsMenuProps = {}) => {
               gap: '12px',
             }}
           >
-            {onBack && (
-              <button
-                onClick={onBack}
-                style={{
-                  padding: '10px 24px',
-                  background: 'rgba(255,154,0,0.12)',
-                  border: '1px solid rgba(255,154,0,0.7)',
-                  cursor: 'pointer',
-                  fontFamily: "'Share Tech Mono', monospace",
-                  fontSize: '11px',
-                  letterSpacing: '0.22em',
-                  color: '#FF9A00',
-                  textTransform: 'uppercase',
-                  transition: 'background 0.15s ease, box-shadow 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(255,154,0,0.22)';
-                  el.style.boxShadow = '0 0 14px rgba(255,154,0,0.25)';
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(255,154,0,0.12)';
-                  el.style.boxShadow = 'none';
-                }}
-              >
-                Back
-              </button>
-            )}
-
             <button
               onClick={resetSettings}
               style={{

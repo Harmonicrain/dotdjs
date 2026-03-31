@@ -51,13 +51,9 @@ export class InputManager {
   private canvas: HTMLCanvasElement | null = null;
   private onPause: ((paused: boolean) => void) | null = null;
   private stateProxy: GameStateProxy | null = null;
+  private onInputDeviceChange: ((device: InputDevice) => void) | null = null;
 
   // Debug Controls
-  private debugControlsCallback: ((data: {
-    inputSource: 'MOUSE' | 'CONTROLLER' | 'NONE';
-    rawMouseDelta: { x: number; y: number };
-    rawControllerLook: { x: number; y: number };
-  }) => void) | null = null;
   private lastMouseMovementForDebug = { x: 0, y: 0 };
   private debugControlsActive = false;
 
@@ -80,27 +76,19 @@ export class InputManager {
     Object.assign(this.settings, updates);
 
     // When switching devices, clear the other device's state to prevent ghost inputs
-    if (updates.inputDevice === 'KM') {
-      this.controllerHandler.clearState();
-      this.touchHandler.clearState();
-    } else if (updates.inputDevice === 'CONTROLLER') {
-      this.kmHandler.clearState();
-      this.touchHandler.clearState();
-    } else if (updates.inputDevice === 'TOUCH') {
-      this.kmHandler.clearState();
-      this.controllerHandler.clearState();
-      this.touchHandler.clearState();
-    }
+    if (updates.inputDevice) this.clearOtherDeviceState(updates.inputDevice);
   }
 
   public attachListeners(
     canvas: HTMLCanvasElement,
     state: GameStateProxy,
     onPause: (paused: boolean) => void,
+    onInputDeviceChange?: (device: InputDevice) => void,
   ): void {
     this.canvas = canvas;
     this.stateProxy = state;
     this.onPause = onPause;
+    this.onInputDeviceChange = onInputDeviceChange ?? null;
 
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
@@ -135,6 +123,32 @@ export class InputManager {
     this.canvas = null;
     this.stateProxy = null;
     this.onPause = null;
+    this.onInputDeviceChange = null;
+  }
+
+  private _setInputDevice(device: InputDevice) {
+    if (this.settings.inputDevice === device) return;
+    this.settings.inputDevice = device;
+    this.clearOtherDeviceState(device);
+    this.onInputDeviceChange?.(device);
+  }
+
+  private clearOtherDeviceState(device: InputDevice) {
+    if (device === 'KM') {
+      this.controllerHandler.clearState();
+      this.touchHandler.clearState();
+      return;
+    }
+
+    if (device === 'CONTROLLER') {
+      this.kmHandler.clearState();
+      this.touchHandler.clearState();
+      return;
+    }
+
+    this.kmHandler.clearState();
+    this.controllerHandler.clearState();
+    this.touchHandler.clearState();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -144,29 +158,14 @@ export class InputManager {
     console.log('[InputManager] Controller connected:', e.gamepad.id);
     this.controllerHandler.handleConnected();
 
-    this.settings.inputDevice = 'CONTROLLER';
-    this.kmHandler.clearState();
-
-    if (this.stateProxy) {
-      const store = (this.stateProxy as any).getState?.();
-      if (store?.updateSettings) {
-        store.updateSettings({ inputDevice: 'CONTROLLER' });
-      }
-    }
+    this._setInputDevice('CONTROLLER');
   };
 
   private _onGamepadDisconnected = (e: GamepadEvent) => {
     console.log('[InputManager] Controller disconnected:', e.gamepad.id);
     this.controllerHandler.handleDisconnected();
 
-    this.settings.inputDevice = 'KM';
-
-    if (this.stateProxy) {
-      const store = (this.stateProxy as any).getState?.();
-      if (store?.updateSettings) {
-        store.updateSettings({ inputDevice: 'KM' });
-      }
-    }
+    this._setInputDevice('KM');
   };
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -175,9 +174,7 @@ export class InputManager {
   private _handleKeyDownEvent(e: KeyboardEvent) {
     if (this.settings.inputDevice === 'CONTROLLER' || this.settings.inputDevice === 'TOUCH') {
       console.log('[InputManager] Keyboard input detected, switching to KB/M mode');
-      this.settings.inputDevice = 'KM';
-      this.controllerHandler.clearState();
-      this.touchHandler.clearState();
+      this._setInputDevice('KM');
     }
 
     if (this.stateProxy?.isSpectating) return;
@@ -201,9 +198,7 @@ export class InputManager {
     if (this.settings.inputDevice === 'TOUCH') return;
 
     if (this.settings.inputDevice === 'CONTROLLER') {
-      this.settings.inputDevice = 'KM';
-      this.controllerHandler.clearState();
-      this.touchHandler.clearState();
+      this._setInputDevice('KM');
     }
 
     const s = this.stateProxy;
@@ -248,14 +243,6 @@ export class InputManager {
     if (active) {
       console.log('[DEBUG_CONTROLS] InputManager debug mode ENABLED');
     }
-  }
-
-  public setDebugControlsCallback(callback: ((data: {
-    inputSource: 'MOUSE' | 'CONTROLLER' | 'NONE';
-    rawMouseDelta: { x: number; y: number };
-    rawControllerLook: { x: number; y: number };
-  }) => void) | null): void {
-    this.debugControlsCallback = callback;
   }
 
   public getDebugControlsData(): {

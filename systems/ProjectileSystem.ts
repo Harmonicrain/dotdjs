@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { GameMessage, PowerUpType, GameStateData, Zombie, Projectile, HellhoundState } from '../types/index';
+import { GameMessage, PowerUpType, GameStateData, Zombie, Projectile } from '../types/index';
 import { BulletDebugState, BulletDebugInfo } from '../types/debug';
 import { EventBus } from '../engine/EventBus';
 import { System } from '../types/systems';
@@ -10,6 +10,7 @@ import { VisualManager } from '../managers/VisualManager';
 import { ZombieManager } from '../managers/ZombieManager';
 import { HellhoundManager } from '../managers/HellhoundManager';
 import { MapConfigManager } from '../managers/MapConfigManager';
+import { applyExplosionHit, applyProjectileHit } from './zombie/zombieDamageUtils';
 
 /** Shape passed to setDebugInfo when an object is picked in debug mode. */
 export interface DebugMeshInfo {
@@ -83,7 +84,6 @@ const handleExplosion = (
     const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
     if (!isAuthority) return;
 
-    const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
     const playerPos = ctx.camera.position;
     const splashRadiusSq = splashRadius * splashRadius;
 
@@ -105,38 +105,13 @@ const handleExplosion = (
 
     // Damage all zombies in radius
     for (const z of ctx.zombies) {
-        if (z.isDead) continue;
-
-        const distSq = BABYLON.Vector3.DistanceSquared(impactPoint, z.mesh.position);
-        if (distSq <= splashRadiusSq) {
-            const dist = Math.sqrt(distSq);
-            // Linear falloff - max damage at center, minimum at edge
-            const damageRatio = 1 - (dist / splashRadius);
-            const finalDamage = isInstaKill ? z.maxHealth : (splashDamage * damageRatio);
-
-            z.lastHitTime = Date.now();
-            z.health -= finalDamage;
-
-            // Check for crawler creation (leg damage from explosion)
-            if (dist > splashRadius * 0.3 && !z.isCrawling && z.type === 'ZOMBIE') {
-                if (finalDamage > 40 || z.health < 40) {
-                    z.isCrawling = true;
-                    z.speed = 0.015;
-                }
-            }
-
-            if (z.health <= 0 && !z.isDead) {
-                if (z.type === 'HELLHOUND') {
-                    ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
-                } else {
-                    // For AoE, direction is from explosion center toward zombie (blast pushes outward)
-                    const blastDir = z.mesh.position.subtract(impactPoint).normalize();
-                    ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, false, undefined, blastDir);
-                }
-                // Bonus points for explosion kills
-                ctx.addPoints(ctx.hasDoublePoints() ? 60 : 30);
-            }
-        }
+        applyExplosionHit(ctx, {
+            zombie: z,
+            impactPoint,
+            splashRadius,
+            splashDamage,
+            owner: p.owner,
+        });
     }
 };
 
@@ -350,8 +325,6 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
             if (projectiles.length === 0) return;
 
             const isAuthority = ctx.gameModeRef.current === 'SOLO' || ctx.gameModeRef.current === 'HOST';
-            const isInstaKill = ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL] && ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]! > Date.now();
-
             hitsProcessed.clear();
 
             for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -424,48 +397,24 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                             } else if (isAuthority) {
                                 const z = pick.pickedMesh.metadata?.zombie as Zombie | undefined;
                                 if (z) {
-                                    z.lastHitTime = Date.now();
-
                                     const isHeadshot = pick.pickedMesh.name.includes("head") || pick.pickedMesh.name.includes("Head");
                                     const isLegHit = pick.pickedMesh.name.includes("leg");
-
-                                    let multiplier = 1.0;
-                                    if (isHeadshot) multiplier = 1.5;
-                                    else if (isLegHit) multiplier = 0.7;
-
-                                    const dmg = isInstaKill ? z.maxHealth : (p.damage * multiplier);
-                                    z.health -= dmg;
-
-                                    if (isLegHit && !z.isCrawling && z.type === 'ZOMBIE') {
-                                        if (dmg > 40 || z.health < 40) {
-                                            z.isCrawling = true;
-                                            z.speed = 0.015;
-                                            pick.pickedMesh.setEnabled(false);
-                                            if (z.missingLimbs) {
-                                                if (pick.pickedMesh.name.includes("_l")) z.missingLimbs.legL = true;
-                                                else if (pick.pickedMesh.name.includes("_r")) z.missingLimbs.legR = true;
-                                            }
-                                        }
-                                    }
 
                                     const hitKey = `${z.id}_${p.owner}`;
                                     if (!hitsProcessed.has(hitKey)) {
                                         hitsProcessed.add(hitKey);
+                                        applyProjectileHit(ctx, {
+                                            zombie: z,
+                                            damage: p.damage,
+                                            owner: p.owner,
+                                            isHeadshot,
+                                            isLegHit,
+                                            hitMeshName: pick.pickedMesh.name,
+                                            hitDirection: p.direction,
+                                        });
 
-                                        if (p.owner === 'HOST') {
-                                            const base = isHeadshot ? 20 : 10;
-                                            ctx.addPoints(ctx.hasDoublePoints() ? base * 2 : base);
-                                        } else if (p.owner === 'CLIENT') {
-                                            ctx.send({ type: 'HIT_CONFIRM', amount: (isHeadshot ? 20 : 10) });
-                                        }
-                                    }
-
-                                    if (z.health <= 0 && !z.isDead) {
-                                        if (z.type === 'HELLHOUND') {
-                                            ctx.hellhoundManager.onHellhoundDeath(z, z.mesh.position, p.owner);
-                                        } else {
-                                            const headPos = z.headMesh ? z.headMesh.absolutePosition : undefined;
-                                            ctx.zombieManager.onZombieDeath(z, z.mesh.position, p.owner, isHeadshot, headPos, p.direction);
+                                        if (isLegHit && z.isCrawling) {
+                                            pick.pickedMesh.setEnabled(false);
                                         }
                                     }
                                 }

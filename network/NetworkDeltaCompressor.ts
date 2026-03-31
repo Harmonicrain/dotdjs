@@ -46,6 +46,8 @@ export interface HostSnapshot {
     windowStates: Record<string, number>;
     activeZombiesCount: number;
     totalRoundZombies: number;
+    zombiesSpawned: number;
+    zombiesKilledInRound: number;
     round: number;
     powerOn: boolean;
     isDogRound: boolean;
@@ -253,6 +255,8 @@ export class NetworkDeltaCompressor {
                 windowStates: { ...full.windowStates },
                 activeZombiesCount: full.activeZombiesCount,
                 totalRoundZombies: full.totalRoundZombies,
+                zombiesSpawned: full.zombiesSpawned,
+                zombiesKilledInRound: full.zombiesKilledInRound,
                 round: full.round,
                 powerOn: full.powerOn,
                 isDogRound: full.isDogRound,
@@ -294,9 +298,12 @@ export class NetworkDeltaCompressor {
                 windowStates: full.windowStates,
                 activeZombiesCount: full.activeZombiesCount,
                 totalRoundZombies: full.totalRoundZombies,
+                zombiesSpawned: full.zombiesSpawned,
+                zombiesKilledInRound: full.zombiesKilledInRound,
                 round: full.round,
                 powerOn: full.powerOn,
                 isDogRound: full.isDogRound,
+                isGameOver: full.isGameOver,
                 activePowerUps: full.activePowerUps,
                 mysteryBox: full.mysteryBox,
             };
@@ -361,6 +368,14 @@ export class NetworkDeltaCompressor {
             delta.totalRoundZombies = full.totalRoundZombies;
             snap.totalRoundZombies = full.totalRoundZombies;
         }
+        if (full.zombiesSpawned !== snap.zombiesSpawned) {
+            delta.zombiesSpawned = full.zombiesSpawned;
+            snap.zombiesSpawned = full.zombiesSpawned;
+        }
+        if (full.zombiesKilledInRound !== snap.zombiesKilledInRound) {
+            delta.zombiesKilledInRound = full.zombiesKilledInRound;
+            snap.zombiesKilledInRound = full.zombiesKilledInRound;
+        }
         if (full.round !== snap.round) {
             delta.round = full.round;
             snap.round = full.round;
@@ -372,6 +387,10 @@ export class NetworkDeltaCompressor {
         if (full.isDogRound !== snap.isDogRound) {
             delta.isDogRound = full.isDogRound;
             snap.isDogRound = full.isDogRound;
+        }
+        if (full.isGameOver !== snap.isGameOver) {
+            delta.isGameOver = full.isGameOver;
+            snap.isGameOver = full.isGameOver;
         }
 
         // Object comparisons (cheap stringify / deep-equal helpers)

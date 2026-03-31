@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { GameMessage } from '../types/index';
-import { CachedHostState, CachedClientState } from '../network/NetworkMessageHandler';
+import { CachedHostState, CachedClientState } from '../types/network';
 import { ReviveEvent } from '../types/systems';
 import type { ShootMessage } from '../systems/ProjectileSystem';
 

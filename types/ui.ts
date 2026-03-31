@@ -224,11 +224,12 @@ export type GameMessage =
         windowStates?: Record<string, number>;
         activeZombiesCount?: number;
         totalRoundZombies?: number;
+        zombiesSpawned?: number;
+        zombiesKilledInRound?: number;
         round?: number;
         powerOn?: boolean;
         isDogRound?: boolean;
-        zombiesSpawned?: number;
-        zombiesKilledInRound?: number;
+        isGameOver?: boolean;
         activePowerUps?: PowerUpType[];
         mysteryBox?: {
             state: number;

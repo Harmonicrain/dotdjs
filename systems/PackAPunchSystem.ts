@@ -1,6 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { WeaponState } from '../types/index';
 import { createWorldWeapon } from '../factories';
+import { applyPackAPunchUpgrade } from './packAPunchUtils';
 import { StateManager } from '../state/StateManager';
 
 /**
@@ -101,16 +102,6 @@ export const createPackAPunchSystem = (ctx: StateManager) => {
             ctx.timerManager.schedule('pap_anim_cleanup', 3000, () => {
                 cleanupPapAnimation();
             });
-        }
-    };
-
-    const applyPackAPunchUpgrade = (weapon: WeaponState) => {
-        const upgradeConfig = ctx.configManager.upgradedWeapons[weapon.id];
-        if (upgradeConfig) {
-            Object.assign(weapon, upgradeConfig);
-            weapon.currentAmmo = weapon.clipSize;
-            weapon.currentReserve = weapon.maxReserve;
-            weapon.isPacked = true;
         }
     };
 
@@ -271,7 +262,10 @@ export const createPackAPunchSystem = (ctx: StateManager) => {
         setupPackAPunchAnimation(targetMachine, weapon, anchorPos, ctx.scene);
 
         ctx.timerManager.schedule('pap_upgrade', 3000, () => {
-            applyPackAPunchUpgrade(weapon);
+            if (!applyPackAPunchUpgrade(weapon, ctx.configManager)) {
+                ctx.gameState.isPackAPunching = false;
+                return;
+            }
 
             const papCamoTex = ctx.resourceManager.getTexture("papCamoTex", () => {
                 return createPackAPunchTexture();

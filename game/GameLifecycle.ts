@@ -1,11 +1,13 @@
 
 import * as BABYLON from '@babylonjs/core';
 import { Game } from './Game';
+import { getSessionStartPoints, startEngineSessionState } from './sessionStateUtils';
 import { MapLoader } from '../managers/MapLoader';
 import { GameMessage, MysteryBox, createDefaultMysteryBox } from '../types/index';
 import { MAP_DEFINITIONS } from '../managers/MapRegistry';
-import { GAME_CONFIG, DEFAULT_MAP_ID, WEAPON_CONFIGS } from '../config';
+import { GAME_CONFIG, DEFAULT_MAP_ID } from '../config';
 import { resetPlayerWeapons } from '../engine/weaponResetUtils';
+import type { InputDevice } from '../engine/InputManager';
 import type { PlayerFields, GameFields } from '../store/useGameStore';
 
 /**
@@ -17,6 +19,7 @@ export interface LifecycleCallbacks {
     onStartedChange: (started: boolean) => void;
     onMapLoadedChange: (loaded: boolean) => void;
     onSetPaused: (paused: boolean) => void;
+    onInputDeviceChange?: (device: InputDevice) => void;
 }
 
 /**
@@ -74,7 +77,7 @@ export class GameLifecycle {
 
         game.inputManager.attachListeners(canvas, stateProxy, (paused) => {
             this._setPaused(paused);
-        });
+        }, callbacks.onInputDeviceChange);
 
         // Handle respawn requests emitted by RoundSystem / NetworkMessageHandler.
         // Respawn lives here because it needs to manipulate weapon meshes and camera —
@@ -114,191 +117,155 @@ export class GameLifecycle {
         callbacks.onLoadingChange(true);
 
         try {
-            // Wait for engine initialization to finish before loading level
-            if (this.engineInitPromise) {
-                await this.engineInitPromise;
-            }
-
-            // Give React one frame to paint the loading screen before heavy work
-            await new Promise<void>(resolve =>
-                requestAnimationFrame(() => setTimeout(resolve, 50)),
-            );
-
-            // Reset mystery box state for the new level to avoid stale references
-            this.mysteryBox = createDefaultMysteryBox();
-            this.mysteryBoxRef.current = this.mysteryBox;
-
-            // Load / reload the selected level
-            await game.loadLevel(mapId, this.mysteryBoxRef);
-            
-            // Pre-warm assets to prevent runtime shader compilation hitches
             const sm = game.stateManager!;
-            await Promise.all([
-                sm.visualManager.preWarmAssets(),
-                sm.zombieManager.preWarmAssets(),
-                sm.hellhoundManager.preWarmAssets()
-            ]);
+            await this._waitForEngineAndPaint();
+            await this._prepareLevel(game, mapId, callbacks);
+            this._spawnPlayer(game, sm, mode);
 
-            // ── CRITICAL FIX: Wait for ALL scene textures to be ready ──
-            // When textures are served from browser cache, they may resolve
-            // instantly but PBR materials need the environment texture + all
-            // albedo textures to be fully uploaded to GPU before compilation
-            // produces correct shaders. Without this, cached reloads render black.
-            await new Promise<void>((resolve) => {
-                let resolved = false;
-                const done = () => {
-                    if (resolved) return;
-                    resolved = true;
-                    clearTimeout(timeout);
-                    resolve();
-                };
-                const checkReady = () => {
-                    const allReady = game.scene.textures.every(t => t.isReady());
-                    if (allReady) {
-                        done();
-                    } else {
-                        setTimeout(checkReady, 50);
-                    }
-                };
-                // Timeout safety net
-                const timeout = setTimeout(() => {
-                    console.warn("Texture ready-wait timed out — forcing material refresh");
-                    done();
-                }, 8000);
-                checkReady();
-            });
+            const def = MAP_DEFINITIONS[mapId] ?? MAP_DEFINITIONS[DEFAULT_MAP_ID];
+            new MapLoader(sm.scene, sm).initializeState(def);
+            const startPoints = sm.configManager.gameplay.STARTING_POINTS ?? getSessionStartPoints(mapId);
 
-            // Now that all textures are confirmed ready, recompile materials once
-            game.refreshMaterials();
-            // Allow one full frame for the GPU to process the dirty flag
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            game.refreshMaterials();
+            // Propagate the session game mode to all systems BEFORE GAME_STARTED fires
+            // so that NetworkSystem and RemotePlayerSystem read the correct mode on their
+            // very first tick and inside their GAME_STARTED reset handlers.
+            sm.updateGameMode(mode);
 
-            await game.scene.whenReadyAsync();
-            callbacks.onMapLoadedChange(true);
+            startEngineSessionState(sm, playerName, startPoints);
 
-        // Spawn player
-        if (sm.spawnPoints) {
-            const spawns = sm.spawnPoints;
-            const spawnPos  = mode === 'CLIENT' ? spawns.client.clone() : spawns.host.clone();
-            const spawnRotY = mode === 'CLIENT' ? (spawns.clientRotation ?? spawns.rotation) : spawns.rotation;
+            await this._waitForMultiplayerReady(sm, mode);
 
-            // Set initial position
-            game.camera.position.copyFrom(spawnPos);
-            game.camera.rotation.y = spawnRotY;
-            game.camera.rotation.x = 0;
-            sm.gameState.verticalVelocity = 0;
-            sm.gameState.currentVelocity  = BABYLON.Vector3.Zero();
-            sm.gameState.externalForce.set(0, 0, 0);
+            // Signal all systems (NetworkSystem compressor, NetworkMessageHandler cache)
+            // to reset their per-session state before the first tick fires.
+            sm.eventBus.emit('GAME_STARTED', { startPoints });
 
-            // Use frame-synced observer to finalize spawn position after physics settles
-            // This prevents the camera jump that occurs with setTimeout
-            let framesWaited = 0;
-            const spawnObserver = game.scene.onBeforeRenderObservable.add(() => {
-                framesWaited++;
-                // Wait 3 frames for physics to fully settle, then lock in position
-                if (framesWaited >= 3) {
-                    game.camera.position.copyFrom(spawnPos);
-                    game.camera.rotation.y = spawnRotY;
-                    game.camera.rotation.x = 0;
-                    sm.gameState.verticalVelocity = 0;
-                    sm.gameState.currentVelocity  = BABYLON.Vector3.Zero();
-                    sm.gameState.externalForce.set(0, 0, 0);
-                    game.scene.onBeforeRenderObservable.remove(spawnObserver);
-                }
-            });
-        }
+            game.inputManager.reset();
 
-        // Initialise game state for the new session
-        const def = MAP_DEFINITIONS[mapId] ?? MAP_DEFINITIONS[DEFAULT_MAP_ID];
-        
-        // Data-driven map state (Apply config first so we can use it)
-        new MapLoader(sm.scene, sm).initializeState(def);
-        
-        const startPoints = sm.configManager.gameplay.STARTING_POINTS ?? GAME_CONFIG.STARTING_POINTS;
+            callbacks.onStartedChange(true);
 
-        sm.gameState.hasStarted         = true;
-        sm.gameState.startTime          = Date.now();
-        sm.gameState.isPaused           = false;
-        sm.gameState.isIntermission     = true;
-        sm.gameState.nextRoundTime      = Date.now() + 8_000;
-        sm.gameState.isDogRound         = false;
-        sm.gameState.isSpectating       = false;
-        sm.gameState.isPackAPunching    = false;
-        sm.gameState.isGameOver         = false;
-        sm.gameState.isDowned           = false;
-        sm.gameState.round              = 0;
-        sm.gameState.playerName         = playerName;
-        sm.gameState.points             = startPoints;
-        sm.gameState.perkStates         = {};
-        sm.gameState.maxHealth          = GAME_CONFIG.PLAYER_BASE_HEALTH;
-        sm.gameState.kills              = 0;
-        sm.gameState.shots              = 0;
-        sm.setPlayerName(playerName);
-        sm.setPoints(startPoints);
-        sm.setPerks({});
-        sm.setHealth(GAME_CONFIG.PLAYER_BASE_HEALTH);
-        sm.setKills(0);
-        sm.setShotsFired(0);
+            if (game.inputManager.shouldUsePointerLock()) game.canvas.requestPointerLock();
+            await this._waitForWarmupFrames(5);
 
-        // Propagate the session game mode to all systems BEFORE GAME_STARTED fires
-        // so that NetworkSystem and RemotePlayerSystem read the correct mode on their
-        // very first tick and inside their GAME_STARTED reset handlers.
-        sm.updateGameMode(mode);
-
-        // Reset weapons to starting pistol
-        resetPlayerWeapons(sm);
-
-        // ── Multiplayer Handshake ──────────────────────────────────────────
-        // Ensure the client stays on the loading screen until the host is fully ready.
-        if (mode === 'HOST') {
-            sm.send({ type: 'HOST_LOADED' });
-        } else if (mode === 'CLIENT' && !sm.gameState.isHostLoaded) {
-            await new Promise<void>((resolve) => {
-                let resolved = false;
-                const done = () => {
-                    if (resolved) return;
-                    resolved = true;
-                    clearTimeout(safetyTimeout);
-                    sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
-                    resolve();
-                };
-                const onHostLoaded = () => done();
-                sm.eventBus.on('HOST_LOADED_RECEIVED', onHostLoaded);
-                // 15s safety timeout
-                const safetyTimeout = setTimeout(done, 15000);
-            });
-        }
-
-        // Signal all systems (NetworkSystem compressor, NetworkMessageHandler cache)
-        // to reset their per-session state before the first tick fires.
-        sm.eventBus.emit('GAME_STARTED', { startPoints });
-
-        game.inputManager.reset();
-
-        // Notify React
-        callbacks.onStartedChange(true);
-
-        // Schedule a no-op timer that GameScene uses as a cue to clear the fade overlay
-        // via its own useEffect watching hasStarted (the 2 s value is cosmetic only).
-        sm.timerManager.schedule('fade_out', 2_000, () => {});
-
-        // Request pointer lock
-        if (game.inputManager.shouldUsePointerLock()) game.canvas.requestPointerLock();
-
-        // Let the engine render a few frames while the loading screen is still up.
-        // This ensures the weapon shaders (just enabled) and shadow maps compile 
-        // completely before the player sees the game, preventing the initial sub-60fps drop.
-        for (let i = 0; i < 5; i++) {
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        }
-
-        callbacks.onLoadingChange(false);
+            callbacks.onLoadingChange(false);
         } catch (e) {
             console.error("Error during level load:", e);
         } finally {
             // Always hide loading screen, even if something fails
             callbacks.onLoadingChange(false);
+        }
+    }
+
+    private async _waitForEngineAndPaint(): Promise<void> {
+        if (this.engineInitPromise) {
+            await this.engineInitPromise;
+        }
+
+        await new Promise<void>(resolve =>
+            requestAnimationFrame(() => setTimeout(resolve, 50)),
+        );
+    }
+
+    private async _prepareLevel(game: Game, mapId: string, callbacks: LifecycleCallbacks): Promise<void> {
+        this.mysteryBox = createDefaultMysteryBox();
+        this.mysteryBoxRef.current = this.mysteryBox;
+
+        await game.loadLevel(mapId, this.mysteryBoxRef);
+
+        const sm = game.stateManager!;
+        await Promise.all([
+            sm.visualManager.preWarmAssets(),
+            sm.zombieManager.preWarmAssets(),
+            sm.hellhoundManager.preWarmAssets(),
+        ]);
+
+        await this._waitForTextures(game);
+        game.refreshMaterials();
+        await this._waitForWarmupFrames(1);
+        game.refreshMaterials();
+        await game.scene.whenReadyAsync();
+
+        callbacks.onMapLoadedChange(true);
+    }
+
+    private async _waitForTextures(game: Game): Promise<void> {
+        await new Promise<void>((resolve) => {
+            let resolved = false;
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(timeout);
+                resolve();
+            };
+            const checkReady = () => {
+                const allReady = game.scene.textures.every(t => t.isReady());
+                if (allReady) {
+                    done();
+                } else {
+                    setTimeout(checkReady, 50);
+                }
+            };
+            const timeout = setTimeout(() => {
+                console.warn("Texture ready-wait timed out — forcing material refresh");
+                done();
+            }, 8000);
+            checkReady();
+        });
+    }
+
+    private _spawnPlayer(game: Game, sm: NonNullable<Game['stateManager']>, mode: 'SOLO' | 'HOST' | 'CLIENT'): void {
+        if (!sm.spawnPoints) return;
+
+        const spawns = sm.spawnPoints;
+        const spawnPos = mode === 'CLIENT' ? spawns.client.clone() : spawns.host.clone();
+        const spawnRotY = mode === 'CLIENT' ? (spawns.clientRotation ?? spawns.rotation) : spawns.rotation;
+
+        const applySpawnTransform = () => {
+            game.camera.position.copyFrom(spawnPos);
+            game.camera.rotation.y = spawnRotY;
+            game.camera.rotation.x = 0;
+            sm.gameState.verticalVelocity = 0;
+            sm.gameState.currentVelocity = BABYLON.Vector3.Zero();
+            sm.gameState.externalForce.set(0, 0, 0);
+        };
+
+        applySpawnTransform();
+
+        let framesWaited = 0;
+        const spawnObserver = game.scene.onBeforeRenderObservable.add(() => {
+            framesWaited++;
+            if (framesWaited < 3) return;
+
+            applySpawnTransform();
+            game.scene.onBeforeRenderObservable.remove(spawnObserver);
+        });
+    }
+
+    private async _waitForMultiplayerReady(sm: NonNullable<Game['stateManager']>, mode: 'SOLO' | 'HOST' | 'CLIENT'): Promise<void> {
+        if (mode === 'HOST') {
+            sm.send({ type: 'HOST_LOADED' });
+            return;
+        }
+
+        if (mode !== 'CLIENT' || sm.gameState.isHostLoaded) return;
+
+        await new Promise<void>((resolve) => {
+            let resolved = false;
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(safetyTimeout);
+                sm.eventBus.off('HOST_LOADED_RECEIVED', onHostLoaded);
+                resolve();
+            };
+            const onHostLoaded = () => done();
+            sm.eventBus.on('HOST_LOADED_RECEIVED', onHostLoaded);
+            const safetyTimeout = setTimeout(done, 15000);
+        });
+    }
+
+    private async _waitForWarmupFrames(count: number): Promise<void> {
+        for (let i = 0; i < count; i++) {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         }
     }
 
@@ -313,9 +280,6 @@ export class GameLifecycle {
 
         if (game.stateManager) {
             const sm = game.stateManager;
-            sm.gameState.hasStarted   = false;
-            sm.gameState.isGameOver   = false;
-            sm.gameState.isSpectating = false;
             sm.updateGameMode('SOLO');
 
             // Must go through setPaused() so scene.particlesEnabled and

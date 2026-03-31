@@ -31,7 +31,6 @@ import { InputManager } from '../engine/InputManager';
 interface HUDProps {
     onResume?: () => void;
     onQuit: () => void;
-    onRestart?: () => void;
     onCommand: (cmd: string) => void;
     inputManager?: InputManager | null;
     onPause?: () => void;
@@ -137,6 +136,19 @@ const DogRoundAnnouncement = () => (
     </div>
 );
 
+const DebugOverlays = ({ onCommand }: { onCommand: (cmd: string) => void }) => (
+    <>
+        <Console onCommand={onCommand} />
+        <DebugInfoWindow />
+        <BulletDebugOverlay />
+        <DebugControlsOverlay />
+        <ScaleWeaponOverlay />
+        <RenderStatsOverlay />
+        <WeaponAdsDebugOverlay />
+        <DeveloperStats />
+    </>
+);
+
 export const HUD = ({ onResume, onQuit, onCommand, inputManager, onPause }: HUDProps) => {
     // Only subscribe to fields needed for conditional rendering layout
     const isGameOver = useGameStore(s => s.isGameOver);
@@ -198,14 +210,7 @@ export const HUD = ({ onResume, onQuit, onCommand, inputManager, onPause }: HUDP
             <PowerUpDisplay isTouchMode={isTouchMode} touchBottomSafe={TOUCH_BOTTOM_SAFE} />
 
             {/* Debug/Dev tools */}
-            <Console onCommand={onCommand} />
-            <DebugInfoWindow />
-            <BulletDebugOverlay />
-            <DebugControlsOverlay />
-            <ScaleWeaponOverlay />
-            <RenderStatsOverlay />
-            <WeaponAdsDebugOverlay />
-            <DeveloperStats />
+            <DebugOverlays onCommand={onCommand} />
 
             {/* Spectating overlay */}
             {isSpectating && !isGameOver && (

@@ -264,8 +264,8 @@ export class UIBridge {
 
     public setActiveZombiesCount(v: number) {
         if (this.uiCache.activeZombiesCount !== v) {
-            this.uiCache.activeZombiesCount = v;
             if (this.checkThrottle('zombieCount')) {
+                this.uiCache.activeZombiesCount = v;
                 this._updateGame({ activeZombiesCount: v });
             }
         }

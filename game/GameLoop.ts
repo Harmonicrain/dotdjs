@@ -4,7 +4,6 @@ import { StateManager } from '../state/StateManager';
 import { GAME_CONFIG } from '../config';
 import { InputManager, GameAction } from '../engine/InputManager';
 import { SystemManager } from '../engine/SystemManager';
-import { useGameStore } from '../store/useGameStore';
 
 interface Ref<T> { current: T; }
 
@@ -13,7 +12,6 @@ export interface GameLoopDeps {
     systemManager: SystemManager;
     cameraRef: Ref<BABYLON.UniversalCamera | null>;
     gameModeRef: Ref<string>;
-    pollGamepad: (dt: number) => void;
     inputManager: InputManager;
 }
 
@@ -25,7 +23,7 @@ export interface GameLoopDeps {
  *
  * Order of operations each frame:
  *   1. Guard: skip if paused.
- *   2. Update InputManager (snapshot previous state, poll gamepad).
+ *   2. Update InputManager.
  *   3. Multiplayer spectator game-over check.
  *   4. When the game has started: advance TimerManager, MysteryBoxSystem,
  *      VisualManager lighting, and zombie-count HUD updates (HOST/SOLO only).
@@ -34,7 +32,6 @@ export interface GameLoopDeps {
  */
 export const createGameLoop = (deps: GameLoopDeps) => {
     const { stateManager: sm, systemManager, gameModeRef, inputManager } = deps;
-    let lastSettingsSync = 0;
     let lastDevStatsUpdate = 0;
     let lastZombieCountUpdate = 0;
     let lastDrawCallCount = 0;
@@ -140,211 +137,213 @@ export const createGameLoop = (deps: GameLoopDeps) => {
         }
     };
 
+    const updateDebugControls = (now: number) => {
+        const debugMode = sm.debugControlsMode;
+        if (debugMode.isActive) {
+            inputManager.setDebugControlsActive(true);
+
+            debugMode.frameCount++;
+            const elapsed = now - debugMode.lastFpsUpdate;
+            if (elapsed >= 500) {
+                debugMode.fps = (debugMode.frameCount / elapsed) * 1000;
+                debugMode.frameCount = 0;
+                debugMode.lastFpsUpdate = now;
+            }
+
+            const debugData = inputManager.getDebugControlsData();
+            const cam = sm.camera;
+            sm.ui.setDebugControls({
+                isActive: true,
+                fps: debugMode.fps,
+                inputSource: debugData.inputSource,
+                cameraRotation: cam ? { x: cam.rotation.x, y: cam.rotation.y } : { x: 0, y: 0 },
+                rawMouseDelta: debugData.rawMouseDelta,
+                rawControllerLook: debugData.rawControllerLook,
+            });
+            return;
+        }
+
+        inputManager.setDebugControlsActive(false);
+    };
+
+    const updateRenderStats = () => {
+        if (!sm.renderStatsMode.isActive) return;
+
+        const scene = sm.scene;
+        const engine = scene.getEngine();
+
+        let shadowGenCount = 0;
+        let shadowMapSize = 0;
+        const totalLights = scene.lights.length;
+        let activeLights = 0;
+        for (let i = 0; i < totalLights; i++) {
+            const light = scene.lights[i];
+            if (!light.isEnabled()) continue;
+
+            activeLights++;
+            const sgs = light.getShadowGenerators();
+            if (!sgs) continue;
+
+            sgs.forEach(sg => {
+                if (!sg) return;
+                shadowGenCount++;
+                const map = sg.getShadowMap();
+                if (map) {
+                    const size = map.getRenderSize() as number;
+                    shadowMapSize = Math.max(shadowMapSize, size);
+                }
+            });
+        }
+
+        let pbrCount = 0;
+        for (let i = 0; i < scene.materials.length; i++) {
+            if (scene.materials[i] instanceof BABYLON.PBRMaterial) pbrCount++;
+        }
+
+        const activeMeshes = scene.getActiveMeshes().length;
+        let totalVerts = 0;
+        let totalFaces = 0;
+        const meshList = scene.getActiveMeshes();
+        for (let i = 0; i < meshList.length; i++) {
+            totalVerts += meshList.data[i].getTotalVertices();
+            totalFaces += meshList.data[i].getTotalIndices() / 3;
+        }
+
+        const currentDrawCalls = (engine as any)._drawCalls?.current ?? 0;
+        const perFrameDrawCalls = currentDrawCalls - lastDrawCallCount;
+        lastDrawCallCount = currentDrawCalls;
+
+        sm.ui.setRenderStats({
+            isActive: true,
+            drawCalls: perFrameDrawCalls,
+            activeMeshes,
+            totalMeshes: scene.meshes.length,
+            totalVertices: totalVerts,
+            totalFaces: Math.round(totalFaces),
+            activeLights,
+            totalLights,
+            pbrMaterials: pbrCount,
+            totalMaterials: scene.materials.length,
+            shadowGenerators: shadowGenCount,
+            shadowMapSize,
+            textures: scene.textures.length,
+            particleSystems: scene.particleSystems.filter(ps => ps.isStarted()).length,
+        });
+    };
+
+    const handleConsoleToggle = () => {
+        if (!inputManager.justPressed(GameAction.TOGGLE_CONSOLE)) return;
+
+        sm.isConsoleOpen = !sm.isConsoleOpen;
+        sm.ui.setIsConsoleOpen(sm.isConsoleOpen);
+
+        if (sm.isConsoleOpen) {
+            sm.isInternalPointerRelease = true;
+            if (document.pointerLockElement && inputManager.shouldUsePointerLock()) document.exitPointerLock();
+            if (consoleToggleTimeout !== null) clearTimeout(consoleToggleTimeout);
+            consoleToggleTimeout = setTimeout(() => {
+                consoleToggleTimeout = null;
+                sm.isInternalPointerRelease = false;
+            }, 100);
+            return;
+        }
+
+        if (!sm.gameState.isPaused && !sm.gameState.isGameOver && inputManager.shouldUsePointerLock()) {
+            sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
+        }
+    };
+
+    const updateDeveloperStats = (now: number) => {
+        if (!sm.gameState.hasStarted || now - lastDevStatsUpdate < 167) return;
+        lastDevStatsUpdate = now;
+
+        if (!sm.ui.getIsDebugActive() && !sm.isConsoleOpen) return;
+
+        const cam = sm.camera;
+        if (!cam) return;
+
+        const zone = sm.getZone(cam.position);
+        sm.ui.setPlayerStats(zone, {
+            x: cam.position.x,
+            y: cam.position.y,
+            z: cam.position.z,
+            rot: cam.rotation.y,
+        });
+    };
+
+    const updateDebugFreezeState = (currentGameMode: string): boolean => {
+        const isMultiplayer = currentGameMode !== 'SOLO';
+        const isPausedForLogic = sm.gameState.isPaused && !isMultiplayer;
+        const isLogicFrozen = isPausedForLogic || sm.isConsoleOpen || sm.debugSelection.isActive;
+
+        sm.gameState.isDebugMode = isLogicFrozen;
+        sm.ui.setIsDebugMode(isLogicFrozen);
+        sm.ui.setIsDebugActive(sm.debugSelection.isActive);
+        sm.gameState.isConsoleOpen = sm.isConsoleOpen;
+
+        if (sm.navPlugin) {
+            sm.navPlugin.timeFactor = isLogicFrozen ? 0 : 1;
+        }
+
+        return isPausedForLogic || (sm.isConsoleOpen && !sm.debugSelection.isActive);
+    };
+
+    const updateSpectatorGameOver = (currentGameMode: string) => {
+        if (!sm.gameState.isSpectating || sm.gameState.isGameOver || currentGameMode === 'SOLO') return;
+        if (sm.remote.gameState.health > 0) return;
+
+        sm.setIsGameOver(true);
+        sm.eventBus.emit('GAME_OVER', null);
+    };
+
+    const updateStartedSessionState = (dt: number, now: number, currentGameMode: string) => {
+        if (!sm.gameState.hasStarted) return;
+
+        sm.update(dt);
+
+        if (sm.gameState.isSpectating && !sm.getIsSpectating()) {
+            sm.setIsSpectating(true);
+        }
+
+        sm.mysteryBoxSystem?.update(dt);
+
+        if (now - lastZombieCountUpdate >= 500 && currentGameMode !== 'CLIENT') {
+            lastZombieCountUpdate = now;
+            sm.setActiveZombiesCount(sm.zombies.length);
+            sm.setTotalRoundZombies(sm.gameState.totalZombiesInRound);
+        }
+    };
+
+    const applyPassiveHealthRegen = (now: number) => {
+        const maxHP = sm.gameState.maxHealth || GAME_CONFIG.PLAYER_BASE_HEALTH;
+        if (sm.gameState.health >= maxHP || sm.gameState.health <= 0 || sm.gameState.isGameOver) return;
+        if (now - sm.gameState.lastDamageTime <= 3000) return;
+        if (now - sm.gameState.lastRegenTime <= 50) return;
+
+        sm.gameState.health = Math.min(maxHP, sm.gameState.health + 5);
+        sm.gameState.lastRegenTime = now;
+        sm.setHealth(sm.gameState.health);
+    };
+
     return {
         loop: (dt: number) => {
             const currentGameMode = gameModeRef.current;
             const now = Date.now();
 
-            // Sync settings to InputManager (throttled - settings don't change often)
-            if (now - lastSettingsSync >= 500) {
-                lastSettingsSync = now;
-                inputManager.updateSettings(useGameStore.getState().settings);
-            }
-
             inputManager.update();
 
-            // ── Debug Controls Update ────────────────────────────────────────────
-            // When debug_controls is active, update FPS counter and input debug data
-            const debugMode = sm.debugControlsMode;
-            if (debugMode.isActive) {
-                // Sync debug mode to input manager
-                inputManager.setDebugControlsActive(true);
+            updateDebugControls(now);
+            updateRenderStats();
+            handleConsoleToggle();
+            updateDeveloperStats(now);
 
-                // FPS calculation
-                debugMode.frameCount++;
-                const elapsed = now - debugMode.lastFpsUpdate;
-                if (elapsed >= 500) { // Update FPS every 500ms for stability
-                    debugMode.fps = (debugMode.frameCount / elapsed) * 1000;
-                    debugMode.frameCount = 0;
-                    debugMode.lastFpsUpdate = now;
-                }
+            if (updateDebugFreezeState(currentGameMode)) return;
 
-                // Get debug data from input manager
-                const debugData = inputManager.getDebugControlsData();
-                const cam = sm.camera;
-
-                // Update UI with debug controls data
-                sm.ui.setDebugControls({
-                    isActive: true,
-                    fps: debugMode.fps,
-                    inputSource: debugData.inputSource,
-                    cameraRotation: cam ? { x: cam.rotation.x, y: cam.rotation.y } : { x: 0, y: 0 },
-                    rawMouseDelta: debugData.rawMouseDelta,
-                    rawControllerLook: debugData.rawControllerLook,
-                });
-
-                // Debug input logging removed to prevent frame hitches
-            } else {
-                inputManager.setDebugControlsActive(false);
-            }
-
-            // ── Render Stats Update ───────────────────────────────────────────
-            if (sm.renderStatsMode.isActive) {
-                const scene = sm.scene;
-                const engine = scene.getEngine();
-
-                let shadowGenCount = 0;
-                let shadowMapSize = 0;
-                const totalLights = scene.lights.length;
-                let activeLights = 0;
-                for (let i = 0; i < totalLights; i++) {
-                    const light = scene.lights[i];
-                    if (light.isEnabled()) {
-                        activeLights++;
-                        const sgs = light.getShadowGenerators();
-                        if (sgs) {
-                            sgs.forEach(sg => {
-                                if (sg) {
-                                    shadowGenCount++;
-                                    const map = sg.getShadowMap();
-                                    if (map) {
-                                        const size = map.getRenderSize() as number;
-                                        shadowMapSize = Math.max(shadowMapSize, size);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-
-                let pbrCount = 0;
-                for (let i = 0; i < scene.materials.length; i++) {
-                    if (scene.materials[i] instanceof BABYLON.PBRMaterial) pbrCount++;
-                }
-
-                const activeMeshes = scene.getActiveMeshes().length;
-                let totalVerts = 0;
-                let totalFaces = 0;
-                const meshList = scene.getActiveMeshes();
-                for (let i = 0; i < meshList.length; i++) {
-                    totalVerts += meshList.data[i].getTotalVertices();
-                    totalFaces += meshList.data[i].getTotalIndices() / 3;
-                }
-
-                const currentDrawCalls = (engine as any)._drawCalls?.current ?? 0;
-                const perFrameDrawCalls = currentDrawCalls - lastDrawCallCount;
-                lastDrawCallCount = currentDrawCalls;
-
-                sm.ui.setRenderStats({
-                    isActive: true,
-                    drawCalls: perFrameDrawCalls,
-                    activeMeshes,
-                    totalMeshes: scene.meshes.length,
-                    totalVertices: totalVerts,
-                    totalFaces: Math.round(totalFaces),
-                    activeLights,
-                    totalLights,
-                    pbrMaterials: pbrCount,
-                    totalMaterials: scene.materials.length,
-                    shadowGenerators: shadowGenCount,
-                    shadowMapSize,
-                    textures: scene.textures.length,
-                    particleSystems: scene.particleSystems.filter(ps => ps.isStarted()).length,
-                });
-            }
-
-            // Console Toggle (Works even when paused)
-            if (inputManager.justPressed(GameAction.TOGGLE_CONSOLE)) {
-                sm.isConsoleOpen = !sm.isConsoleOpen;
-                sm.ui.setIsConsoleOpen(sm.isConsoleOpen);
-
-                if (sm.isConsoleOpen) {
-                    sm.isInternalPointerRelease = true;
-                    if (document.pointerLockElement && inputManager.shouldUsePointerLock()) document.exitPointerLock();
-                    // Clear the flag after a short delay to ensure InputManager has seen it
-                    if (consoleToggleTimeout !== null) clearTimeout(consoleToggleTimeout);
-                    consoleToggleTimeout = setTimeout(() => { consoleToggleTimeout = null; sm.isInternalPointerRelease = false; }, 100);
-                } else {
-                    if (!sm.gameState.isPaused && !sm.gameState.isGameOver && inputManager.shouldUsePointerLock()) {
-                        sm.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
-                    }
-                }
-            }
-
-            // Update Developer Stats (Zone & Position) — Throttled & Debug Only
-            if (sm.gameState.hasStarted && now - lastDevStatsUpdate >= 167) {
-                lastDevStatsUpdate = now;
-                if (sm.ui.getIsDebugActive() || sm.isConsoleOpen) {
-                    const cam = sm.camera;
-                    if (cam) {
-                        const zone = sm.getZone(cam.position);
-                        sm.ui.setPlayerStats(zone, {
-                            x: cam.position.x,
-                            y: cam.position.y,
-                            z: cam.position.z,
-                            rot: cam.rotation.y
-                        });
-                    }
-                }
-            }
-
-            // In multiplayer, pause only affects local player UI — game logic keeps running
-            // so the host pausing doesn't freeze the world for other players.
-            const isMultiplayer = currentGameMode !== 'SOLO';
-            const isPausedForLogic = sm.gameState.isPaused && !isMultiplayer;
-            const isLogicFrozen = isPausedForLogic || sm.isConsoleOpen || sm.debugSelection.isActive;
-            sm.gameState.isDebugMode = isLogicFrozen;
-            sm.ui.setIsDebugMode(isLogicFrozen);
-            sm.ui.setIsDebugActive(sm.debugSelection.isActive);
-            sm.gameState.isConsoleOpen = sm.isConsoleOpen;
-
-            if (sm.navPlugin) {
-                sm.navPlugin.timeFactor = isLogicFrozen ? 0 : 1;
-            }
-
-            if (isPausedForLogic || (sm.isConsoleOpen && !sm.debugSelection.isActive)) {
-                return;
-            }
-
-            // In multiplayer spectator mode, end the game if the remote player also dies.
-            if (sm.gameState.isSpectating && !sm.gameState.isGameOver && currentGameMode !== 'SOLO') {
-                if (sm.remote.gameState.health <= 0) {
-                    sm.setIsGameOver(true);
-                    sm.eventBus.emit('GAME_OVER', null);
-                }
-            }
-
-            if (sm.gameState.hasStarted) {
-                sm.update(dt);
-
-                if (sm.gameState.isSpectating && !sm.getIsSpectating()) {
-                    sm.setIsSpectating(true);
-                }
-
-                sm.mysteryBoxSystem?.update(dt);
-
-                // Zombie count HUD — throttled to ~2x/sec, HOST/SOLO only
-                // (CLIENT receives counts via the STATE delta from the host).
-                if (now - lastZombieCountUpdate >= 500 && currentGameMode !== 'CLIENT') {
-                    lastZombieCountUpdate = now;
-                    sm.setActiveZombiesCount(sm.zombies.length);
-                    sm.setTotalRoundZombies(sm.gameState.totalZombiesInRound);
-                }
-            }
+            updateSpectatorGameOver(currentGameMode);
+            updateStartedSessionState(dt, now, currentGameMode);
 
             systemManager.updateAll(dt, now);
-
-            // Passive health regeneration: starts 3 s after last damage, ticks at 20 Hz.
-            const maxHP = sm.gameState.maxHealth || GAME_CONFIG.PLAYER_BASE_HEALTH;
-            if (sm.gameState.health < maxHP && sm.gameState.health > 0 && !sm.gameState.isGameOver) {
-                if (now - sm.gameState.lastDamageTime > 3000) {
-                    if (now - sm.gameState.lastRegenTime > 50) {
-                        sm.gameState.health = Math.min(maxHP, sm.gameState.health + 5);
-                        sm.gameState.lastRegenTime = now;
-                        sm.setHealth(sm.gameState.health);
-                    }
-                }
-            }
+            applyPassiveHealthRegen(now);
         },
         dispose
     };

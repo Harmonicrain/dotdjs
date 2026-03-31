@@ -16,15 +16,36 @@ const BENIGN_NETWORK_ERRORS = [
 
 import { PeerError, DataConnection, Peer } from '../types/index';
 
+const STATUS_TEXT = {
+    disconnected: 'DISCONNECTED',
+    waiting: 'WAITING...',
+    seeking: 'SEEKING...',
+    connecting: 'CONNECTING...',
+    connected: 'CONNECTED',
+    reconnecting: 'RECONNECTING...',
+    retrying: 'RETRYING...',
+    hostNotFound: 'HOST NOT FOUND',
+    idTaken: 'ERR: ID Taken',
+    libMissing: 'ERROR: Lib Missing',
+    browser: 'ERR: BROWSER',
+    webrtc: 'ERR: WEBRTC',
+    server404: 'ERR: SERVER 404',
+    banned: 'ERR: BANNED/403',
+    hostTimeout: 'TIMEOUT - NAT/Firewall blocked',
+    clientTimeout: 'TIMEOUT - Check firewall/port forwarding',
+} as const;
+
+type MultiplayerStatus = typeof STATUS_TEXT[keyof typeof STATUS_TEXT];
+
 export const useMultiplayer = (
     onDataReceived: (data: any) => void,
     onConnectionOpened: () => void
 ) => {
     const [roomId, setRoomId] = useState("");
-    const [connectionStatus, setConnectionStatus] = useState("DISCONNECTED");
+    const [connectionStatus, setConnectionStatus] = useState<MultiplayerStatus>(STATUS_TEXT.disconnected);
     
     // Refs
-    const connectionStatusRef = useRef("DISCONNECTED");
+    const connectionStatusRef = useRef<MultiplayerStatus>(STATUS_TEXT.disconnected);
     const onDataReceivedRef = useRef(onDataReceived);
     const onConnectionOpenedRef = useRef(onConnectionOpened);
     const peerRef = useRef<Peer | null>(null);
@@ -32,7 +53,7 @@ export const useMultiplayer = (
     const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const updateStatus = (status: string) => {
+    const updateStatus = (status: MultiplayerStatus) => {
         setConnectionStatus(status);
         connectionStatusRef.current = status;
     };
@@ -94,7 +115,7 @@ export const useMultiplayer = (
             try { peerRef.current.destroy(); } catch(e) {}
             peerRef.current = null;
         }
-        updateStatus("DISCONNECTED");
+        updateStatus(STATUS_TEXT.disconnected);
         setRoomId("");
     }, [stopHeartbeat, clearConnectionTimeout]);
 
@@ -131,34 +152,89 @@ export const useMultiplayer = (
         });
     };
 
+    const schedulePeerReconnect = useCallback(() => {
+        setTimeout(() => {
+            if (peerRef.current && !peerRef.current.destroyed && peerRef.current.disconnected) {
+                peerRef.current.reconnect();
+            }
+        }, 3000);
+    }, []);
+
+    const beginConnectionTimeout = useCallback((status: MultiplayerStatus, onTimeout: () => void) => {
+        clearConnectionTimeout();
+        connectionTimeoutRef.current = setTimeout(() => {
+            if (connectionStatusRef.current === STATUS_TEXT.connected) return;
+            updateStatus(status);
+            onTimeout();
+        }, CONNECTION_TIMEOUT_MS);
+    }, [clearConnectionTimeout]);
+
+    const attachConnectionLifecycle = useCallback((
+        conn: DataConnection,
+        role: 'Host' | 'Client',
+        onConnected?: () => void,
+    ) => {
+        conn.on('data', handleDataInternal);
+
+        conn.on('open', () => {
+            console.log(`${role} Data Connection Open`);
+            clearConnectionTimeout();
+            updateStatus(STATUS_TEXT.connected);
+            startHeartbeat();
+            if (onConnectionOpenedRef.current) onConnectionOpenedRef.current();
+            onConnected?.();
+        });
+
+        conn.on('close', () => {
+            console.log(`${role} Data Connection Closed`);
+            stopHeartbeat();
+            connRef.current = null;
+            updateStatus(role === 'Host' ? STATUS_TEXT.waiting : STATUS_TEXT.disconnected);
+        });
+
+        conn.on('error', (err: PeerError) => {
+            console.warn(`${role} Conn Error:`, err.type, err.message);
+            updateStatus(`ERR: ${err.type || 'CONN'}` as MultiplayerStatus);
+        });
+
+        conn.on('iceConnectionStateChange', () => {
+            const pc = (conn as any).peerConnection;
+            console.log(`${role} ICE state:`, pc?.iceConnectionState);
+            if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
+                console.warn(`${role} ICE connection failed/disconnected`);
+                updateStatus(STATUS_TEXT.retrying);
+            }
+        });
+    }, [clearConnectionTimeout, handleDataInternal, startHeartbeat, stopHeartbeat]);
+
     const handlePeerError = (err: PeerError) => {
         console.error('Peer Error:', err);
         
         const msg = (err.message || "").toLowerCase();
         if (msg.includes("404") || msg.includes("not found")) {
-             updateStatus("ERR: SERVER 404");
+             updateStatus(STATUS_TEXT.server404);
              return;
         }
         if (msg.includes("banned") || msg.includes("forbidden") || msg.includes("403") || msg.includes("access denied")) {
-             updateStatus("ERR: BANNED/403");
+             updateStatus(STATUS_TEXT.banned);
              return;
         }
 
         const errType = err.type;
         if (errType === 'unavailable-id') {
-            updateStatus("ERR: ID Taken");
+            updateStatus(STATUS_TEXT.idTaken);
         } else if (errType === 'peer-unavailable') {
-            updateStatus("HOST NOT FOUND");
+            updateStatus(STATUS_TEXT.hostNotFound);
         } else if (BENIGN_NETWORK_ERRORS.includes(errType)) {
              // Benign networking errors, wait for reconnect
-             console.warn("Network hiccup:", errType);
-             updateStatus("RECONNECTING...");
+              console.warn("Network hiccup:", errType);
+              updateStatus(STATUS_TEXT.reconnecting);
         } else if (errType === 'browser-incompatible') {
-            updateStatus("ERR: BROWSER");
+            updateStatus(STATUS_TEXT.browser);
         } else if (errType === 'webrtc') {
-            updateStatus("ERR: WEBRTC");
+            updateStatus(STATUS_TEXT.webrtc);
         } else {
-            updateStatus(`ERR: ${errType}`);
+            updateStatus(`ERR: ${errType}` as MultiplayerStatus);
         }
     };
 
@@ -174,16 +250,16 @@ export const useMultiplayer = (
         
         const peer = createPeer(id);
         if (!peer) {
-            updateStatus("ERROR: Lib Missing");
+            updateStatus(STATUS_TEXT.libMissing);
             return;
         }
 
         peerRef.current = peer;
-        updateStatus("WAITING...");
+        updateStatus(STATUS_TEXT.waiting);
 
         peer.on('open', (myId: string) => {
             console.log('Host initialized:', myId);
-            if (!connRef.current) updateStatus("WAITING...");
+            if (!connRef.current) updateStatus(STATUS_TEXT.waiting);
         });
 
         peer.on('connection', (conn: DataConnection) => {
@@ -194,7 +270,7 @@ export const useMultiplayer = (
             }
             
             connRef.current = conn;
-            updateStatus("CONNECTING...");
+            updateStatus(STATUS_TEXT.connecting);
 
             // Log immediate peer connection state
             setTimeout(() => {
@@ -202,62 +278,27 @@ export const useMultiplayer = (
                 console.log('Host immediate ICE state:', pc?.iceConnectionState);
             }, 500);
 
-            clearConnectionTimeout();
-            connectionTimeoutRef.current = setTimeout(() => {
+            beginConnectionTimeout(STATUS_TEXT.hostTimeout, () => {
                 if (connRef.current && !connRef.current.open) {
                     const pc = (conn as any).peerConnection;
                     console.warn("Host Connection Timeout - ICE state:", pc?.iceConnectionState);
-                    updateStatus("TIMEOUT - NAT/Firewall blocked");
                     connRef.current.close();
                 }
-            }, CONNECTION_TIMEOUT_MS);
+            });
 
-            conn.on('open', () => {
-                console.log('Host Data Connection Open');
-                clearConnectionTimeout();
-                updateStatus("CONNECTED");
-                startHeartbeat();
-                if (onConnectionOpenedRef.current) onConnectionOpenedRef.current();
+            attachConnectionLifecycle(conn, 'Host', () => {
                 try { conn.send({ type: 'PING' }); } catch(e) {}
-            });
-
-            conn.on('data', handleDataInternal);
-
-            conn.on('close', () => {
-                console.log('Host Data Connection Closed');
-                connRef.current = null;
-                stopHeartbeat();
-                updateStatus("WAITING...");
-            });
-            
-            conn.on('error', (err: PeerError) => {
-                console.warn('Host Conn Error:', err.type, err.message);
-                updateStatus(`ERR: ${err.type || 'CONN'}`);
-            });
-            
-            conn.on('iceConnectionStateChange', () => {
-                const pc = (conn as any).peerConnection;
-                console.log('Host ICE state:', pc?.iceConnectionState);
-                if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
-                    console.warn('Host ICE connection failed/disconnected');
-                    updateStatus("RETRYING...");
-                }
             });
         });
 
         peer.on('disconnected', () => {
             console.log('Host disconnected from signaling.');
-            // Attempt reconnect to signaling server
-            setTimeout(() => {
-                if (peerRef.current && !peerRef.current.destroyed && peerRef.current.disconnected) {
-                    peerRef.current.reconnect();
-                }
-            }, 3000);
+            schedulePeerReconnect();
         });
 
         peer.on('error', handlePeerError);
 
-    }, [cleanup, handleDataInternal, startHeartbeat, clearConnectionTimeout]);
+    }, [attachConnectionLifecycle, beginConnectionTimeout, cleanup, schedulePeerReconnect]);
 
     const initializeClient = useCallback((hostId: string) => {
         if (!hostId) return;
@@ -267,21 +308,14 @@ export const useMultiplayer = (
         const clientId = Math.random().toString(36).substring(2, 10).toUpperCase();
         const peer = createPeer(clientId);
         if (!peer) {
-            updateStatus("ERROR: Lib Missing");
+            updateStatus(STATUS_TEXT.libMissing);
             return;
         }
         
         peerRef.current = peer;
-        updateStatus("SEEKING...");
+        updateStatus(STATUS_TEXT.seeking);
 
-        clearConnectionTimeout();
-        connectionTimeoutRef.current = setTimeout(() => {
-            if (connectionStatusRef.current !== "CONNECTED") {
-                console.warn("Client Connection Timeout");
-                updateStatus("TIMEOUT - Check firewall/port forwarding");
-                cleanup();
-            }
-        }, CONNECTION_TIMEOUT_MS);
+        beginConnectionTimeout(STATUS_TEXT.clientTimeout, cleanup);
 
         peer.on('open', (myId: string) => {
             console.log('Client initialized:', myId, '- connecting to host:', hostId);
@@ -289,7 +323,7 @@ export const useMultiplayer = (
             const conn = peer.connect(hostId, { serialization: 'json' });
             console.log('Client: created connection (serialization: json), waiting for open...');
             connRef.current = conn;
-            updateStatus("CONNECTING...");
+            updateStatus(STATUS_TEXT.connecting);
 
             // Log immediate peer connection state
             setTimeout(() => {
@@ -297,44 +331,11 @@ export const useMultiplayer = (
                 console.log('Client immediate ICE state:', pc?.iceConnectionState);
             }, 500);
 
-            conn.on('open', () => {
-                console.log('Client Data Connection Open');
-                clearConnectionTimeout();
-                updateStatus("CONNECTED");
-                startHeartbeat();
-                if (onConnectionOpenedRef.current) onConnectionOpenedRef.current();
-            });
-
-            conn.on('data', handleDataInternal);
-
-            conn.on('close', () => {
-                console.log('Client Data Connection Closed');
-                updateStatus("DISCONNECTED");
-                stopHeartbeat();
-                connRef.current = null;
-            });
-            
-            conn.on('error', (err: PeerError) => {
-                console.warn('Client Conn Error:', err.type, err.message);
-                updateStatus(`ERR: ${err.type || 'CONN'}`);
-            });
-            
-            conn.on('iceConnectionStateChange', () => {
-                const pc = (conn as any).peerConnection;
-                console.log('Client ICE state:', pc?.iceConnectionState);
-                if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
-                    console.warn('Client ICE connection failed/disconnected');
-                    updateStatus("RETRYING...");
-                }
-            });
+            attachConnectionLifecycle(conn, 'Client');
         });
 
         peer.on('disconnected', () => {
-            setTimeout(() => {
-                if (peerRef.current && !peerRef.current.destroyed && peerRef.current.disconnected) {
-                    peerRef.current.reconnect();
-                }
-            }, 3000);
+            schedulePeerReconnect();
         });
 
         peer.on('error', (err: PeerError) => {
@@ -342,7 +343,7 @@ export const useMultiplayer = (
             handlePeerError(err);
         });
 
-    }, [cleanup, handleDataInternal, startHeartbeat, clearConnectionTimeout]);
+    }, [attachConnectionLifecycle, beginConnectionTimeout, cleanup, schedulePeerReconnect]);
 
     const send = useCallback((data: unknown) => {
         if (connRef.current && connRef.current.open) {

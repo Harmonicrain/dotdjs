@@ -21,7 +21,7 @@ import { InputManager } from '../engine/InputManager';
 import { SystemManager } from '../engine/SystemManager';
 import { loadTextureConfig } from '../maps/MapTextureResolver';
 import { createGameLoop } from './GameLoop';
-import { useGameStore } from '../store/useGameStore';
+import { resetEngineSessionState } from './sessionStateUtils';
 import type { PlayerFields, GameFields } from '../store/useGameStore';
 import { resetPlayerWeapons } from '../engine/weaponResetUtils';
 
@@ -175,18 +175,6 @@ export class Game {
 
         const soundManager = new SoundManager(this.scene);
         sm.soundManager = soundManager;
-
-        // Apply saved volume settings from store and subscribe to changes
-        const applyVolumeSettings = (s: { masterVolume: number; weaponVolume: number; zombieVolume: number; effectsVolume: number }) => {
-            soundManager.setMasterVolume(s.masterVolume);
-            soundManager.setCategoryVolume('weapon', s.weaponVolume);
-            soundManager.setCategoryVolume('zombie', s.zombieVolume);
-            soundManager.setCategoryVolume('effects', s.effectsVolume);
-        };
-        applyVolumeSettings(useGameStore.getState().settings);
-        useGameStore.subscribe((state) => {
-            applyVolumeSettings(state.settings);
-        });
 
         const zombieManager = new ZombieManager(
             this.scene,
@@ -564,69 +552,7 @@ export class Game {
 
     /** Reset game state flags */
     private _resetGameStateFlags(sm: StateManager): void {
-        sm.gameState.hasStarted = false;
-        sm.gameState.round = 1;
-        sm.setRound(1);
-        sm.setShowRoundIntro(false);
-        sm.gameState.isPackAPunching = false;
-        sm.gameState.isReloading = false;
-        sm.gameState.isFiring = false;
-        sm.gameState.isAiming = false;
-        sm.gameState.isKnifing = false;
-        sm.gameState.powerOn = false;
-        sm.gameState.isGameOver = false;
-        sm.gameState.isSpectating = false;
-        sm.setIsSpectating(false);
-        sm.gameState.isDowned = false;
-        sm.gameState.isBeingRevived = false;
-        sm.gameState.isRevivingTeammate = false;
-
-        sm.gameState.reviveProgress = 0;
-        sm.setReviveProgress(0);
-
-        sm.gameState.doorStates = {};
-        sm.gameState.windowBarriers = {};
-        sm.gameState.interactableStates = {};
-
-        sm.gameState.accumulatedDropPoints = 0;
-        sm.gameState.nextDropThreshold = 2000;
-        sm.gameState.repairPointsRound = 0;
-        sm.gameState.externalForce = BABYLON.Vector3.Zero();
-        sm.gameState.currentVelocity = BABYLON.Vector3.Zero();
-        sm.gameState.recoilOffsetX = 0;
-        sm.gameState.recoilOffsetY = 0;
-        sm.gameState.recoilRecoverySpeed = 3.0;
-        sm.gameState.screenShakeIntensity = 0;
-        sm.gameState.weaponKickTrigger = null;
-
-        sm.gameState.quickRevivesRemaining = GAME_CONFIG.MAX_QUICK_REVIVES_SOLO;
-
-        sm.gameState.points = GAME_CONFIG.STARTING_POINTS;
-        sm.setPoints(GAME_CONFIG.STARTING_POINTS);
-
-        sm.gameState.totalEarnedPoints = GAME_CONFIG.STARTING_POINTS;
-        sm.setTotalEarnedPoints(GAME_CONFIG.STARTING_POINTS);
-
-        sm.gameState.health = GAME_CONFIG.PLAYER_BASE_HEALTH;
-        sm.gameState.maxHealth = GAME_CONFIG.PLAYER_BASE_HEALTH;
-        sm.setHealth(GAME_CONFIG.PLAYER_BASE_HEALTH);
-
-        sm.gameState.kills = 0;
-        sm.setKills(0);
-        sm.ui.clearKillEvents();
-
-        sm.gameState.shots = 0;
-        sm.setShotsFired(0);
-
-        sm.gameState.perkStates = {};
-        sm.setPerks({});
-
-        sm.setFlashColor(null);
-        sm.setInteractionMsg(null);
-        sm.setHoverMsg(null);
-
-        // Reset weapons to starting state (pistol)
-        resetPlayerWeapons(sm);
+        resetEngineSessionState(sm);
     }
 
     /** Reset mystery box state */
@@ -919,7 +845,6 @@ export class Game {
             systemManager: this.systemManager,
             cameraRef: { get current() { return sm.camera; } },
             gameModeRef: sm.gameModeRef,
-            pollGamepad: (_dt: number) => { /* gamepad polled inside InputManager.update() */ },
             inputManager: this.inputManager,
         });
 
