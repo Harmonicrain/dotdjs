@@ -1,59 +1,137 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/useGameStore';
+import { MenuPanel } from '../menus/MenuPrimitives';
 
 interface GameOverScreenProps {
     onQuit: () => void;
 }
 
-// Animated stat reveal component
-const StatReveal = ({ label, value, delay, highlight }: {
-    label: string;
-    value: number | string;
-    delay: number;
-    highlight?: boolean;
-}) => {
-    const [show, setShow] = useState(false);
-    const [countedValue, setCountedValue] = useState(0);
+// Count-up animation for numeric stat values
+const useCountUp = (target: number, active: boolean, duration = 1000) => {
+    const [value, setValue] = useState(0);
 
     useEffect(() => {
-        const showTimer = setTimeout(() => setShow(true), delay);
-        return () => clearTimeout(showTimer);
-    }, [delay]);
+        if (!active || target === 0) {
+            if (active) setValue(target);
+            return;
+        }
 
-    // Count-up animation for numbers
-    useEffect(() => {
-        if (!show || typeof value !== 'number') return;
-
-        const duration = 1000;
         const steps = 30;
-        const increment = value / steps;
+        const increment = target / steps;
         let current = 0;
 
         const interval = setInterval(() => {
             current += increment;
-            if (current >= value) {
-                setCountedValue(value);
+            if (current >= target) {
+                setValue(target);
                 clearInterval(interval);
             } else {
-                setCountedValue(Math.floor(current));
+                setValue(Math.floor(current));
             }
         }, duration / steps);
 
         return () => clearInterval(interval);
-    }, [show, value]);
+    }, [active, target, duration]);
 
-    if (!show) return <div className="h-8" />;
+    return value;
+};
+
+const MENU_BUTTON_STYLE = (isActive: boolean): React.CSSProperties => ({
+    width: '100%',
+    padding: '4px 0 4px 26px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left',
+    position: 'relative',
+    fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+    fontSize: isActive ? 'clamp(28px, 3.1vw, 44px)' : 'clamp(22px, 2.6vw, 34px)',
+    fontWeight: 600,
+    letterSpacing: '0.02em',
+    color: isActive ? '#FF9A00' : '#E5E5E5',
+    textTransform: 'uppercase',
+    textShadow: isActive
+        ? '0 0 15px rgba(255,154,0,0.5), 0 0 30px rgba(255,100,0,0.2)'
+        : '2px 2px 4px rgba(0,0,0,0.8)',
+    transform: isActive ? 'scale(1.03)' : 'scale(1)',
+    transformOrigin: 'left center',
+    transition: 'color 0.1s ease, text-shadow 0.1s ease, font-size 0.15s ease, transform 0.2s ease',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+});
+
+const panelContentStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+};
+
+const sectionLabelStyle: React.CSSProperties = {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: '11px',
+    letterSpacing: '0.2em',
+    color: '#777',
+    textTransform: 'uppercase',
+};
+
+// Single stat row inside a MenuPanel
+const StatRow = ({ label, value, highlight, startDelay, ready }: {
+    label: string;
+    value: number | string;
+    highlight?: boolean;
+    startDelay: number;
+    ready: boolean;
+}) => {
+    const [visible, setVisible] = useState(false);
+
+    useEffect(() => {
+        if (!ready) return;
+        const t = setTimeout(() => setVisible(true), startDelay);
+        return () => clearTimeout(t);
+    }, [ready, startDelay]);
+
+    const counted = useCountUp(
+        typeof value === 'number' ? value : 0,
+        visible,
+    );
+
+    const displayValue = typeof value === 'number'
+        ? counted.toLocaleString()
+        : value;
 
     return (
         <div
-            className="flex justify-between items-center py-2 border-b border-stone-800/50"
-            style={{ animation: 'statSlideIn 0.4s ease-out' }}
+            style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 0',
+                borderBottom: '1px solid rgba(139,0,0,0.22)',
+                opacity: visible ? 1 : 0,
+                transition: 'opacity 0.35s ease',
+            }}
         >
-            <span className="text-stone-500 text-sm uppercase tracking-wider font-mono">{label}</span>
-            <span className={`text-xl font-bold font-mono tracking-wider
-                           ${highlight ? 'text-amber-400' : 'text-stone-200'}`}>
-                {typeof value === 'number' ? countedValue.toLocaleString() : value}
+            <span
+                style={{
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.18em',
+                    color: '#888',
+                    textTransform: 'uppercase',
+                }}
+            >
+                {label}
+            </span>
+            <span
+                style={{
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '18px',
+                    color: highlight ? '#FF9A00' : '#D0D0D0',
+                    letterSpacing: '0.05em',
+                }}
+            >
+                {displayValue}
             </span>
         </div>
     );
@@ -70,194 +148,330 @@ export const GameOverScreen = ({ onQuit }: GameOverScreenProps) => {
     const remoteKills = useGameStore(s => s.remoteKills);
     const remoteShots = useGameStore(s => s.remoteShots);
     const remoteScore = useGameStore(s => s.remoteTotalEarnedPoints);
-    const [phase, setPhase] = useState(0);
+
+    const [ready, setReady] = useState(false);
     const accuracy = shotsFired > 0 ? ((kills / shotsFired) * 100).toFixed(1) : '0.0';
     const remoteAccuracy = remoteShots && remoteShots > 0
         ? ((remoteKills! / remoteShots) * 100).toFixed(1)
         : '0.0';
+    const isCoop = gameMode !== 'SOLO';
+    const summaryDelay = isCoop ? '0.55s' : '0.45s';
 
-    // Phase progression for cinematic reveal
     useEffect(() => {
-        const timers = [
-            setTimeout(() => setPhase(1), 500),   // Show title
-            setTimeout(() => setPhase(2), 1200),  // Show round
-            setTimeout(() => setPhase(3), 2000),  // Show stats
-            setTimeout(() => setPhase(4), 3500),  // Show button
-        ];
-        return () => timers.forEach(clearTimeout);
+        const t = setTimeout(() => setReady(true), 60);
+        return () => clearTimeout(t);
     }, []);
 
+    useEffect(() => {
+        if (document.pointerLockElement && document.exitPointerLock) {
+            document.exitPointerLock();
+        }
+    }, []);
+
+    // ESC key handler
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onQuit();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [onQuit]);
+
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center 
-                      pointer-events-auto overflow-hidden">
-            {/* Animated background */}
-            <div className="absolute inset-0 bg-black">
-                {/* Noise texture */}
+        <div className="absolute inset-0 z-50 overflow-hidden pointer-events-auto select-none">
+            <div
+                className="absolute inset-0"
+                style={{ background: 'rgba(0, 0, 0, 0.58)' }}
+            />
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: 'linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.82) 34%, rgba(0,0,0,0.56) 62%, rgba(0,0,0,0.38) 100%)',
+                }}
+            />
+            <div
+                className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                style={{
+                    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+                }}
+            />
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(circle at 12% 50%, rgba(140,30,0,0.22) 0%, rgba(140,30,0,0.08) 20%, transparent 46%)',
+                }}
+            />
+
+            <div
+                className="absolute inset-0 game-over-layout"
+                style={{
+                    zIndex: 10,
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(280px, 440px) minmax(420px, 720px)',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 'clamp(24px, 3vw, 48px)',
+                    padding: 'clamp(32px, 6vw, 72px) 6% clamp(48px, 8vh, 96px)',
+                }}
+            >
                 <div
-                    className="absolute inset-0 opacity-[0.03]"
+                    className="game-over-hero"
                     style={{
-                        backgroundImage: 'url("https://playground.babylonjs.com/textures/noise.png")',
-                        backgroundSize: '200px'
+                        maxWidth: '440px',
                     }}
-                />
-
-                {/* Vignette */}
-                <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/50 to-black" />
-
-                {/* Blood drip effect at top */}
-                <div className="absolute top-0 left-0 right-0 h-32 overflow-hidden">
-                    {[...Array(12)].map((_, i) => (
-                        <div
-                            key={i}
-                            className="absolute top-0 w-1 bg-gradient-to-b from-red-900 to-transparent rounded-full"
+                >
+                    <div
+                        style={{
+                            opacity: ready ? 0.72 : 0,
+                            transition: 'opacity 0.45s ease 0.2s',
+                        }}
+                    >
+                        <span
                             style={{
-                                left: `${8 + i * 8}%`,
-                                height: `${30 + Math.random() * 70}px`,
-                                animation: `bloodDrip ${2 + Math.random() * 2}s ease-in ${i * 0.2}s infinite`,
-                                opacity: 0.3 + Math.random() * 0.4
+                                fontFamily: "'Share Tech Mono', monospace",
+                                fontSize: '11px',
+                                letterSpacing: '0.28em',
+                                color: '#FF8C00',
+                                textTransform: 'uppercase',
+                            }}
+                        >
+                            Mission Failed
+                        </span>
+                        <div
+                            style={{
+                                marginTop: '6px',
+                                width: '42px',
+                                height: '1px',
+                                background: 'rgba(255,140,0,0.5)',
                             }}
                         />
-                    ))}
+                    </div>
+
+                    <div
+                        style={{
+                            marginTop: '20px',
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.55s ease 0.25s',
+                        }}
+                    >
+                        <h1
+                            className="game-over-title"
+                            style={{
+                                fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+                                fontSize: 'clamp(52px, 7vw, 96px)',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                color: '#E5E5E5',
+                                margin: 0,
+                                lineHeight: 0.92,
+                                whiteSpace: 'nowrap',
+                                textTransform: 'uppercase',
+                                textShadow: '2px 2px 4px rgba(0,0,0,0.85), 0 0 18px rgba(255,154,0,0.08)',
+                            }}
+                        >
+                            Game Over
+                        </h1>
+                    </div>
+
+                    <div
+                        style={{
+                            marginTop: '42px',
+                            opacity: ready ? 1 : 0,
+                            transition: 'opacity 0.55s ease 0.35s',
+                        }}
+                    >
+                        <div
+                            className="game-over-actions"
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '2px',
+                                width: 'min(420px, 86vw)',
+                            }}
+                        >
+                            <button onClick={onQuit} style={MENU_BUTTON_STYLE(true)}>
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: '16%',
+                                        bottom: '16%',
+                                        width: '5px',
+                                        background: '#FF9A00',
+                                        boxShadow: '0 0 12px rgba(255,154,0,0.7)',
+                                    }}
+                                />
+                                <span style={{ whiteSpace: 'nowrap' }}>Return to Menu</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Ambient particles */}
-                <div className="absolute inset-0">
-                    {[...Array(20)].map((_, i) => (
+                <div
+                    className="game-over-summary"
+                    style={{
+                        opacity: ready ? 1 : 0,
+                        transition: `opacity 0.6s ease ${summaryDelay}`,
+                        justifySelf: 'end',
+                        width: '100%',
+                    }}
+                >
+                    <div style={{ width: 'min(100%, 720px)' }}>
                         <div
-                            key={i}
-                            className="absolute w-1 h-1 bg-red-900/30 rounded-full"
                             style={{
-                                left: `${Math.random() * 100}%`,
-                                top: `${Math.random() * 100}%`,
-                                animation: `floatParticle ${5 + Math.random() * 5}s ease-in-out ${Math.random() * 5}s infinite`
+                                display: 'grid',
+                                gridTemplateColumns: isCoop ? 'repeat(auto-fit, minmax(280px, 1fr))' : 'minmax(320px, 1fr)',
+                                gap: '20px',
                             }}
-                        />
-                    ))}
+                        >
+                            <MenuPanel
+                                title="Session Report"
+                                titleRight={(
+                                    <span style={sectionLabelStyle}>
+                                        Round {round}
+                                    </span>
+                                )}
+                                maxWidth="100%"
+                            >
+                                <div style={panelContentStyle}>
+                                    <div>
+                                        <div style={sectionLabelStyle}>Primary Survivor</div>
+                                        <div
+                                            style={{
+                                                marginTop: '8px',
+                                                fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+                                                fontSize: '28px',
+                                                fontWeight: 600,
+                                                letterSpacing: '0.08em',
+                                                color: '#E5E5E5',
+                                                textTransform: 'uppercase',
+                                            }}
+                                        >
+                                            {playerName || 'Survivor'}
+                                        </div>
+                                        <div style={{ marginTop: '12px' }}>
+                                            <StatRow label="Score" value={score} highlight ready={ready} startDelay={550} />
+                                            <StatRow label="Kills" value={kills} ready={ready} startDelay={700} />
+                                            <StatRow label="Shots Fired" value={shotsFired} ready={ready} startDelay={850} />
+                                            <StatRow label="Accuracy" value={`${accuracy}%`} ready={ready} startDelay={1000} />
+                                        </div>
+                                    </div>
+
+                                    {isCoop && (
+                                        <div
+                                            style={{
+                                                borderTop: '1px solid rgba(139,0,0,0.3)',
+                                                paddingTop: '18px',
+                                            }}
+                                        >
+                                            <div style={sectionLabelStyle}>Secondary Survivor</div>
+                                            <div
+                                                style={{
+                                                    marginTop: '8px',
+                                                    fontFamily: "'Oswald', 'Bebas Neue', Georgia, serif",
+                                                    fontSize: '28px',
+                                                    fontWeight: 600,
+                                                    letterSpacing: '0.08em',
+                                                    color: '#E5E5E5',
+                                                    textTransform: 'uppercase',
+                                                }}
+                                            >
+                                                {remotePlayerName || 'Survivor 2'}
+                                            </div>
+                                            <div style={{ marginTop: '12px' }}>
+                                                <StatRow label="Score" value={remoteScore || 0} highlight ready={ready} startDelay={650} />
+                                                <StatRow label="Kills" value={remoteKills || 0} ready={ready} startDelay={800} />
+                                                <StatRow label="Shots Fired" value={remoteShots || 0} ready={ready} startDelay={950} />
+                                                <StatRow label="Accuracy" value={`${remoteAccuracy}%`} ready={ready} startDelay={1100} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </MenuPanel>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Content container */}
-            <div className="relative w-full max-w-4xl px-8">
-                {/* GAME OVER title */}
-                {phase >= 1 && (
-                    <div className="text-center mb-8" style={{ animation: 'titleReveal 1s ease-out' }}>
-                        <h1 className="text-[120px] font-black text-red-700 leading-none tracking-tighter
-                                     drop-shadow-[0_0_60px_rgba(127,29,29,0.5)]"
-                            style={{
-                                textShadow: '0 8px 0 rgba(0,0,0,0.8), 0 0 100px rgba(127,29,29,0.3)',
-                                animation: 'glitchText 0.3s ease-in-out 0.5s 3'
-                            }}>
-                            GAME OVER
-                        </h1>
+            <style>{`
+                @media (max-width: 1700px) {
+                    .game-over-title {
+                        font-size: clamp(42px, 4.8vw, 76px) !important;
+                    }
 
-                        {/* Glitch layers */}
-                        <div className="absolute inset-0 flex items-start justify-center pointer-events-none">
-                            <h1 className="text-[120px] font-black text-red-500/30 leading-none tracking-tighter
-                                         translate-x-[3px]"
-                                style={{ clipPath: 'inset(30% 0 50% 0)', animation: 'glitchLeft 0.2s ease-in-out 0.5s 5' }}>
-                                GAME OVER
-                            </h1>
-                        </div>
-                        <div className="absolute inset-0 flex items-start justify-center pointer-events-none">
-                            <h1 className="text-[120px] font-black text-cyan-500/20 leading-none tracking-tighter
-                                         -translate-x-[3px]"
-                                style={{ clipPath: 'inset(60% 0 20% 0)', animation: 'glitchRight 0.2s ease-in-out 0.6s 5' }}>
-                                GAME OVER
-                            </h1>
-                        </div>
-                    </div>
-                )}
+                    .game-over-actions button {
+                        font-size: clamp(22px, 2.5vw, 34px) !important;
+                    }
+                }
 
-                {/* Round survived */}
-                {phase >= 2 && (
-                    <div className="text-center mb-12" style={{ animation: 'fadeSlideUp 0.6s ease-out' }}>
-                        <div className="inline-flex items-center gap-6">
-                            <div className="w-24 h-[1px] bg-gradient-to-r from-transparent to-stone-700" />
-                            <div>
-                                <p className="text-stone-600 text-xs tracking-[0.5em] uppercase mb-1 font-mono">
-                                    SURVIVED
-                                </p>
-                                <p className="text-5xl font-black text-stone-300 font-mono">
-                                    {round}
-                                    <span className="text-xl text-stone-500 ml-2">ROUNDS</span>
-                                </p>
-                            </div>
-                            <div className="w-24 h-[1px] bg-gradient-to-l from-transparent to-stone-700" />
-                        </div>
-                    </div>
-                )}
+                @media (max-width: 1500px) {
+                    .game-over-layout {
+                        grid-template-columns: minmax(0, 1fr) !important;
+                        justify-content: stretch !important;
+                        align-items: start !important;
+                    }
 
-                {/* Stats cards */}
-                {phase >= 3 && (
-                    <div className={`grid gap-8 mb-12 ${gameMode !== 'SOLO' ? 'grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'}`}>
-                        {/* Player 1 stats */}
-                        <div
-                            className="bg-stone-950/80 border border-stone-800 rounded-lg p-6
-                                     backdrop-blur-sm"
-                            style={{ animation: 'cardSlideIn 0.5s ease-out' }}
-                        >
-                            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-stone-800">
-                                <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                                <h3 className="text-lg font-bold text-stone-200 tracking-wider uppercase">
-                                    {playerName}
-                                </h3>
-                            </div>
+                    .game-over-hero {
+                        max-width: none !important;
+                        width: 100% !important;
+                    }
 
-                            <StatReveal label="Score" value={score} delay={0} highlight />
-                            <StatReveal label="Kills" value={kills} delay={200} />
-                            <StatReveal label="Shots Fired" value={shotsFired} delay={400} />
-                            <StatReveal label="Accuracy" value={`${accuracy}%`} delay={600} />
-                        </div>
+                    .game-over-summary {
+                        max-width: none !important;
+                        width: 100% !important;
+                        justify-self: stretch !important;
+                    }
 
-                        {/* Player 2 stats (co-op) */}
-                        {gameMode !== 'SOLO' && (
-                            <div
-                                className="bg-stone-950/80 border border-stone-800 rounded-lg p-6
-                                         backdrop-blur-sm"
-                                style={{ animation: 'cardSlideIn 0.5s ease-out 0.2s both' }}
-                            >
-                                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-stone-800">
-                                    <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                                    <h3 className="text-lg font-bold text-stone-400 tracking-wider uppercase">
-                                        {remotePlayerName || '---'}
-                                    </h3>
-                                </div>
+                    .game-over-summary > div {
+                        width: 100% !important;
+                    }
 
-                                <StatReveal label="Score" value={remoteScore || 0} delay={100} highlight />
-                                <StatReveal label="Kills" value={remoteKills || 0} delay={300} />
-                                <StatReveal label="Shots Fired" value={remoteShots || 0} delay={500} />
-                                <StatReveal label="Accuracy" value={`${remoteAccuracy}%`} delay={700} />
-                            </div>
-                        )}
-                    </div>
-                )}
+                    .game-over-actions {
+                        width: min(420px, 100%) !important;
+                    }
 
-                {/* Return button */}
-                {phase >= 4 && (
-                    <div className="text-center" style={{ animation: 'fadeSlideUp 0.5s ease-out' }}>
-                        <button
-                            onClick={onQuit}
-                            className="group relative px-12 py-4 overflow-hidden
-                                     bg-transparent border-2 border-stone-700
-                                     hover:border-red-700 transition-all duration-300"
-                        >
-                            {/* Button background effect */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-red-950/0 via-red-950/50 to-red-950/0
-                                          translate-x-[-100%] group-hover:translate-x-[100%]
-                                          transition-transform duration-500" />
+                    .game-over-title {
+                        font-size: clamp(44px, 6vw, 76px) !important;
+                    }
+                }
 
-                            <span className="relative text-stone-400 group-hover:text-red-100
-                                           text-sm tracking-[0.3em] uppercase font-bold
-                                           transition-colors duration-300">
-                                Return to Main Menu
-                            </span>
-                        </button>
+                @media (max-width: 1100px) {
+                    .game-over-title {
+                        white-space: normal !important;
+                    }
+                }
+            `}</style>
 
-                        <p className="mt-6 text-stone-700 text-xs tracking-widest uppercase font-mono">
-                            Press ESC or click to continue
-                        </p>
-                    </div>
-                )}
+            <div
+                className="absolute bottom-4 left-5"
+                style={{
+                    color: '#444',
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.18em',
+                    opacity: ready ? 1 : 0,
+                    transition: 'opacity 0.6s ease 0.4s',
+                    zIndex: 10,
+                }}
+            >
+                BUILD 2024.1 • CLASSIFIED
+            </div>
+            <div
+                className="absolute bottom-4 right-5"
+                style={{
+                    color: '#444',
+                    fontFamily: "'Share Tech Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.12em',
+                    opacity: ready ? 1 : 0,
+                    transition: 'opacity 0.6s ease 0.4s',
+                    zIndex: 10,
+                }}
+            >
+                [ESC] MAIN MENU  [CLICK] SELECT
             </div>
         </div>
     );
