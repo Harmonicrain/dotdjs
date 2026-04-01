@@ -45,7 +45,6 @@ export interface StoredPos {
 }
 
 export interface CachedHostState {
-    [key: string]: any;
     doors: Record<string, DoorState>;
     hostPos: StoredPos;
     activeWeaponIndex: number;
@@ -81,7 +80,6 @@ export interface CachedHostState {
 }
 
 export interface CachedClientState {
-    [key: string]: any;
     pos: StoredPos;
     activeWeaponIndex: number;
     activeWeaponId: string;

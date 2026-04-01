@@ -133,6 +133,11 @@ export class StateManager {
     public getConnectionStatus(): string { return this.ui.getConnectionStatus(); }
     public getIsSpectating(): boolean { return this.ui.getIsSpectating(); }
 
+    // EventBus handler references for dispose() cleanup
+    private _onCommandRequest: (cmd: string) => void;
+    private _onPlayerDamage: (data: { amount: number; source: string }) => void;
+    private _onCommandCloseConsole: () => void;
+
     constructor(
         public scene: BABYLON.Scene,
         public camera: BABYLON.UniversalCamera,
@@ -148,21 +153,23 @@ export class StateManager {
         this.configManager = new MapConfigManager();
 
         // Console Commands
-        this.eventBus.on('COMMAND_REQUEST', (cmd: string) => {
+        this._onCommandRequest = (cmd: string) => {
             const result = executeCommand(cmd, this);
             if (result) {
                 this.ui.setConsoleResult(result);
                 this.timerManager.schedule('clear_console', 5000, () => this.ui.setConsoleResult(null));
             }
-        });
+        };
+        this.eventBus.on('COMMAND_REQUEST', this._onCommandRequest);
 
         // Player Damage Event
-        this.eventBus.on('PLAYER_DAMAGE', (data: { amount: number; source: string }) => {
+        this._onPlayerDamage = (data: { amount: number; source: string }) => {
             _applyDamage(this, data.amount, "rgba(200, 50, 0, 0.4)");
-        });
+        };
+        this.eventBus.on('PLAYER_DAMAGE', this._onPlayerDamage);
 
         // Some commands (e.g. /scaleweapon) need to close the console and return to gameplay
-        this.eventBus.on('COMMAND_CLOSE_CONSOLE', () => {
+        this._onCommandCloseConsole = () => {
             this.isConsoleOpen = false;
             this.ui.setIsConsoleOpen(false);
             this.ui.setConsoleResult(null);
@@ -170,7 +177,8 @@ export class StateManager {
             if (this.inputManager?.shouldUsePointerLock()) {
                 this.scene.getEngine().getRenderingCanvas()?.requestPointerLock();
             }
-        });
+        };
+        this.eventBus.on('COMMAND_CLOSE_CONSOLE', this._onCommandCloseConsole);
 
         // Init GameState
         this.gameState = {
@@ -272,5 +280,12 @@ export class StateManager {
         this.zombieManager = zombie;
         this.hellhoundManager = hellhound;
         this.powerUpManager = powerUp;
+    }
+
+    public dispose(): void {
+        this.eventBus.off('COMMAND_REQUEST', this._onCommandRequest);
+        this.eventBus.off('PLAYER_DAMAGE', this._onPlayerDamage);
+        this.eventBus.off('COMMAND_CLOSE_CONSOLE', this._onCommandCloseConsole);
+        this.timerManager.clear();
     }
 }

@@ -1,27 +1,45 @@
-
 import * as BABYLON from '@babylonjs/core';
 import { GameMessage, PowerUpType, ZombieSyncData } from '../types/index';
 import { StoredPos, CachedClientState, CachedHostState } from '../types/network';
 import { StateManager } from '../state/StateManager';
-import { GameFields, PlayerFields, RemoteFields } from '../store/useGameStore';
+import { GameFields, RemoteFields } from '../store/useGameStore';
 import { handleWeaponPickup } from '../systems/interaction/weaponPickupUtils';
 import { applyPackAPunchUpgrade } from '../systems/packAPunchUtils';
 import { applyExplosionHit, applyProjectileHit } from '../systems/zombie/zombieDamageUtils';
 
+type StateMessage = Extract<GameMessage, { type: 'STATE' }>;
+type InputMessage = Extract<GameMessage, { type: 'INPUT' }>;
+
+const HOST_CACHE_FIELDS: Array<keyof CachedHostState> = [
+    'doors', 'hostPos', 'activeWeaponIndex', 'activeWeaponId',
+    'hostHealth', 'hostPoints', 'hostTotalEarned', 'hostName',
+    'hostPerks', 'hostIsDowned', 'hostKills', 'hostShots',
+    'hostIsSpectating', 'windowStates', 'activeZombiesCount',
+    'totalRoundZombies', 'zombiesSpawned', 'zombiesKilledInRound',
+    'round', 'powerOn', 'isDogRound', 'isGameOver', 'activePowerUps', 'mysteryBox'
+];
+
+const CLIENT_CACHE_FIELDS: Array<keyof CachedClientState> = [
+    'pos', 'activeWeaponIndex', 'activeWeaponId',
+    'clientHealth', 'clientPoints', 'clientTotalEarned',
+    'clientPerks', 'clientIsDowned', 'clientName',
+    'clientIsSpectating', 'clientKills', 'clientShots'
+];
+
 export interface NetworkHandlerActions {
     updateGame: (updates: Partial<GameFields>) => void;
     updateRemote: (updates: Partial<RemoteFields>) => void;
-    updatePlayer: (updates: Partial<PlayerFields>) => void;
-
     setIsClientReady: (ready: boolean) => void;
     setRemotePlayerName: (name: string) => void;
     setSelectedMap: (mapId: string) => void;
     startGameLocal: (overrideMode?: string, overrideMapId?: string) => void;
-
     setInteractionMsg: (msg: string | null) => void;
 }
 
-// ── Default factories ─────────────────────────────────────────────────────────
+export interface NetworkMessageHandler {
+    handleMessage: (msg: GameMessage) => void;
+    dispose: () => void;
+}
 
 const ZERO_POS = () => ({ x: 0, y: 0, z: 0, rot: 0, pitch: 0 });
 
@@ -49,16 +67,10 @@ function defaultClientCache(startPoints = 0, name = 'Unknown'): CachedClientStat
     };
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
-
-/**
- * Merges defined fields from source to target for specified field names.
- * Reduces repetitive `if (msg.field !== undefined) cached.field = msg.field;` patterns.
- */
-function mergeIfDefined<T extends Record<string, unknown>>(
+function mergeIfDefined<T extends object>(
     target: T,
     source: Record<string, unknown>,
-    fields: (keyof T)[]
+    fields: Array<keyof T>
 ): void {
     for (const field of fields) {
         if (source[field as string] !== undefined) {
@@ -67,13 +79,7 @@ function mergeIfDefined<T extends Record<string, unknown>>(
     }
 }
 
-/**
- * Syncs remote player position to interpolation buffer and legacy position props.
- */
-function syncRemotePosition(
-    sm: StateManager,
-    pos: StoredPos
-): void {
+function syncRemotePosition(sm: StateManager, pos: StoredPos): void {
     sm.remote.interpolationBuffer.push({
         timestamp: Date.now(),
         x: pos.x,
@@ -88,9 +94,6 @@ function syncRemotePosition(
     sm.remote.pitch = pos.pitch;
 }
 
-/**
- * Syncs remote player game state (health, downed, kills, shots, perks).
- */
 function syncRemoteGameState(
     sm: StateManager,
     health: number,
@@ -113,33 +116,65 @@ function syncRemoteGameState(
 export const createNetworkMessageHandler = (
     stateManager: StateManager,
     actions: NetworkHandlerActions,
-) => {
+): NetworkMessageHandler => {
+    const sm = stateManager;
+
     let cachedHost: CachedHostState = defaultHostCache();
     let cachedClient: CachedClientState = defaultClientCache();
     let lastHostSeq = -1;
     let lastClientSeq = -1;
 
-    // On game start / restart wipe cached state so a fresh full-sync is required
-    stateManager.eventBus.on('GAME_STARTED', (data: { startPoints?: number } | null) => {
-        const startPoints = data?.startPoints ?? 0;
-        const currentRemoteName = stateManager.remote.name;
-        const localName = stateManager.gameState.playerName;
+    const updateRemoteUIFromHostCache = (): void => {
+        actions.updateRemote({
+            remoteHealth: cachedHost.hostHealth,
+            remotePoints: cachedHost.hostPoints,
+            remoteTotalEarnedPoints: cachedHost.hostTotalEarned,
+            remoteKills: cachedHost.hostKills ?? 0,
+            remoteShots: cachedHost.hostShots ?? 0,
+            remotePerks: cachedHost.hostPerks,
+            remotePlayerName: cachedHost.hostName,
+        });
+    };
 
-        cachedHost = defaultHostCache(startPoints, stateManager.gameModeRef.current === 'HOST' ? localName : currentRemoteName);
-        cachedClient = defaultClientCache(startPoints, stateManager.gameModeRef.current === 'CLIENT' ? localName : currentRemoteName);
+    const updateRemoteUIFromClientCache = (): void => {
+        actions.updateRemote({
+            remoteHealth: cachedClient.clientHealth,
+            remotePoints: cachedClient.clientPoints,
+            remoteTotalEarnedPoints: cachedClient.clientTotalEarned,
+            remoteKills: cachedClient.clientKills ?? 0,
+            remoteShots: cachedClient.clientShots ?? 0,
+            remotePerks: cachedClient.clientPerks,
+            remotePlayerName: cachedClient.clientName,
+        });
+    };
+
+    const resetRemoteGameState = (startPoints: number): void => {
+        sm.remote.interpolationBuffer.clear();
+        sm.remote.gameState.points = startPoints;
+        sm.remote.gameState.health = 100;
+        sm.remote.gameState.isDowned = false;
+        sm.remote.gameState.isSpectating = false;
+        sm.remote.gameState.kills = 0;
+        sm.remote.gameState.shots = 0;
+        sm.remote.gameState.perks = {};
+    };
+
+    const resetCachesForGameStart = (startPoints: number): void => {
+        const currentRemoteName = sm.remote.name;
+        const localName = sm.gameState.playerName;
+
+        cachedHost = defaultHostCache(
+            startPoints,
+            sm.gameModeRef.current === 'HOST' ? localName : currentRemoteName,
+        );
+        cachedClient = defaultClientCache(
+            startPoints,
+            sm.gameModeRef.current === 'CLIENT' ? localName : currentRemoteName,
+        );
 
         lastHostSeq = -1;
         lastClientSeq = -1;
-        stateManager.remote.interpolationBuffer.clear();
-
-        // Ensure remote state is initialized correctly
-        stateManager.remote.gameState.points = startPoints;
-        stateManager.remote.gameState.health = 100;
-        stateManager.remote.gameState.isDowned = false;
-        stateManager.remote.gameState.isSpectating = false;
-        stateManager.remote.gameState.kills = 0;
-        stateManager.remote.gameState.shots = 0;
-        stateManager.remote.gameState.perks = {};
+        resetRemoteGameState(startPoints);
 
         actions.updateRemote({
             remotePoints: startPoints,
@@ -148,188 +183,409 @@ export const createNetworkMessageHandler = (
             remoteKills: 0,
             remoteShots: 0,
             remotePerks: {},
-            remotePlayerName: currentRemoteName
+            remotePlayerName: currentRemoteName,
         });
-    });
+    };
 
-    return (msg: GameMessage) => {
-        // stateManager may not exist yet during lobby phase for some message types
-        if (!stateManager && msg.type !== 'START_GAME' && msg.type !== 'READY') return;
-        const sm = stateManager;
+    const gameStartedHandler = (data: { startPoints?: number } | null): void => {
+        resetCachesForGameStart(data?.startPoints ?? 0);
+    };
 
+    sm.eventBus.on('GAME_STARTED', gameStartedHandler);
+
+    const shouldIgnoreHostDelta = (msg: StateMessage): boolean => {
+        if (lastHostSeq !== -1 && msg._seq > lastHostSeq + 1 && !msg._full) {
+            lastHostSeq = msg._seq;
+            return true;
+        }
+
+        lastHostSeq = msg._seq;
+        return false;
+    };
+
+    const shouldIgnoreClientDelta = (msg: InputMessage): boolean => {
+        if (lastClientSeq !== -1 && msg._seq > lastClientSeq + 1 && !msg._full) {
+            lastClientSeq = msg._seq;
+            return true;
+        }
+
+        lastClientSeq = msg._seq;
+        return false;
+    };
+
+    const sendClientPointsUpdate = (): void => {
+        sm.send({
+            type: 'POINTS_UPDATE',
+            points: cachedClient.clientPoints,
+            totalEarned: cachedClient.clientTotalEarned,
+        });
+    };
+
+    const rejectInteraction = (interactionType: string): void => {
+        sm.send({
+            type: 'INTERACT_REJECT',
+            interactionType,
+            points: cachedClient.clientPoints,
+        });
+    };
+
+    const trySpendClientPoints = (cost: number, interactionType: string): boolean => {
+        if (cachedClient.clientPoints < cost) {
+            rejectInteraction(interactionType);
+            return false;
+        }
+
+        cachedClient.clientPoints -= cost;
+        sendClientPointsUpdate();
+        return true;
+    };
+
+    const applyDoorStateUpdates = (doors: StateMessage['doors']): void => {
+        if (doors === undefined) return;
+
+        for (const [doorId, doorState] of Object.entries(doors)) {
+            const previousState = sm.gameState.doorStates[doorId];
+            const wasOpen = previousState?.isOpen ?? false;
+            const isOpen = doorState.isOpen;
+
+            sm.gameState.doorStates[doorId] = doorState;
+
+            if (!wasOpen && isOpen) {
+                sm.eventBus.emit('DOOR_OPEN_REQUEST', doorId);
+            }
+        }
+    };
+
+    const applyHostZombieDelta = (msg: StateMessage): void => {
+        if (msg._full && msg.zombies !== undefined) {
+            cachedHost.zombies = msg.zombies;
+            return;
+        }
+
+        if (msg.removedZombieIds?.length) {
+            const removed = new Set<string>(msg.removedZombieIds);
+            cachedHost.zombies = cachedHost.zombies.filter(z => !removed.has(z.id));
+        }
+
+        if (msg.zombies?.length) {
+            const zombieMap = new Map<string, ZombieSyncData>(
+                cachedHost.zombies.map(z => [z.id, z]),
+            );
+
+            for (const zombie of msg.zombies) {
+                zombieMap.set(zombie.id, zombie);
+            }
+
+            cachedHost.zombies = Array.from(zombieMap.values());
+        }
+    };
+
+    const syncRemoteFromHostCache = (): void => {
+        syncRemotePosition(sm, cachedHost.hostPos);
+        sm.remote.weaponId = cachedHost.activeWeaponId;
+        syncRemoteGameState(
+            sm,
+            cachedHost.hostHealth,
+            cachedHost.hostPoints,
+            cachedHost.hostIsDowned,
+            cachedHost.hostIsSpectating,
+            cachedHost.hostKills,
+            cachedHost.hostShots,
+            cachedHost.hostPerks,
+        );
+    };
+
+    const syncRemoteFromClientCache = (): void => {
+        syncRemotePosition(sm, cachedClient.pos);
+        sm.remote.weaponId = cachedClient.activeWeaponId;
+        syncRemoteGameState(
+            sm,
+            cachedClient.clientHealth,
+            cachedClient.clientPoints,
+            cachedClient.clientIsDowned,
+            cachedClient.clientIsSpectating,
+            cachedClient.clientKills,
+            cachedClient.clientShots,
+            cachedClient.clientPerks,
+        );
+    };
+
+    const handleStateMessage = (msg: StateMessage): void => {
+        if (shouldIgnoreHostDelta(msg)) return;
+
+        if (msg._full) {
+            cachedHost = defaultHostCache(cachedHost.hostPoints, cachedHost.hostName);
+        }
+
+        mergeIfDefined(cachedHost, msg as unknown as Record<string, unknown>, HOST_CACHE_FIELDS);
+        applyDoorStateUpdates(msg.doors);
+
+        actions.updateGame({
+            round: cachedHost.round,
+            isDogRound: cachedHost.isDogRound,
+            activeZombiesCount: cachedHost.activeZombiesCount,
+            totalRoundZombies: cachedHost.totalRoundZombies,
+            zombiesSpawned: cachedHost.zombiesSpawned,
+            zombiesKilledInRound: cachedHost.zombiesKilledInRound,
+            zombiesToSpawn: cachedHost.totalRoundZombies - cachedHost.zombiesSpawned,
+            powerOn: cachedHost.powerOn,
+            isGameOver: cachedHost.isGameOver,
+        });
+
+        applyHostZombieDelta(msg);
+        syncRemoteFromHostCache();
+        sm.eventBus.emit('NET_GAME_STATE_UPDATE', cachedHost);
+        updateRemoteUIFromHostCache();
+    };
+
+    const handleInputMessage = (msg: InputMessage): void => {
+        if (shouldIgnoreClientDelta(msg)) return;
+
+        if (msg._full) {
+            cachedClient = defaultClientCache(cachedClient.clientPoints, cachedClient.clientName);
+        }
+
+        mergeIfDefined(cachedClient, msg as unknown as Record<string, unknown>, CLIENT_CACHE_FIELDS);
+        syncRemoteFromClientCache();
+        sm.eventBus.emit('NET_CLIENT_INPUT', cachedClient);
+        updateRemoteUIFromClientCache();
+    };
+
+    const handleReadyMessage = (msg: Extract<GameMessage, { type: 'READY' }>): void => {
+        actions.setIsClientReady(true);
+        actions.setRemotePlayerName(msg.name);
+        sm.remote.name = msg.name;
+        sm.remote.visuals?.updateName(msg.name);
+        cachedClient.clientName = msg.name;
+    };
+
+    const handleClientZombieHit = (msg: Extract<GameMessage, { type: 'CLIENT_ZOMBIE_HIT' }>): void => {
+        const hitZombie = sm.zombies.find(z => z.id === msg.zombieId);
+        if (hitZombie && !hitZombie.isDead) {
+            applyProjectileHit(sm, {
+                zombie: hitZombie,
+                damage: msg.damage,
+                owner: 'CLIENT',
+                isHeadshot: msg.isHeadshot,
+                isLegHit: msg.isLegHit,
+                hitMeshName: msg.meshName,
+            });
+        }
+    };
+
+    const handleClientExplosionHit = (msg: Extract<GameMessage, { type: 'CLIENT_EXPLOSION_HIT' }>): void => {
+        const impactPoint = new BABYLON.Vector3(msg.x, msg.y, msg.z);
+
+        for (const zombie of sm.zombies) {
+            applyExplosionHit(sm, {
+                zombie,
+                impactPoint,
+                splashRadius: msg.splashRadius,
+                splashDamage: msg.splashDamage,
+                owner: 'CLIENT',
+            });
+        }
+    };
+
+    const handleDoorInteraction = (msg: Extract<GameMessage, { type: 'INTERACT_DOOR' }>): void => {
+        const doorState = sm.gameState.doorStates[msg.doorId];
+        if (!doorState || doorState.isOpen) return;
+
+        if (trySpendClientPoints(doorState.cost, 'DOOR')) {
+            sm.eventBus.emit('DOOR_OPEN_REQUEST', msg.doorId);
+        }
+    };
+
+    const handlePerkInteraction = (msg: Extract<GameMessage, { type: 'INTERACT_PERK' }>): void => {
+        if (!trySpendClientPoints(msg.cost, 'PERK')) return;
+
+        sm.send({ type: 'PERK_CONFIRM', perkId: msg.perkId, perkType: msg.perkType });
+    };
+
+    const handleWallBuyInteraction = (msg: Extract<GameMessage, { type: 'INTERACT_WALL_BUY' }>): void => {
+        if (!trySpendClientPoints(msg.cost, 'WALL_BUY')) return;
+
+        sm.send({ type: 'WALL_BUY_CONFIRM', weaponId: msg.weaponId });
+    };
+
+    const handlePackAPunchInteraction = (msg: Extract<GameMessage, { type: 'INTERACT_PACK_A_PUNCH' }>): void => {
+        if (!sm.gameState.powerOn) {
+            rejectInteraction('PACK_A_PUNCH');
+            return;
+        }
+
+        if (!trySpendClientPoints(msg.cost, 'PACK_A_PUNCH')) return;
+
+        sm.send({ type: 'PACK_A_PUNCH_CONFIRM', weaponId: msg.weaponId });
+    };
+
+    const handleWindowInteraction = (msg: Extract<GameMessage, { type: 'INTERACT_WINDOW' }>): void => {
+        const windowBarrier = sm.windows.find(win => win.id === msg.targetId);
+        if (!windowBarrier) return;
+
+        const disabledBoard = windowBarrier.boards.find((board: BABYLON.AbstractMesh) => !board.isEnabled());
+        if (disabledBoard) {
+            disabledBoard.setEnabled(true);
+        }
+    };
+
+    const handleMysteryBoxInteraction = (
+        msg: Extract<GameMessage, { type: 'INTERACT_BOX' | 'INTERACT_BOX_START' | 'INTERACT_BOX_TAKE' }>,
+    ): void => {
+        if (!sm.mysteryBoxSystem) return;
+
+        const playerName = msg.type === 'INTERACT_BOX_START' || msg.type === 'INTERACT_BOX_TAKE'
+            ? msg.playerName
+            : undefined;
+
+        if (msg.type === 'INTERACT_BOX_START') {
+            const isFireSale = !!msg.isFireSale;
+            const boxCost = isFireSale ? 10 : sm.configManager.mysteryBox.COST;
+            if (!trySpendClientPoints(boxCost, 'BOX')) return;
+
+            const previousLocationIndex = sm.mysteryBox.activeLocationIndex;
+            if (isFireSale && msg.locIndex !== undefined) {
+                sm.mysteryBox.activeLocationIndex = msg.locIndex;
+            }
+
+            const interactResult = sm.mysteryBoxSystem.interact(playerName, boxCost);
+            if (!interactResult) {
+                sm.mysteryBox.activeLocationIndex = previousLocationIndex;
+            }
+            return;
+        }
+
+        const takeResult = sm.mysteryBoxSystem.interact(playerName);
+        if (typeof takeResult === 'string' && takeResult !== 'NO_POINTS') {
+            sm.send({ type: 'BOX_TAKE_CONFIRM', weaponId: takeResult });
+        }
+    };
+
+    const handleZombieDamage = (msg: Extract<GameMessage, { type: 'ZOMBIE_DAMAGE' }>): void => {
+        if (sm.gameState.isGodMode || sm.gameState.isDowned || sm.gameState.isGameOver) return;
+
+        const now = Date.now();
+        if (now - sm.gameState.lastDamageTime < sm.configManager.gameplay.DAMAGE_IMMUNITY_MS) return;
+
+        sm.gameState.lastDamageTime = now;
+        sm.gameState.health = Math.max(0, sm.gameState.health - msg.amount);
+        sm.setHealth(sm.gameState.health);
+        sm.setFlashColor(msg.isHellhound ? 'rgba(200, 50, 0, 0.4)' : 'rgba(255, 0, 0, 0.4)');
+        sm.timerManager.schedule('dmg_flash', sm.configManager.visuals.HIT_FLASH_DURATION * 2, () => sm.setFlashColor(null));
+
+        if (sm.gameState.health > 0 || sm.gameState.isDowned) return;
+
+        const isSolo = sm.gameModeRef.current === 'SOLO';
+        const hasQuickRevive = sm.gameState.perkStates['quickRevive'];
+
+        if (isSolo && !hasQuickRevive) {
+            sm.setHealth(0);
+            sm.setIsGameOver(true);
+            return;
+        }
+
+        sm.gameState.isDowned = true;
+        sm.gameState.downedStartTime = now;
+        sm.gameState.downedTimeLimit = sm.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
+        sm.setIsDowned(true);
+        sm.send({
+            type: 'PLAYER_DOWNED',
+            playerName: sm.gameState.playerName || 'Unknown',
+            position: { x: sm.camera.position.x, y: sm.camera.position.y, z: sm.camera.position.z },
+        });
+    };
+
+    const handlePerkConfirm = (msg: Extract<GameMessage, { type: 'PERK_CONFIRM' }>): void => {
+        sm.gameState.perkStates[msg.perkId] = true;
+        sm.setPerks(sm.gameState.perkStates);
+
+        if (msg.perkType === 'juggernog') {
+            const juggHealth = sm.configManager.gameplay.PLAYER_JUGG_HEALTH;
+            sm.gameState.maxHealth = juggHealth;
+            sm.gameState.health = juggHealth;
+            sm.setHealth(juggHealth);
+        }
+    };
+
+    const handlePackAPunchConfirm = (msg: Extract<GameMessage, { type: 'PACK_A_PUNCH_CONFIRM' }>): void => {
+        const weapon = sm.gameState.weapons.find(w => w.id === msg.weaponId);
+        if (!weapon || !applyPackAPunchUpgrade(weapon, sm.configManager)) return;
+
+        const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
+        if (activeWeapon === weapon) {
+            sm.setAmmo(weapon.currentAmmo);
+            sm.setReserveAmmo(weapon.currentReserve);
+            sm.setWeaponName(weapon.name);
+            sm.setWeaponId(weapon.id);
+        }
+
+        sm.setInteractionMsg('WEAPON UPGRADED!');
+        sm.timerManager.schedule('pap_msg_clear', sm.configManager.visuals.HUD_MSG_DURATION || 2000, () => sm.setInteractionMsg(null));
+    };
+
+    const handleRespawnMessage = (msg: Extract<GameMessage, { type: 'RESPAWN' }>): void => {
+        if (!sm.gameState.isSpectating) return;
+
+        actions.updateGame({ round: msg.round });
+        sm.eventBus.emit('RESPAWN_REQUEST', { round: msg.round, points: msg.points });
+        actions.updateGame({ isSpectating: false });
+    };
+
+    const handleMessage = (msg: GameMessage): void => {
         switch (msg.type) {
-
-            // ── Non-tick event messages — completely unchanged ─────────────────
-
             case 'READY':
-                if (msg.name) {
-                    actions.setIsClientReady(true);
-                    actions.setRemotePlayerName(msg.name);
-                    sm.remote.name = msg.name;
-                    sm.remote.visuals?.updateName(msg.name);
-                    // Update cache so subsequent tick updates don't overwrite with default
-                    cachedClient.clientName = msg.name;
-                }
+                handleReadyMessage(msg);
                 break;
 
             case 'START_GAME':
-                if (msg.mapId) actions.setSelectedMap(msg.mapId);
+                actions.setSelectedMap(msg.mapId);
                 actions.startGameLocal('CLIENT', msg.mapId);
+                break;
+
+            case 'PING':
                 break;
 
             case 'SHOOT':
                 sm.eventBus.emit('REMOTE_SHOOT', msg);
                 break;
 
-            case 'CLIENT_ZOMBIE_HIT': {
-                // HOST applies CLIENT's zombie hit authoritatively
-                const hitZombie = sm.zombies.find(z => z.id === msg.zombieId);
-                if (hitZombie && !hitZombie.isDead) {
-                    applyProjectileHit(sm, {
-                        zombie: hitZombie,
-                        damage: msg.damage,
-                        owner: 'CLIENT',
-                        isHeadshot: msg.isHeadshot,
-                        isLegHit: msg.isLegHit,
-                        hitMeshName: msg.meshName,
-                    });
-                }
+            case 'CLIENT_ZOMBIE_HIT':
+                handleClientZombieHit(msg);
                 break;
-            }
 
-            case 'CLIENT_EXPLOSION_HIT': {
-                // HOST applies CLIENT's explosive hit authoritatively
-                const impactPoint = new BABYLON.Vector3(msg.x, msg.y, msg.z);
-
-                for (const z of sm.zombies) {
-                    applyExplosionHit(sm, {
-                        zombie: z,
-                        impactPoint,
-                        splashRadius: msg.splashRadius,
-                        splashDamage: msg.splashDamage,
-                        owner: 'CLIENT',
-                    });
-                }
+            case 'CLIENT_EXPLOSION_HIT':
+                handleClientExplosionHit(msg);
                 break;
-            }
 
-            case 'INTERACT_DOOR': {
-                // HOST validates CLIENT has enough points before opening
-                const doorState = sm.gameState.doorStates[msg.doorId];
-                if (doorState && !doorState.isOpen) {
-                    const clientPoints = cachedClient.clientPoints;
-                    if (clientPoints >= doorState.cost) {
-                        sm.eventBus.emit('DOOR_OPEN_REQUEST', msg.doorId);
-                        // Deduct points from CLIENT's tracked state and confirm
-                        const newPoints = clientPoints - doorState.cost;
-                        cachedClient.clientPoints = newPoints;
-                        sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                    } else {
-                        sm.send({ type: 'INTERACT_REJECT', interactionType: 'DOOR', points: clientPoints });
-                    }
-                }
+            case 'INTERACT_DOOR':
+                handleDoorInteraction(msg);
                 break;
-            }
 
-            case 'INTERACT_PERK': {
-                // HOST validates CLIENT perk purchase
-                const perkMsg = msg as any;
-                const clientPoints = cachedClient.clientPoints;
-                if (clientPoints >= perkMsg.cost) {
-                    const newPoints = clientPoints - perkMsg.cost;
-                    cachedClient.clientPoints = newPoints;
-                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                    // Tell the CLIENT to actually apply the perk
-                    sm.send({ type: 'PERK_CONFIRM', perkId: perkMsg.perkId, perkType: perkMsg.perkType });
-                } else {
-                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'PERK', points: clientPoints });
-                }
+            case 'INTERACT_PERK':
+                handlePerkInteraction(msg);
                 break;
-            }
 
-            case 'INTERACT_WALL_BUY': {
-                // HOST validates CLIENT wall buy
-                const wbMsg = msg as any;
-                const clientPoints = cachedClient.clientPoints;
-                if (clientPoints >= wbMsg.cost) {
-                    const newPoints = clientPoints - wbMsg.cost;
-                    cachedClient.clientPoints = newPoints;
-                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                    // Tell the CLIENT to actually pick up / refill the weapon
-                    sm.send({ type: 'WALL_BUY_CONFIRM', weaponId: wbMsg.weaponId });
-                } else {
-                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'WALL_BUY', points: clientPoints });
-                }
+            case 'INTERACT_WALL_BUY':
+                handleWallBuyInteraction(msg);
                 break;
-            }
 
-            case 'INTERACT_PACK_A_PUNCH': {
-                // HOST validates CLIENT Pack-a-Punch
-                const papMsg = msg as any;
-                const clientPoints = cachedClient.clientPoints;
-                if (clientPoints >= papMsg.cost && sm.gameState.powerOn) {
-                    const newPoints = clientPoints - papMsg.cost;
-                    cachedClient.clientPoints = newPoints;
-                    sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                    // Tell the CLIENT to actually upgrade the weapon
-                    sm.send({ type: 'PACK_A_PUNCH_CONFIRM', weaponId: papMsg.weaponId });
-                } else {
-                    sm.send({ type: 'INTERACT_REJECT', interactionType: 'PACK_A_PUNCH', points: clientPoints });
-                }
+            case 'INTERACT_PACK_A_PUNCH':
+                handlePackAPunchInteraction(msg);
                 break;
-            }
 
             case 'INTERACT_POWER':
                 sm.eventBus.emit('POWER_ON_REQUEST', null);
                 break;
 
             case 'INTERACT_WINDOW':
-                if (msg.targetId) {
-                    const w = sm.windows.find(win => win.id === msg.targetId);
-                    if (w) {
-                        const disabledBoard = w.boards.find((b: BABYLON.AbstractMesh) => !b.isEnabled());
-                        if (disabledBoard) disabledBoard.setEnabled(true);
-                    }
-                }
+                handleWindowInteraction(msg);
                 break;
 
             case 'INTERACT_BOX':
             case 'INTERACT_BOX_START':
-            case 'INTERACT_BOX_TAKE': {
-                if (sm.mysteryBoxSystem) {
-                    const playerName =
-                        (msg.type === 'INTERACT_BOX_START' || msg.type === 'INTERACT_BOX_TAKE')
-                            ? msg.playerName
-                            : undefined;
-
-                    // For BOX_START, validate CLIENT has enough points
-                    if (msg.type === 'INTERACT_BOX_START') {
-                        const isFireSale = !!msg.isFireSale;
-                        const boxCost = isFireSale ? 10 : sm.configManager.mysteryBox.COST;
-                        const clientPoints = cachedClient.clientPoints;
-                        if (clientPoints >= boxCost) {
-                            const newPoints = clientPoints - boxCost;
-                            cachedClient.clientPoints = newPoints;
-                            const prevLocIdx = sm.mysteryBox.activeLocationIndex;
-                            if (isFireSale && msg.locIndex !== undefined) {
-                                sm.mysteryBox.activeLocationIndex = msg.locIndex;
-                            }
-                            sm.send({ type: 'POINTS_UPDATE', points: newPoints, totalEarned: cachedClient.clientTotalEarned });
-                            const interactResult = sm.mysteryBoxSystem.interact(playerName, boxCost);
-                            if (!interactResult) sm.mysteryBox.activeLocationIndex = prevLocIdx;
-                        } else {
-                            sm.send({ type: 'INTERACT_REJECT', interactionType: 'BOX', points: clientPoints });
-                        }
-                    } else {
-                        const takeResult = sm.mysteryBoxSystem.interact(playerName);
-                        // If the CLIENT took a weapon, send it back so they can add it to inventory
-                        if (typeof takeResult === 'string' && takeResult !== 'NO_POINTS') {
-                            sm.send({ type: 'BOX_TAKE_CONFIRM', weaponId: takeResult });
-                        }
-                    }
-                }
+            case 'INTERACT_BOX_TAKE':
+                handleMysteryBoxInteraction(msg);
                 break;
-            }
 
             case 'SPAWN_POWERUP':
                 sm.gameState.pendingPowerUps.push({
@@ -343,52 +599,18 @@ export const createNetworkMessageHandler = (
             case 'ACTIVATE_POWERUP_EFFECT':
                 actions.updateGame({ interactionMsg: `${msg.pType.replace('_', ' ')}!` });
                 sm.timerManager.schedule('net_powerup_msg_clear', 3000, () => actions.updateGame({ interactionMsg: null }));
-                if (sm.powerUpManager) {
-                    sm.powerUpManager.activatePowerUp(msg.pType as PowerUpType, true);
-                }
+                sm.powerUpManager?.activatePowerUp(msg.pType as PowerUpType, true);
                 break;
 
             case 'HIT_CONFIRM':
                 sm.addPoints(msg.amount);
                 break;
 
-            case 'ZOMBIE_DAMAGE': {
-                if (sm.gameState.isGodMode || sm.gameState.isDowned || sm.gameState.isGameOver) break;
-                const now = Date.now();
-                if (now - sm.gameState.lastDamageTime < sm.configManager.gameplay.DAMAGE_IMMUNITY_MS) break;
-
-                sm.gameState.lastDamageTime = now;
-                sm.gameState.health = Math.max(0, sm.gameState.health - msg.amount);
-                sm.setHealth(sm.gameState.health);
-                sm.setFlashColor(msg.isHellhound ? "rgba(200, 50, 0, 0.4)" : "rgba(255, 0, 0, 0.4)");
-                sm.timerManager.schedule('dmg_flash', sm.configManager.visuals.HIT_FLASH_DURATION * 2, () => sm.setFlashColor(null));
-
-                if (sm.gameState.health <= 0 && !sm.gameState.isDowned) {
-                    const isSolo = sm.gameModeRef.current === 'SOLO';
-                    const hasQuickRevive = sm.gameState.perkStates['quickRevive'];
-
-                    if (isSolo && !hasQuickRevive) {
-                        sm.setHealth(0);
-                        sm.setIsGameOver(true);
-                    } else {
-                        sm.gameState.isDowned = true;
-                        sm.gameState.downedStartTime = now;
-                        sm.gameState.downedTimeLimit = sm.configManager.gameplay.DOWNED_BLEED_OUT_TIME;
-                        sm.setIsDowned(true);
-
-                        // Notify others (host) that we went down
-                        sm.send({
-                            type: 'PLAYER_DOWNED',
-                            playerName: sm.gameState.playerName || 'Unknown',
-                            position: { x: sm.camera.position.x, y: sm.camera.position.y, z: sm.camera.position.z },
-                        });
-                    }
-                }
+            case 'ZOMBIE_DAMAGE':
+                handleZombieDamage(msg);
                 break;
-            }
 
             case 'POINTS_UPDATE':
-                // HOST confirmed a purchase — apply the authoritative point value
                 sm.gameState.points = msg.points;
                 sm.setPoints(msg.points);
                 sm.gameState.totalEarnedPoints = msg.totalEarned;
@@ -396,68 +618,34 @@ export const createNetworkMessageHandler = (
                 break;
 
             case 'INTERACT_REJECT':
-                // HOST rejected an interaction — sync CLIENT points to HOST's authoritative value
                 sm.gameState.points = msg.points;
                 sm.setPoints(msg.points);
                 break;
 
             case 'WALL_BUY_CONFIRM':
-                // HOST confirmed the wall buy — give the CLIENT the weapon
                 handleWeaponPickup(sm, msg.weaponId);
                 break;
 
-            case 'PERK_CONFIRM': {
-                // HOST confirmed the perk purchase — apply it on the CLIENT
-                const perkId = msg.perkId;
-                const perkType = msg.perkType;
-                sm.gameState.perkStates[perkId] = true;
-                sm.setPerks(sm.gameState.perkStates);
-                if (perkType === 'juggernog') {
-                    const juggHealth = sm.configManager.gameplay.PLAYER_JUGG_HEALTH;
-                    sm.gameState.maxHealth = juggHealth;
-                    sm.gameState.health = juggHealth;
-                    sm.setHealth(juggHealth);
-                }
+            case 'PERK_CONFIRM':
+                handlePerkConfirm(msg);
                 break;
-            }
 
-            case 'PACK_A_PUNCH_CONFIRM': {
-                // HOST confirmed Pack-a-Punch — upgrade the CLIENT's weapon
-                const weapon = sm.gameState.weapons.find(w => w.id === msg.weaponId);
-                if (weapon && applyPackAPunchUpgrade(weapon, sm.configManager)) {
-                    const activeWeapon = sm.gameState.weapons[sm.gameState.activeWeaponIndex];
-                    if (activeWeapon === weapon) {
-                        sm.setAmmo(weapon.currentAmmo);
-                        sm.setReserveAmmo(weapon.currentReserve);
-                        sm.setWeaponName(weapon.name);
-                        sm.setWeaponId(weapon.id);
-                    }
-                    sm.setInteractionMsg("WEAPON UPGRADED!");
-                    sm.timerManager.schedule('pap_msg_clear', sm.configManager.visuals.HUD_MSG_DURATION || 2000, () => sm.setInteractionMsg(null));
-                }
+            case 'PACK_A_PUNCH_CONFIRM':
+                handlePackAPunchConfirm(msg);
                 break;
-            }
 
             case 'BOX_TAKE_CONFIRM':
-                // HOST confirmed mystery box take — give the CLIENT the weapon
                 handleWeaponPickup(sm, msg.weaponId);
                 break;
 
             case 'RESPAWN':
-                if (!sm.gameState.isSpectating) {
-                    break;
-                }
-                actions.updateGame({ round: msg.round });
-                sm.eventBus.emit('RESPAWN_REQUEST', { round: msg.round, points: msg.points });
-                actions.updateGame({ isSpectating: false });
+                handleRespawnMessage(msg);
                 break;
 
             case 'PLAYER_DOWNED':
                 sm.remote.gameState.isDowned = true;
                 actions.setInteractionMsg(`${msg.playerName} IS DOWN!`);
                 sm.timerManager.schedule('net_downed_msg_clear', 3000, () => actions.setInteractionMsg(null));
-
-                // In multiplayer, if both players are now downed, trigger game over on the host
                 if (sm.gameModeRef.current === 'HOST' && sm.gameState.isDowned) {
                     sm.setIsGameOver(true);
                 }
@@ -490,165 +678,20 @@ export const createNetworkMessageHandler = (
                 sm.eventBus.emit('HOST_LOADED_RECEIVED', null);
                 break;
 
-            // ── Tick messages — delta-aware ────────────────────────────────────
-
-            case 'STATE': {
-                const seq: number | undefined = msg._seq;
-                const isFull: boolean = !!msg._full;
-
-                // Gap detection: if seq jumped and this isn't a full sync, our delta
-                // chain is broken. Ignore deltas until the next full sync arrives.
-                if (seq !== undefined && lastHostSeq !== -1 && seq > lastHostSeq + 1 && !isFull) {
-                    lastHostSeq = seq;
-                    break;
-                }
-                if (seq !== undefined) lastHostSeq = seq;
-
-                if (isFull) {
-                    cachedHost = defaultHostCache(cachedHost.hostPoints, cachedHost.hostName);
-                }
-
-                // ── Merge delta fields into the cached host state ──────────────
-                mergeIfDefined(cachedHost, msg, [
-                    'doors', 'hostPos', 'activeWeaponIndex', 'activeWeaponId',
-                    'hostHealth', 'hostPoints', 'hostTotalEarned', 'hostName',
-                    'hostPerks', 'hostIsDowned', 'hostKills', 'hostShots',
-                    'hostIsSpectating',
-                    'windowStates', 'activeZombiesCount', 'totalRoundZombies',
-                    'zombiesSpawned', 'zombiesKilledInRound', 'round',
-                    'powerOn', 'isDogRound', 'isGameOver', 'activePowerUps', 'mysteryBox'
-                ]);
-
-                // ── Sync door states to client game state ───────────────────────
-                if (msg.doors !== undefined) {
-                    for (const [doorId, doorState] of Object.entries(msg.doors)) {
-                        const previousState = sm.gameState.doorStates[doorId];
-                        const wasOpen = previousState?.isOpen ?? false;
-                        const isOpen = doorState.isOpen;
-
-                        sm.gameState.doorStates[doorId] = doorState;
-
-                        if (!wasOpen && isOpen) {
-                            sm.eventBus.emit('DOOR_OPEN_REQUEST', doorId);
-                        }
-                    }
-                }
-
-                // ── Feed merged state to the game ──────────────────────────────
-                actions.updateGame({
-                    round: cachedHost.round,
-                    isDogRound: cachedHost.isDogRound,
-                    activeZombiesCount: cachedHost.activeZombiesCount,
-                    totalRoundZombies: cachedHost.totalRoundZombies,
-                    zombiesSpawned: cachedHost.zombiesSpawned,
-                    zombiesKilledInRound: cachedHost.zombiesKilledInRound,
-                    zombiesToSpawn: cachedHost.totalRoundZombies - cachedHost.zombiesSpawned,
-                    powerOn: cachedHost.powerOn,
-                    isGameOver: cachedHost.isGameOver,
-                });
-                if (isFull && msg.zombies !== undefined) {
-                    // Full sync – replace entire list
-                    cachedHost.zombies = msg.zombies;
-                } else {
-                    // Remove dead zombies first
-                    if (msg.removedZombieIds?.length) {
-                        const removed = new Set<string>(msg.removedZombieIds as string[]);
-                        cachedHost.zombies = cachedHost.zombies.filter(z => !removed.has(z.id));
-                    }
-                    // Upsert moved / new zombies
-                    if (msg.zombies?.length) {
-                        const map = new Map<string, ZombieSyncData>(
-                            cachedHost.zombies.map(z => [z.id, z])
-                        );
-                        for (const z of msg.zombies as ZombieSyncData[]) {
-                            map.set(z.id, z);
-                        }
-                        cachedHost.zombies = Array.from(map.values());
-                    }
-                }
-
-                // ── Sync remote player position and state ──────────────────────
-                syncRemotePosition(sm, cachedHost.hostPos);
-                sm.remote.weaponId = cachedHost.activeWeaponId;
-                syncRemoteGameState(
-                    sm,
-                    cachedHost.hostHealth,
-                    cachedHost.hostPoints,
-                    cachedHost.hostIsDowned,
-                    cachedHost.hostIsSpectating,
-                    cachedHost.hostKills,
-                    cachedHost.hostShots,
-                    cachedHost.hostPerks
-                );
-
-                // Emit full merged state for systems (ZombieSystem uses this to sync
-                // zombie positions on the client, WeaponViewSystem for remote weapon, etc.)
-                sm.eventBus.emit('NET_GAME_STATE_UPDATE', cachedHost);
-
-                actions.updateRemote({
-                    remoteHealth: cachedHost.hostHealth,
-                    remotePoints: cachedHost.hostPoints,
-                    remoteTotalEarnedPoints: cachedHost.hostTotalEarned,
-                    remoteKills: cachedHost.hostKills ?? 0,
-                    remoteShots: cachedHost.hostShots ?? 0,
-                    remotePerks: cachedHost.hostPerks,
-                    remotePlayerName: cachedHost.hostName
-                });
+            case 'STATE':
+                handleStateMessage(msg);
                 break;
-            }
 
-            case 'INPUT': {
-                const seq: number | undefined = msg._seq;
-                const isFull: boolean = !!msg._full;
-
-                // Gap detection for client → host direction
-                if (seq !== undefined && lastClientSeq !== -1 && seq > lastClientSeq + 1 && !isFull) {
-                    lastClientSeq = seq;
-                    break;
-                }
-                if (seq !== undefined) lastClientSeq = seq;
-
-                if (isFull) {
-                    cachedClient = defaultClientCache(cachedClient.clientPoints, cachedClient.clientName);
-                }
-
-                // Merge delta fields
-                mergeIfDefined(cachedClient, msg, [
-                    'pos', 'activeWeaponIndex', 'activeWeaponId',
-                    'clientHealth', 'clientPoints', 'clientTotalEarned',
-                    'clientPerks', 'clientIsDowned', 'clientName',
-                    'clientIsSpectating',
-                    'clientKills', 'clientShots'
-                ]);
-
-                // Sync remote player position and state
-                syncRemotePosition(sm, cachedClient.pos);
-                sm.remote.weaponId = cachedClient.activeWeaponId;
-                syncRemoteGameState(
-                    sm,
-                    cachedClient.clientHealth,
-                    cachedClient.clientPoints,
-                    cachedClient.clientIsDowned,
-                    cachedClient.clientIsSpectating,
-                    cachedClient.clientKills,
-                    cachedClient.clientShots,
-                    cachedClient.clientPerks
-                );
-
-                // Emit for systems (host uses this for authoritative zombie kill credit, etc.)
-                sm.eventBus.emit('NET_CLIENT_INPUT', cachedClient);
-
-                actions.updateRemote({
-                    remoteHealth: cachedClient.clientHealth,
-                    remotePoints: cachedClient.clientPoints,
-                    remoteTotalEarnedPoints: cachedClient.clientTotalEarned,
-                    remoteKills: cachedClient.clientKills ?? 0,
-                    remoteShots: cachedClient.clientShots ?? 0,
-                    remotePerks: cachedClient.clientPerks,
-                    remotePlayerName: cachedClient.clientName
-                });
+            case 'INPUT':
+                handleInputMessage(msg);
                 break;
-            }
         }
+    };
+
+    return {
+        handleMessage,
+        dispose: () => {
+            sm.eventBus.off('GAME_STARTED', gameStartedHandler);
+        },
     };
 };

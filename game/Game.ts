@@ -872,6 +872,7 @@ export class Game {
         }
         if (this.stateManager?.packAPunchSystem) this.stateManager.packAPunchSystem.dispose();
         if (this.systemManager) this.systemManager.dispose();
+        if (this.stateManager) this.stateManager.dispose();
         if (this.gameEngine) this.gameEngine.dispose();
         if (this.resourceManager) this.resourceManager.dispose();
         disposeZombiePools();

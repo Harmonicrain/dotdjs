@@ -19,7 +19,6 @@ const createStateManager = () => {
 const createActions = () => ({
     updateGame: vi.fn(),
     updateRemote: vi.fn(),
-    updatePlayer: vi.fn(),
     setIsClientReady: vi.fn(),
     setRemotePlayerName: vi.fn(),
     setSelectedMap: vi.fn(),
@@ -44,7 +43,7 @@ describe('NetworkMessageHandler', () => {
         sm.gameState.isDowned = false;
         sm.gameState.isSpectating = false;
 
-        handler({ type: 'RESPAWN', round: 2, points: 1000 });
+        handler.handleMessage({ type: 'RESPAWN', round: 2, points: 1000 });
 
         expect(emitSpy).not.toHaveBeenCalledWith('RESPAWN_REQUEST', expect.anything());
         expect(actions.updateGame).not.toHaveBeenCalledWith(expect.objectContaining({ round: 2 }));
@@ -56,7 +55,7 @@ describe('NetworkMessageHandler', () => {
         sm.gameState.isDowned = true;
         sm.gameState.isSpectating = false;
 
-        handler({ type: 'RESPAWN', round: 2, points: 1000 });
+        handler.handleMessage({ type: 'RESPAWN', round: 2, points: 1000 });
 
         expect(emitSpy).not.toHaveBeenCalledWith('RESPAWN_REQUEST', expect.anything());
         expect(actions.updateGame).not.toHaveBeenCalledWith(expect.objectContaining({ round: 2 }));
@@ -68,7 +67,7 @@ describe('NetworkMessageHandler', () => {
         sm.gameState.isDowned = false;
         sm.gameState.isSpectating = true;
 
-        handler({ type: 'RESPAWN', round: 2, points: 1000 });
+        handler.handleMessage({ type: 'RESPAWN', round: 2, points: 1000 });
 
         expect(emitSpy).toHaveBeenCalledWith('RESPAWN_REQUEST', { round: 2, points: 1000 });
         expect(actions.updateGame).toHaveBeenCalledWith({ round: 2 });
@@ -77,7 +76,7 @@ describe('NetworkMessageHandler', () => {
     it('applies isGameOver and round progress fields from state packets', () => {
         const emitSpy = vi.spyOn(sm.eventBus, 'emit');
 
-        handler({
+        handler.handleMessage({
             type: 'STATE',
             _seq: 1,
             _full: true,
@@ -132,7 +131,7 @@ describe('NetworkMessageHandler', () => {
     });
 
     it('ignores gapped host deltas until the next full sync arrives', () => {
-        handler({
+        handler.handleMessage({
             type: 'STATE',
             _seq: 1,
             _full: true,
@@ -164,7 +163,7 @@ describe('NetworkMessageHandler', () => {
             mysteryBox: { state: 0, locIndex: 0, lidAngle: 0, weaponId: null, rollIndex: 0, owner: null },
         });
 
-        handler({
+        handler.handleMessage({
             type: 'STATE',
             _seq: 3,
             round: 8,
@@ -176,7 +175,7 @@ describe('NetworkMessageHandler', () => {
 
         expect(actions.updateGame).not.toHaveBeenCalledWith(expect.objectContaining({ round: 8 }));
 
-        handler({
+        handler.handleMessage({
             type: 'STATE',
             _seq: 4,
             _full: true,
@@ -222,7 +221,7 @@ describe('NetworkMessageHandler', () => {
     });
 
     it('ignores gapped client deltas until the next full sync arrives', () => {
-        handler({
+        handler.handleMessage({
             type: 'INPUT',
             _seq: 1,
             _full: true,
@@ -240,7 +239,7 @@ describe('NetworkMessageHandler', () => {
             clientShots: 0,
         });
 
-        handler({
+        handler.handleMessage({
             type: 'INPUT',
             _seq: 3,
             clientName: 'CorruptedName',
@@ -249,7 +248,7 @@ describe('NetworkMessageHandler', () => {
 
         expect(actions.updateRemote).not.toHaveBeenCalledWith(expect.objectContaining({ remotePlayerName: 'CorruptedName' }));
 
-        handler({
+        handler.handleMessage({
             type: 'INPUT',
             _seq: 4,
             _full: true,
@@ -276,5 +275,111 @@ describe('NetworkMessageHandler', () => {
             remotePerks: { juggernog: true },
             remotePlayerName: 'RecoveredClient',
         });
+    });
+
+    it('resets remote state and clears interpolation buffer on GAME_STARTED', () => {
+        const pushSpy = vi.spyOn(sm.remote.interpolationBuffer, 'push');
+        const clearSpy = vi.spyOn(sm.remote.interpolationBuffer, 'clear');
+
+        handler.handleMessage({
+            type: 'INPUT',
+            _seq: 1,
+            _full: true,
+            pos: { x: 1, y: 2, z: 3, rot: 4, pitch: 5 },
+            activeWeaponIndex: 0,
+            activeWeaponId: 'pistol',
+            clientHealth: 70,
+            clientPoints: 900,
+            clientTotalEarned: 1200,
+            clientPerks: { juggernog: true },
+            clientIsDowned: true,
+            clientIsSpectating: false,
+            clientName: 'RemoteClient',
+            clientKills: 4,
+            clientShots: 11,
+        });
+
+        sm.remote.name = 'ExistingRemote';
+        sm.gameState.playerName = 'LocalPlayer';
+        sm.gameModeRef.current = 'HOST';
+        sm.eventBus.emit('GAME_STARTED', { startPoints: 750 });
+
+        expect(clearSpy).toHaveBeenCalled();
+        expect(pushSpy).toHaveBeenCalledTimes(1);
+        expect(sm.remote.gameState.health).toBe(100);
+        expect(sm.remote.gameState.points).toBe(750);
+        expect(sm.remote.gameState.isDowned).toBe(false);
+        expect(sm.remote.gameState.perks).toEqual({});
+        expect(actions.updateRemote).toHaveBeenLastCalledWith({
+            remotePoints: 750,
+            remoteTotalEarnedPoints: 750,
+            remoteHealth: 100,
+            remoteKills: 0,
+            remoteShots: 0,
+            remotePerks: {},
+            remotePlayerName: 'ExistingRemote',
+        });
+    });
+
+    it('stops responding to GAME_STARTED after dispose', () => {
+        handler.dispose();
+
+        sm.eventBus.emit('GAME_STARTED', { startPoints: 999 });
+
+        expect(actions.updateRemote).not.toHaveBeenCalled();
+    });
+
+    it('validates client perk purchases with shared points logic', () => {
+        const sendSpy = vi.spyOn(sm, 'send');
+
+        handler.handleMessage({
+            type: 'INPUT',
+            _seq: 1,
+            _full: true,
+            pos: { x: 0, y: 0, z: 0, rot: 0, pitch: 0 },
+            activeWeaponIndex: 0,
+            activeWeaponId: 'pistol',
+            clientHealth: 100,
+            clientPoints: 1200,
+            clientTotalEarned: 1600,
+            clientPerks: {},
+            clientIsDowned: false,
+            clientIsSpectating: false,
+            clientName: 'RemoteClient',
+            clientKills: 0,
+            clientShots: 0,
+        });
+
+        handler.handleMessage({ type: 'INTERACT_PERK', perkId: 'juggernog', perkType: 'juggernog', cost: 1000 });
+
+        expect(sendSpy).toHaveBeenNthCalledWith(1, { type: 'POINTS_UPDATE', points: 200, totalEarned: 1600 });
+        expect(sendSpy).toHaveBeenNthCalledWith(2, { type: 'PERK_CONFIRM', perkId: 'juggernog', perkType: 'juggernog' });
+    });
+
+    it('rejects unaffordable client perk purchases', () => {
+        const sendSpy = vi.spyOn(sm, 'send');
+
+        handler.handleMessage({
+            type: 'INPUT',
+            _seq: 1,
+            _full: true,
+            pos: { x: 0, y: 0, z: 0, rot: 0, pitch: 0 },
+            activeWeaponIndex: 0,
+            activeWeaponId: 'pistol',
+            clientHealth: 100,
+            clientPoints: 400,
+            clientTotalEarned: 900,
+            clientPerks: {},
+            clientIsDowned: false,
+            clientIsSpectating: false,
+            clientName: 'RemoteClient',
+            clientKills: 0,
+            clientShots: 0,
+        });
+
+        handler.handleMessage({ type: 'INTERACT_PERK', perkId: 'juggernog', perkType: 'juggernog', cost: 1000 });
+
+        expect(sendSpy).toHaveBeenCalledWith({ type: 'INTERACT_REJECT', interactionType: 'PERK', points: 400 });
+        expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'PERK_CONFIRM' }));
     });
 });

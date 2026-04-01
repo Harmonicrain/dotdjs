@@ -8,7 +8,7 @@ import { GameMenuManager } from './GameMenuManager';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ExtendedSettings, useGameStore } from '../store/useGameStore';
 import { GameLifecycle } from '../game/GameLifecycle';
-import { createNetworkMessageHandler } from '../network/NetworkMessageHandler';
+import { createNetworkMessageHandler, NetworkMessageHandler } from '../network/NetworkMessageHandler';
 import { GameMessage } from '../types/index';
 
 interface GameSceneProps {
@@ -37,26 +37,11 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
     const startGameRef = useRef<typeof startGame>(null!);
     
     // ── Network ──────────────────────────────────────────────────────────
-    const networkHandlerRef = useRef<(msg: GameMessage) => void | null>(null);
-    const lifecycleInitializedRef = useRef(false);
+    const networkHandlerRef = useRef<NetworkMessageHandler | null>(null);
     const { send, roomId, connectionStatus, initializeHost, initializeClient, cleanup } =
         useMultiplayer(
             (data) => {
-                const sm = lifecycleRef.current?.game?.stateManager;
-                if (!networkHandlerRef.current && sm) {
-                    networkHandlerRef.current = createNetworkMessageHandler(sm, {
-                        updateGame, updatePlayer, updateRemote,
-                        setIsClientReady,
-                        setRemotePlayerName: (name) => { updateRemote({ remotePlayerName: name }); setRemoteNameLocal(name); },
-                        setSelectedMap,
-                        startGameLocal: (mode, mapId) => {
-                            const currentName = useGameStore.getState().playerName;
-                            startGameRef.current(mode as any, mapId, currentName);
-                        },
-                        setInteractionMsg: (msg) => updateGame({ interactionMsg: msg }),
-                    });
-                }
-                networkHandlerRef.current?.(data);
+                networkHandlerRef.current?.handleMessage(data as GameMessage);
             },
             () => { /* on open */ },
         );
@@ -117,24 +102,6 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
         updateGame({ isPaused: paused });
     }, [updateGame]);
 
-    // ── Network handler (wired after lifecycle is stable) ─────────────────
-    useEffect(() => {
-        const sm = lifecycleRef.current?.game?.stateManager;
-        if (!sm) return;
-
-        networkHandlerRef.current = createNetworkMessageHandler(sm, {
-            updateGame, updatePlayer, updateRemote,
-            setIsClientReady,
-            setRemotePlayerName: (name) => { updateRemote({ remotePlayerName: name }); setRemoteNameLocal(name); },
-            setSelectedMap,
-            startGameLocal: (mode, mapId) => {
-                const currentName = useGameStore.getState().playerName;
-                startGameRef.current(mode as any, mapId, currentName);
-            },
-            setInteractionMsg: (msg) => updateGame({ interactionMsg: msg }),
-        });
-    }, [updateGame, updatePlayer, updateRemote, hasStarted]);
-
     // ── Engine bootstrap (single effect) ─────────────────────────────────
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -157,7 +124,28 @@ const GameScene = ({ onGameReset }: GameSceneProps) => {
             onInputDeviceChange: (device: ExtendedSettings['inputDevice']) => updateSettings({ inputDevice: device }),
         });
 
+        const sm = lifecycle.game?.stateManager;
+        if (sm) {
+            networkHandlerRef.current = createNetworkMessageHandler(sm, {
+                updateGame,
+                updateRemote,
+                setIsClientReady,
+                setRemotePlayerName: (name) => {
+                    updateRemote({ remotePlayerName: name });
+                    setRemoteNameLocal(name);
+                },
+                setSelectedMap,
+                startGameLocal: (mode, mapId) => {
+                    const currentName = useGameStore.getState().playerName;
+                    startGameRef.current(mode as any, mapId, currentName);
+                },
+                setInteractionMsg: (msg) => updateGame({ interactionMsg: msg }),
+            });
+        }
+
         return () => {
+            networkHandlerRef.current?.dispose();
+            networkHandlerRef.current = null;
             lifecycle.dispose();
             lifecycleRef.current = null;
         };

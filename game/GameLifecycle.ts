@@ -46,6 +46,10 @@ export class GameLifecycle {
     private playerNameRef = { current: 'Survivor' };
     private engineInitPromise: Promise<void> | null = null;
 
+    // EventBus handler references for cleanup
+    private _onRespawnRequest: ((data: { round: number; points: number }) => void) | null = null;
+    private _onGameOver: (() => void) | null = null;
+
     // ── Lifecycle ────────────────────────────────────────────────────────
 
     /**
@@ -82,14 +86,16 @@ export class GameLifecycle {
         // Handle respawn requests emitted by RoundSystem / NetworkMessageHandler.
         // Respawn lives here because it needs to manipulate weapon meshes and camera —
         // things that belong at the lifecycle/engine layer, not inside StateManager.
-        game.stateManager?.eventBus.on('RESPAWN_REQUEST', (data: { round: number; points: number }) => {
+        this._onRespawnRequest = (data: { round: number; points: number }) => {
             this._respawnPlayer(data.round, data.points);
-        });
+        };
+        game.stateManager?.eventBus.on('RESPAWN_REQUEST', this._onRespawnRequest);
 
         // Release pointer lock when the game ends — keeps DOM access out of ECS systems.
-        game.stateManager?.eventBus.on('GAME_OVER', () => {
+        this._onGameOver = () => {
             if (document.pointerLockElement && game.inputManager.shouldUsePointerLock()) document.exitPointerLock();
-        });
+        };
+        game.stateManager?.eventBus.on('GAME_OVER', this._onGameOver);
 
         // Boot the engine (including navPlugin initialization) and wait for it.
         // Systems like ZombieAI need navPlugin to be available.
@@ -297,6 +303,15 @@ export class GameLifecycle {
      * Tear down the engine entirely. Call from React's cleanup function.
      */
     public dispose(): void {
+        // Clean up EventBus handlers to prevent accumulation across reloads
+        const eventBus = this.game?.stateManager?.eventBus;
+        if (eventBus) {
+            if (this._onRespawnRequest) eventBus.off('RESPAWN_REQUEST', this._onRespawnRequest);
+            if (this._onGameOver) eventBus.off('GAME_OVER', this._onGameOver);
+        }
+        this._onRespawnRequest = null;
+        this._onGameOver = null;
+
         this.game?.inputManager.detachListeners();
         this.game?.dispose();
         this.game = null;

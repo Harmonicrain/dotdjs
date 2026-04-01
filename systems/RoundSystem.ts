@@ -117,6 +117,8 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
         ctx.gameState.repairPointsRound = 0;
     };
 
+    let lastTickTime = 0;
+
     return {
         name: 'round',
         update: (dt: number, now: number) => {
@@ -125,6 +127,16 @@ export const createRoundSystem = (ctx: IRoundContext): System => {
             const isMultiplayer = ctx.gameModeRef.current !== 'SOLO';
             const effectivelyPaused = ctx.gameState.isPaused && !isMultiplayer;
             if (!isAuthority || !ctx.gameState.hasStarted || effectivelyPaused || ctx.gameState.isGameOver || ctx.gameState.isDebugMode) return;
+
+            // Compensate for pause: if gap > 150ms, shift timestamps forward
+            if (lastTickTime !== 0 && now - lastTickTime > 150) {
+                const pauseDuration = now - lastTickTime;
+                const gs = ctx.gameState;
+                if (gs.nextRoundTime) gs.nextRoundTime += pauseDuration;
+                if (gs.dogRoundStartTime) gs.dogRoundStartTime += pauseDuration;
+                if (gs.lastSpawnTime) gs.lastSpawnTime += pauseDuration;
+            }
+            lastTickTime = now;
 
             const gs = ctx.gameState;
             const rc = ctx.configManager.round;
