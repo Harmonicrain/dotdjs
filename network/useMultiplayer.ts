@@ -1,20 +1,21 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Peer, PeerErrorType } from 'peerjs';
+import type { DataConnection, PeerError } from 'peerjs';
+import { getPeerOptions } from './peerConfig';
 
 // Heartbeat configuration
 const HEARTBEAT_INTERVAL = 2000;
 const CONNECTION_TIMEOUT_MS = 15000; // 15s timeout
 
 // Benign network error types that should trigger reconnection instead of error display
-const BENIGN_NETWORK_ERRORS = [
-    'network',
-    'server-error',
-    'socket-error',
-    'socket-closed',
-    'peer-timeout'
-];
-
-import { PeerError, DataConnection, Peer } from '../types/index';
+const BENIGN_NETWORK_ERRORS = new Set<string>([
+    PeerErrorType.Network,
+    PeerErrorType.ServerError,
+    PeerErrorType.SocketError,
+    PeerErrorType.SocketClosed,
+    'peer-timeout',
+]);
 
 const STATUS_TEXT = {
     disconnected: 'DISCONNECTED',
@@ -26,9 +27,9 @@ const STATUS_TEXT = {
     retrying: 'RETRYING...',
     hostNotFound: 'HOST NOT FOUND',
     idTaken: 'ERR: ID Taken',
-    libMissing: 'ERROR: Lib Missing',
     browser: 'ERR: BROWSER',
     webrtc: 'ERR: WEBRTC',
+    sslUnavailable: 'ERR: TLS/SIGNALING',
     server404: 'ERR: SERVER 404',
     banned: 'ERR: BANNED/403',
     hostTimeout: 'TIMEOUT - NAT/Firewall blocked',
@@ -126,30 +127,18 @@ export const useMultiplayer = (
         };
     }, [cleanup]);
 
-    const createPeer = (id?: string): Peer | null => {
-        const PeerConstructor = (window as any).Peer;
-        if (!PeerConstructor) return null;
-
-        // Use explicit config to ensure we hit the public cloud correctly and avoid 404s
-        return new PeerConstructor(id, { 
-            debug: 1, 
-            host: '0.peerjs.com',
-            port: 443,
-            path: '/',
-            secure: true,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                ],
-                sdpSemantics: 'unified-plan',
-                iceTransportPolicy: 'all'
-            }
+    const createPeer = (id?: string): Peer => {
+        const options = getPeerOptions();
+        console.info('Creating PeerJS peer', {
+            id: id ?? '(auto)',
+            host: options.host,
+            port: options.port,
+            path: options.path,
+            secure: options.secure,
+            debug: options.debug,
         });
+
+        return id ? new Peer(id, options) : new Peer(options);
     };
 
     const schedulePeerReconnect = useCallback(() => {
@@ -192,22 +181,21 @@ export const useMultiplayer = (
             updateStatus(role === 'Host' ? STATUS_TEXT.waiting : STATUS_TEXT.disconnected);
         });
 
-        conn.on('error', (err: PeerError) => {
+        conn.on('error', (err: PeerError<string>) => {
             console.warn(`${role} Conn Error:`, err.type, err.message);
             updateStatus(`ERR: ${err.type || 'CONN'}` as MultiplayerStatus);
         });
 
-        conn.on('iceConnectionStateChange', () => {
-            const pc = (conn as any).peerConnection;
-            console.log(`${role} ICE state:`, pc?.iceConnectionState);
-            if (pc?.iceConnectionState === 'failed' || pc?.iceConnectionState === 'disconnected') {
+        conn.on('iceStateChanged', (state) => {
+            console.log(`${role} ICE state:`, state);
+            if (state === 'failed' || state === 'disconnected') {
                 console.warn(`${role} ICE connection failed/disconnected`);
                 updateStatus(STATUS_TEXT.retrying);
             }
         });
     }, [clearConnectionTimeout, handleDataInternal, startHeartbeat, stopHeartbeat]);
 
-    const handlePeerError = (err: PeerError) => {
+    const handlePeerError = (err: PeerError<`${PeerErrorType}`>) => {
         console.error('Peer Error:', err);
         
         const msg = (err.message || "").toLowerCase();
@@ -221,17 +209,19 @@ export const useMultiplayer = (
         }
 
         const errType = err.type;
-        if (errType === 'unavailable-id') {
+        if (errType === PeerErrorType.UnavailableID) {
             updateStatus(STATUS_TEXT.idTaken);
-        } else if (errType === 'peer-unavailable') {
+        } else if (errType === PeerErrorType.PeerUnavailable) {
             updateStatus(STATUS_TEXT.hostNotFound);
-        } else if (BENIGN_NETWORK_ERRORS.includes(errType)) {
-             // Benign networking errors, wait for reconnect
-              console.warn("Network hiccup:", errType);
-              updateStatus(STATUS_TEXT.reconnecting);
-        } else if (errType === 'browser-incompatible') {
+        } else if (errType === PeerErrorType.SslUnavailable) {
+            updateStatus(STATUS_TEXT.sslUnavailable);
+        } else if (BENIGN_NETWORK_ERRORS.has(errType)) {
+              // Benign networking errors, wait for reconnect
+               console.warn("Network hiccup:", errType);
+               updateStatus(STATUS_TEXT.reconnecting);
+        } else if (errType === PeerErrorType.BrowserIncompatible) {
             updateStatus(STATUS_TEXT.browser);
-        } else if (errType === 'webrtc') {
+        } else if (errType === PeerErrorType.WebRTC) {
             updateStatus(STATUS_TEXT.webrtc);
         } else {
             updateStatus(`ERR: ${errType}` as MultiplayerStatus);
@@ -248,9 +238,12 @@ export const useMultiplayer = (
         const id = Math.random().toString(36).substring(2, 8).toUpperCase();
         setRoomId(id);
         
-        const peer = createPeer(id);
-        if (!peer) {
-            updateStatus(STATUS_TEXT.libMissing);
+        let peer: Peer;
+        try {
+            peer = createPeer(id);
+        } catch (error) {
+            console.error('Failed to initialize host peer', error);
+            updateStatus(STATUS_TEXT.server404);
             return;
         }
 
@@ -306,9 +299,12 @@ export const useMultiplayer = (
         cleanup();
 
         const clientId = Math.random().toString(36).substring(2, 10).toUpperCase();
-        const peer = createPeer(clientId);
-        if (!peer) {
-            updateStatus(STATUS_TEXT.libMissing);
+        let peer: Peer;
+        try {
+            peer = createPeer(clientId);
+        } catch (error) {
+            console.error('Failed to initialize client peer', error);
+            updateStatus(STATUS_TEXT.server404);
             return;
         }
         
@@ -338,7 +334,7 @@ export const useMultiplayer = (
             schedulePeerReconnect();
         });
 
-        peer.on('error', (err: PeerError) => {
+        peer.on('error', (err: PeerError<`${PeerErrorType}`>) => {
             clearConnectionTimeout();
             handlePeerError(err);
         });
