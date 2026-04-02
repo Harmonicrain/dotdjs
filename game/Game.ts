@@ -76,7 +76,32 @@ export class Game {
 
     constructor(canvas: HTMLCanvasElement, private sendNetworkData: (data: GameMessage) => void, updatePlayer: (updates: Partial<PlayerFields>) => void, updateGame: (updates: Partial<GameFields>) => void) {
         this.canvas = canvas;
+        this._createEngine();
+        this._setupCamera();
+        this.remotePlayer = createRemotePlayer(this.scene);
+        this._initializeManagers(updatePlayer, updateGame);
 
+        // Handle visibility change (alt-tab) to fix material lighting issues
+        // When the tab loses and regains focus, materials may need to be refreshed
+        this.visibilityChangeHandler = () => {
+            if (document.visibilityState === 'visible' && this.scene) {
+                // Small delay to let the WebGL context fully restore
+                if (this.visibilityTimeoutId !== null) clearTimeout(this.visibilityTimeoutId);
+                this.visibilityTimeoutId = setTimeout(() => {
+                    this.visibilityTimeoutId = null;
+                    if (this.scene && !this.scene.isDisposed) {
+                        this.scene.markAllMaterialsAsDirty(BABYLON.Constants.MATERIAL_AllDirtyFlag);
+                    }
+                }, 100);
+            }
+        };
+        document.addEventListener("visibilitychange", this.visibilityChangeHandler);
+
+        window.addEventListener("resize", this.resize);
+    }
+
+    /** Create the Babylon engine, scene, core managers, and projectile materials. */
+    private _createEngine(): void {
         // Suppress audio context warnings during engine creation - these are expected
         // because the AudioContext starts suspended until user interaction
         const originalWarn = console.warn;
@@ -88,7 +113,7 @@ export class Game {
         };
         console.warn = suppressedWarn;
 
-        this.engine = new BABYLON.Engine(canvas, true, {
+        this.engine = new BABYLON.Engine(this.canvas, true, {
             preserveDrawingBuffer: true,
             stencil: true,
             audioEngine: true
@@ -133,7 +158,10 @@ export class Game {
 
         this.gameEngine = new GameEngine();
         this.gameEngine.initialize(this.scene);
+    }
 
+    /** Configure the player camera with collision, FOV, and input settings. */
+    private _setupCamera(): void {
         this.camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 2, 0), this.scene);
         this.camera.inertia = 0;   // Disable Babylon's built-in inertia; movement is fully driven by PlayerMovementSystem
         this.camera.speed = GAME_CONFIG.WALK_SPEED;
@@ -153,9 +181,16 @@ export class Game {
         this.camera.checkCollisions = true;
         this.camera.applyGravity = false;
         this.camera.fov = GAME_CONFIG.BASE_FOV;
+    }
 
-        this.remotePlayer = createRemotePlayer(this.scene);
-
+    /**
+     * Construct StateManager and all game managers, wire their cross-dependencies,
+     * and inject them into StateManager via setManagers().
+     *
+     * StateManager is a pure data/API surface; managers are created here in
+     * Game.ts and injected so the state container has no construction logic.
+     */
+    private _initializeManagers(updatePlayer: (updates: Partial<PlayerFields>) => void, updateGame: (updates: Partial<GameFields>) => void): void {
         this.stateManager = new StateManager(
             this.scene,
             this.camera,
@@ -166,9 +201,6 @@ export class Game {
             updateGame,
         );
 
-        // ── Construct managers externally and inject ──────────────────────────
-        // StateManager is a pure data/API surface; managers are created here in
-        // Game.ts and injected so the state container has no construction logic.
         const sm = this.stateManager;
 
         const visualManager = new VisualManager(this.scene, this.resourceManager);
@@ -218,7 +250,6 @@ export class Game {
             visualManager
         );
 
-
         const powerUpManager = new PowerUpManager(
             this.scene,
             sm.gameState,
@@ -256,24 +287,6 @@ export class Game {
         );
 
         sm.setManagers(visualManager, zombieManager, hellhoundManager, powerUpManager);
-
-        // Handle visibility change (alt-tab) to fix material lighting issues
-        // When the tab loses and regains focus, materials may need to be refreshed
-        this.visibilityChangeHandler = () => {
-            if (document.visibilityState === 'visible' && this.scene) {
-                // Small delay to let the WebGL context fully restore
-                if (this.visibilityTimeoutId !== null) clearTimeout(this.visibilityTimeoutId);
-                this.visibilityTimeoutId = setTimeout(() => {
-                    this.visibilityTimeoutId = null;
-                    if (this.scene && !this.scene.isDisposed) {
-                        this.scene.markAllMaterialsAsDirty(BABYLON.Constants.MATERIAL_AllDirtyFlag);
-                    }
-                }, 100);
-            }
-        };
-        document.addEventListener("visibilitychange", this.visibilityChangeHandler);
-
-        window.addEventListener("resize", this.resize);
     }
 
     public initializeSystems() {
@@ -594,36 +607,7 @@ export class Game {
         await loadTextureConfig(selectedMap);
 
         // 1. Cleanup Session & Old Map
-        this.resetSession();
-
-        // ── CRITICAL FIX: Clean up old scene lights & shadow generators ──
-        // LevelBuilder.initializeEnvironment() creates lights and shadow generators
-        // that are NOT children of currentMapRoot. They accumulate on reload,
-        // stacking lights and causing incorrect rendering.
-        if (this.currentMapRoot) {
-            // Dispose lights that were created by the previous level
-            const lightsToRemove = this.scene.lights.filter(l =>
-                l.name === "hemi" || l.name === "dir" || l.name.startsWith("fixture_light")
-            );
-            lightsToRemove.forEach(l => l.dispose());
-
-            // Dispose shadow generators from previous level
-            this.scene.lights.forEach(l => {
-                const shadowGens = l.getShadowGenerators();
-                if (shadowGens) {
-                    shadowGens.forEach(sg => sg?.dispose());
-                }
-            });
-
-            this.currentMapRoot.dispose();
-            this.currentMapRoot = null;
-        }
-
-        this.shadowCasters = [];
-        this.stateManager.mapVisuals.doorMeshes.clear();
-        this.stateManager.windows.length = 0; // Clear array but keep reference
-        this.stateManager.groundSpawns.length = 0; // Clear array but keep reference
-        this.stateManager.gameState.mapLoadGeneration++;
+        this._cleanupPreviousLevel();
 
         // 2. Load New Map
 
@@ -673,35 +657,7 @@ export class Game {
                 }
             }
 
-            this.stateManager.mapVisuals.powerSwitchHandle = lvl.powerSwitchHandle;
-            this.stateManager.mapVisuals.powerSwitchActivate = lvl.powerSwitchActivate ?? null;
-            this.stateManager.mapVisuals.powerDoor = lvl.powerDoor;
-            this.stateManager.mapVisuals.powerDoorOpenY = lvl.powerDoorOpenY ?? 8;
-
-            this.stateManager.lights = lvl.lights;
-            this.stateManager.spawnPoints = lvl.spawnPoints;
-            this.stateManager.boxLocations = lvl.boxLocations;
-            this.stateManager.boxRotations = lvl.boxRotations;
-            this.stateManager.mapGameplay = lvl.mapGameplay || {};
-            this.stateManager.mysteryBox = externalMysteryBoxRef.current;
-            this.stateManager.mysteryBoxRef = externalMysteryBoxRef;
-
-            // Populate static meshes for decals (all meshes with checkCollisions)
-            this.stateManager.staticLevelMeshes.clear();
-            for (const m of this.scene.meshes) {
-                if (m && m.checkCollisions && m.isVisible && !m.name.includes("trigger")) {
-                    this.stateManager.staticLevelMeshes.add(m);
-                }
-            }
-
-            this.stateManager.updateZoneSystem(lvl.zones, lvl.doorConnections);
-            this.stateManager.visualManager.setLights(this.stateManager.lights);
-
-            // Start persistent ambient smoke on all ground spawn holes
-            if (sm.groundSpawns.length > 0) {
-                const holePositions = sm.groundSpawns.map(gs => gs.position);
-                sm.visualManager.startHoleSmoke(holePositions);
-            }
+            this._applyLevelData(lvl, sm, externalMysteryBoxRef);
 
             await this.scene.whenReadyAsync();
             console.log(`Level ${selectedMap} loaded successfully.`);
@@ -711,8 +667,83 @@ export class Game {
     }
 
     /**
+     * Reset session state and dispose all scene objects from the previous level
+     * (lights, shadow generators, map root). Must be called before loading a new map.
+     */
+    private _cleanupPreviousLevel(): void {
+        if (!this.stateManager) return;
+        this.resetSession();
+
+        // ── CRITICAL FIX: Clean up old scene lights & shadow generators ──
+        // LevelBuilder.initializeEnvironment() creates lights and shadow generators
+        // that are NOT children of currentMapRoot. They accumulate on reload,
+        // stacking lights and causing incorrect rendering.
+        if (this.currentMapRoot) {
+            // Dispose lights that were created by the previous level
+            const lightsToRemove = this.scene.lights.filter(l =>
+                l.name === "hemi" || l.name === "dir" || l.name.startsWith("fixture_light")
+            );
+            lightsToRemove.forEach(l => l.dispose());
+
+            // Dispose shadow generators from previous level
+            this.scene.lights.forEach(l => {
+                const shadowGens = l.getShadowGenerators();
+                if (shadowGens) {
+                    shadowGens.forEach(sg => sg?.dispose());
+                }
+            });
+
+            this.currentMapRoot.dispose();
+            this.currentMapRoot = null;
+        }
+
+        this.shadowCasters = [];
+        this.stateManager.mapVisuals.doorMeshes.clear();
+        this.stateManager.windows.length = 0; // Clear array but keep reference
+        this.stateManager.groundSpawns.length = 0; // Clear array but keep reference
+        this.stateManager.gameState.mapLoadGeneration++;
+    }
+
+    /**
+     * Propagate loaded level data into StateManager after a successful map load.
+     * Populates map visuals, spawn points, mystery box refs, zone system, and
+     * seeds the static mesh set used by the decal system.
+     */
+    private _applyLevelData(lvl: ReturnType<typeof loadMap>, sm: StateManager, externalMysteryBoxRef: Ref<MysteryBox>): void {
+        sm.mapVisuals.powerSwitchHandle = lvl.powerSwitchHandle;
+        sm.mapVisuals.powerSwitchActivate = lvl.powerSwitchActivate ?? null;
+        sm.mapVisuals.powerDoor = lvl.powerDoor;
+        sm.mapVisuals.powerDoorOpenY = lvl.powerDoorOpenY ?? 8;
+
+        sm.lights = lvl.lights;
+        sm.spawnPoints = lvl.spawnPoints;
+        sm.boxLocations = lvl.boxLocations;
+        sm.boxRotations = lvl.boxRotations;
+        sm.mapGameplay = lvl.mapGameplay || {};
+        sm.mysteryBox = externalMysteryBoxRef.current;
+        sm.mysteryBoxRef = externalMysteryBoxRef;
+
+        // Populate static meshes for decals (all meshes with checkCollisions)
+        sm.staticLevelMeshes.clear();
+        for (const m of this.scene.meshes) {
+            if (m && m.checkCollisions && m.isVisible && !m.name.includes("trigger")) {
+                sm.staticLevelMeshes.add(m);
+            }
+        }
+
+        sm.updateZoneSystem(lvl.zones, lvl.doorConnections);
+        sm.visualManager.setLights(sm.lights);
+
+        // Start persistent ambient smoke on all ground spawn holes
+        if (sm.groundSpawns.length > 0) {
+            const holePositions = sm.groundSpawns.map(gs => gs.position);
+            sm.visualManager.startHoleSmoke(holePositions);
+        }
+    }
+
+    /**
      * Load the environment texture for PBR materials.
-     * 
+     *
      * Vite blocks serving files with a bare .env extension (security measure to
      * prevent leaking dotenv secrets), so the texture is stored as .envmap and
      * loaded with forcedExtension=".env" so Babylon parses it correctly.
