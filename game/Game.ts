@@ -45,15 +45,15 @@ const COLOR_PROJ_NORMAL = new BABYLON.Color3(0.72, 0.45, 0.2);   // Brass/copper
 const COLOR_PROJ_PACKED = new BABYLON.Color3(0.6, 0.1, 1); // Ray Gun Purple (keep for special weapons)
 
 export class Game {
-    public engine: BABYLON.Engine;
-    public scene: BABYLON.Scene;
-    public camera: BABYLON.UniversalCamera;
+    public engine!: BABYLON.Engine;
+    public scene!: BABYLON.Scene;
+    public camera!: BABYLON.UniversalCamera;
     public canvas: HTMLCanvasElement;
     public navPlugin: BABYLON.RecastJSPlugin | undefined;
-    public gameEngine: GameEngine;
-    public resourceManager: ResourceManager;
-    public inputManager: InputManager;
-    public systemManager: SystemManager;
+    public gameEngine!: GameEngine;
+    public resourceManager!: ResourceManager;
+    public inputManager!: InputManager;
+    public systemManager!: SystemManager;
 
     public stateManager: StateManager | null = null;
 

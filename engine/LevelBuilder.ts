@@ -1,6 +1,7 @@
 
 import * as BABYLON from '@babylonjs/core';
-import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MapGameplay, MutableRefObject, DoorConnection } from '../types/index';
+import { MapDefinition, WindowBarrier, GroundSpawn, MysteryBox, InteractableMetadata, DoorMeshEntry, SpawnPoints, MutableRefObject, DoorConnection } from '../types/index';
+import type { MapGameplayConfig as MapGameplay } from '../maps/types';
 import { ResolvedTextureSet } from '../maps/MapTextureResolver';
 import { createMaterial, createTiledBox, createWallBuy, createWindow, createFixture } from './GeometryUtils';
 import { createJuggernog, createSpeedCola, createQuickRevive, createDoubleTap, createMuleKick, createPackAPunchMachine, createPowerSwitch, createMysteryBox, preWarmLidTemplate, createLidMesh } from '../factories';
@@ -635,7 +636,15 @@ export class LevelBuilder {
     private buildPerks(perks: MapDefinition['interactables']['perks'], def: MapDefinition) {
         if (!perks) return;
 
-        const defaultPerkCosts: Record<string, number> = {
+        const perkCostKeys = {
+            juggernog: 'JUGGERNOG_COST',
+            speed_cola: 'SPEED_COLA_COST',
+            quick_revive: 'QUICK_REVIVE_COST',
+            double_tap: 'DOUBLE_TAP_COST',
+            mule_kick: 'MULE_KICK_COST',
+        } as const;
+
+        const defaultPerkCosts: Record<keyof typeof perkCostKeys, number> = {
             juggernog: GAME_CONFIG.JUGGERNOG_COST,
             speed_cola: GAME_CONFIG.SPEED_COLA_COST,
             quick_revive: GAME_CONFIG.QUICK_REVIVE_COST,
@@ -660,7 +669,8 @@ export class LevelBuilder {
             }
 
             machine.parent = this.root;
-            const perkCost = this.mapGameplay.perkCosts?.[p.type] ?? defaultPerkCosts[p.type] ?? 2000;
+            const perkCostKey = perkCostKeys[p.type];
+            const perkCost = this.mapGameplay[perkCostKey] ?? defaultPerkCosts[p.type];
 
             const triggers = machine.getChildMeshes().filter(m => m.name.includes("Trigger"));
             triggers.forEach(t => {
@@ -787,7 +797,7 @@ export class LevelBuilder {
         const machine = createPackAPunchMachine(this.scene, new BABYLON.Vector3(pp.pos[0], pp.pos[1], pp.pos[2]), pp.rotation || 0, def.modelOverrides?.['pack_a_punch'], this.loadPromises);
         machine.parent = this.root;
 
-        const papCost = this.mapGameplay.packAPunchCost ?? GAME_CONFIG.PACK_A_PUNCH_COST;
+        const papCost = this.mapGameplay.PACK_A_PUNCH_COST ?? GAME_CONFIG.PACK_A_PUNCH_COST;
         const trig = this.scene.getMeshByName("papTrigger");
         if (trig) trig.metadata = { type: 'PAP', cost: papCost } as InteractableMetadata;
     }

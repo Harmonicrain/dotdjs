@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { GAME_CONFIG, WEAPON_CONFIGS } from '../config';
-import { GameStateData, WeaponState, MysteryBox, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorMeshEntry, MapGameplay, createDefaultMysteryBox } from '../types/index';
+import { GameStateData, WeaponState, MysteryBox, Zombie, PowerUpType, WindowBarrier, GroundSpawn, SpawnPoints, ZoneDefinition, DoorConnection, GameMessage, DoorMeshEntry, createDefaultMysteryBox } from '../types/index';
 import { MysteryBoxSystem } from '../types/systems';
 import { DebugSelectionState, ShowPathfindingState, ScaleWeaponModeState, DebugControlsModeState, RenderStatsModeState, BulletDebugState, WeaponAdsDebugState, DEFAULT_DEBUG_SELECTION, DEFAULT_SHOW_PATHFINDING, DEFAULT_SCALE_WEAPON_MODE, DEFAULT_DEBUG_CONTROLS_MODE, DEFAULT_RENDER_STATS_MODE, DEFAULT_BULLET_DEBUG, DEFAULT_WEAPON_ADS_DEBUG } from '../types/debug';
 import { GameEngine } from '../game/GameEngine';
@@ -20,6 +20,7 @@ import { RemotePlayerState } from './RemotePlayerState';
 import { MapConfigManager } from '../managers/MapConfigManager';
 import { executeCommand } from '../engine/CommandRegistry';
 import { applyDamageToLocalPlayer as _applyDamage } from '../systems/player/playerDamageUtils';
+import type { MapGameplayConfig as MapGameplay } from '../maps/types';
 
 import { PlayerFields, GameFields } from '../store/useGameStore';
 

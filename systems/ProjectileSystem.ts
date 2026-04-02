@@ -289,12 +289,7 @@ export const createProjectileSystem = (ctx: IProjectileContext): System => {
                             // Remove the old frozen projectile from active list
                             for (let j = projectiles.length - 1; j >= 0; j--) {
                                 if (projectiles[j].mesh === bd.frozenProjectile) {
-                                    if (projectiles[j].trailParticleSystem) {
-                                        projectiles[j].trailParticleSystem!.dispose();
-                                    }
-                                    projectiles[j].mesh.setEnabled(false);
-                                    engine.projectilePool.release(projectiles[j]);
-                                    projectiles.splice(j, 1);
+                                    engine.releaseProjectile(projectiles[j]);
                                     break;
                                 }
                             }

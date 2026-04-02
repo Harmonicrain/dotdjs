@@ -37,6 +37,10 @@ export const createGameLoop = (deps: GameLoopDeps) => {
     let lastDrawCallCount = 0;
     let consoleToggleTimeout: ReturnType<typeof setTimeout> | null = null;
 
+    const getWeaponModelNode = (weaponRoot: BABYLON.TransformNode): BABYLON.TransformNode | BABYLON.AbstractMesh => {
+        return weaponRoot.getChildTransformNodes()[0] ?? weaponRoot.getChildMeshes()[0] ?? weaponRoot;
+    };
+
     // ── Scale Weapon scroll handler ──────────────────────────────────────
     const onWheel = (e: WheelEvent) => {
         const mode = sm.scaleWeaponMode;
@@ -59,7 +63,7 @@ export const createGameLoop = (deps: GameLoopDeps) => {
         // Apply to child model mesh (root TransformNode is always 1,1,1)
         const mesh = sm.gameState.weaponMeshes[mode.weaponId];
         if (mesh) {
-            const modelMesh = mesh.getChildren()?.[0] ?? mesh;
+            const modelMesh = getWeaponModelNode(mesh);
             modelMesh.scaling.set(mode.scale.x, mode.scale.y, mode.scale.z);
         }
 
@@ -97,7 +101,7 @@ export const createGameLoop = (deps: GameLoopDeps) => {
             case 'Escape':
                 const mesh = sm.gameState.weaponMeshes[mode.weaponId];
                 if (mesh && mode.originalScale) {
-                    const modelMesh = mesh.getChildren()?.[0] ?? mesh;
+                    const modelMesh = getWeaponModelNode(mesh);
                     modelMesh.scaling.set(mode.originalScale.x, mode.originalScale.y, mode.originalScale.z);
                 }
                 mode.isActive = false;
