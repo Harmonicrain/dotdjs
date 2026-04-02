@@ -28,8 +28,6 @@ export interface IPowerUpContext {
  */
 export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
     const activePowerUpIds = new Set<string>();
-    const _spawnForward = new BABYLON.Vector3();
-    const _spawnPos = new BABYLON.Vector3();
     let lastTickTime = 0;
 
     return {
@@ -90,21 +88,8 @@ export const createPowerUpSystem = (ctx: IPowerUpContext): System => {
             }
 
 
-            // Host/Solo: Spawn checks & cleanup active effects
+            // Host/Solo: Cleanup active effects
             if ((currentGameMode === 'SOLO' || currentGameMode === 'HOST') && !gameState.isGameOver) {
-                if (gameState.accumulatedDropPoints >= gameState.nextDropThreshold) {
-                    camera.getDirectionToRef(BABYLON.Vector3.Forward(), _spawnForward);
-                    _spawnForward.y = 0;
-                    _spawnForward.normalize();
-                    _spawnPos.copyFrom(camera.position);
-                    _spawnPos.addInPlaceFromFloats(_spawnForward.x * 2, 0, _spawnForward.z * 2);
-                    _spawnPos.y = 0; // Ground level — mesh factory adds +0.3
-                    ctx.powerUpManager.spawnPowerUp(_spawnPos);
-
-                    gameState.accumulatedDropPoints = 0;
-                    gameState.nextDropThreshold = Math.floor(gameState.nextDropThreshold * pc.POINTS_THRESHOLD_MULTIPLIER);
-                }
-
                 let powerUpExpired = false;
                 for (const key in gameState.activePowerUps) {
                     const type = key as PowerUpType;

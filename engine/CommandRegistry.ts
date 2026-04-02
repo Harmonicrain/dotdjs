@@ -1,20 +1,6 @@
 import { StateManager } from '../state/StateManager';
-import { CHEAT_COMMANDS } from './commands/cheatCommands';
-import { DEBUG_COMMANDS } from './commands/debugCommands';
-import { buildSystemCommands } from './commands/systemCommands';
-import { CommandHandler, CommandMap } from './commands/types';
-import { VISUAL_COMMANDS } from './commands/visualCommands';
-
-const BASE_COMMANDS: CommandMap = {
-    ...DEBUG_COMMANDS,
-    ...VISUAL_COMMANDS,
-    ...CHEAT_COMMANDS,
-};
-
-const COMMANDS: CommandMap = {
-    ...BASE_COMMANDS,
-    ...buildSystemCommands(Object.keys(BASE_COMMANDS).sort()),
-};
+import { COMMANDS } from './commands';
+import { CommandHandler } from './commands/types';
 
 export type { CommandHandler };
 

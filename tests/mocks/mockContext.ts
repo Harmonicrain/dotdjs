@@ -101,8 +101,6 @@ export const createMockGameState = (): GameStateData => ({
     windowBarriers: {},
     interactableStates: {},
     powerOn: false,
-    accumulatedDropPoints: 0,
-    nextDropThreshold: 2000,
     lastDeathPos: null,
     activePowerUps: {},
     repairPointsRound: 0,

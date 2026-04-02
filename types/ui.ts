@@ -135,8 +135,6 @@ export interface WorldState {
     interactableStates: Record<string, boolean>;
     powerOn: boolean;
 
-    accumulatedDropPoints: number;
-    nextDropThreshold: number;
     lastDeathPos: BABYLON.Vector3 | null;
     activePowerUps: Partial<Record<PowerUpType, number>>;
     repairPointsRound: number;

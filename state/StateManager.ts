@@ -204,8 +204,7 @@ export class StateManager {
             lastDamageTime: 0, lastRegenTime: 0, lastRepairTime: 0, isGrounded: true, verticalVelocity: 0,
             externalForce: BABYLON.Vector3.Zero(),
             recoilOffsetX: 0, recoilOffsetY: 0, recoilRecoverySpeed: 3.0, screenShakeIntensity: 0, weaponKickTrigger: null,
-            powerUps: [], pendingPowerUps: [], accumulatedDropPoints: 0, nextDropThreshold: 2000,
-            lastDeathPos: null, activePowerUps: {},
+            powerUps: [], pendingPowerUps: [], lastDeathPos: null, activePowerUps: {},
             repairPointsRound: 0, isSpectating: false, isPackAPunching: false, isGameOver: false,
             weaponFiredThisTriggerPull: false, currentVelocity: BABYLON.Vector3.Zero(),
             isDowned: false,
@@ -271,7 +270,6 @@ export class StateManager {
     public addPoints(amount: number) {
         this.gameState.points += amount;
         this.gameState.totalEarnedPoints += amount;
-        this.gameState.accumulatedDropPoints += amount;
         this.setPoints(this.gameState.points);
         this.setTotalEarnedPoints(this.gameState.totalEarnedPoints);
     }

@@ -35,6 +35,7 @@ describe('Edge Case & Cleanup Tests', () => {
             expect(ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]).toBeGreaterThan(unpauseTime);
             expect(ctx.gameState.activePowerUps[PowerUpType.INSTA_KILL]).toBe(expireTime + pauseDuration);
         });
+
     });
 
     describe('Session Reset', () => {
