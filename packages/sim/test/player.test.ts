@@ -61,6 +61,15 @@ describe('player movement', () => {
     run(p, 3, { moveY: 1 });
     expect(p.pos.z).toBeGreaterThan(-4.75);
     expect(p.pos.z).toBeLessThan(-4.2);
+    // Momentum into the wall is absorbed rather than stored up.
+    expect(Math.abs(p.vel.z)).toBeLessThan(0.5);
+  });
+
+  it('slides along a wall when running into it at an angle', () => {
+    const p = playerAt(-3, 0.05, -3);
+    run(p, 1.5, { moveY: 1, yaw: Math.PI / 4 }); // north-west into the north wall
+    expect(p.pos.z).toBeGreaterThan(-4.75);
+    expect(p.pos.x).toBeLessThan(-4);
   });
 
   it('jumps about a metre and lands again', () => {

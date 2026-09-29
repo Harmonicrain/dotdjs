@@ -59,19 +59,34 @@ export function stepMovement(
   if (state.grounded && wasPressed(input.buttons, state.prevButtons, Button.Jump)) {
     state.vel.y = PLAYER.jumpVelocity;
     state.grounded = false;
+  } else if (state.grounded) {
+    // Pushing into the floor makes the controller drop the rest of the move; snap-to-ground
+    // already keeps a grounded player glued to slopes and steps.
+    state.vel.y = 0;
   } else {
     state.vel.y = Math.max(state.vel.y - PLAYER.gravity * dt, -PLAYER.terminalVelocity);
   }
 
   const desired = { x: state.vel.x * dt, y: state.vel.y * dt, z: state.vel.z * dt };
-  const { moved, grounded } = moveCharacter(physics, collider, state.pos, desired);
+  const { moved, grounded, obstacleNormals } = moveCharacter(
+    physics,
+    collider,
+    state.pos,
+    desired,
+  );
 
   state.pos.x += moved.x;
   state.pos.y += moved.y;
   state.pos.z += moved.z;
-  // Carry only the velocity that survived collisions, so walls absorb momentum.
-  state.vel.x = moved.x / dt;
-  state.vel.z = moved.z / dt;
+
+  // Walls absorb the part of the velocity driven into them; sliding along them is kept.
+  for (const n of obstacleNormals) {
+    const into = state.vel.x * n.x + state.vel.z * n.z;
+    if (into < 0) {
+      state.vel.x -= into * n.x;
+      state.vel.z -= into * n.z;
+    }
+  }
   if (grounded && state.vel.y < 0) state.vel.y = 0;
   if (state.vel.y > 0 && moved.y < desired.y - 1e-4) state.vel.y = 0; // head hit a ceiling
   state.grounded = grounded;

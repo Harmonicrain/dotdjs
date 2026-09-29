@@ -71,25 +71,50 @@ export function removeCharacterCollider(physics: LevelPhysics, collider: Collide
   physics.world.removeCollider(collider, false);
 }
 
+export interface CharacterMove {
+  /** Translation actually applied after collisions. */
+  moved: Vec3;
+  grounded: boolean;
+  /** Horizontal unit normals of walls (not floors or ceilings) touched during the move. */
+  obstacleNormals: Vec3[];
+}
+
+/** Surfaces steeper than this (|normal.y| below it) count as walls. */
+const WALL_NORMAL_Y = 0.7;
+
 /**
  * Moves a character capsule whose feet are at `feet` by `desired`, sliding along and stepping
- * over level geometry. Returns the translation actually applied and whether it ended grounded.
+ * over level geometry.
  */
 export function moveCharacter(
   physics: LevelPhysics,
   collider: Collider,
   feet: Vec3,
   desired: Vec3,
-): { moved: Vec3; grounded: boolean } {
+): CharacterMove {
+  const { controller } = physics;
   collider.setTranslation({ x: feet.x, y: feet.y + PLAYER.height / 2, z: feet.z });
-  physics.controller.computeColliderMovement(
+  controller.computeColliderMovement(
     collider,
     desired,
     RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
     STATIC_QUERY,
   );
-  const m = physics.controller.computedMovement();
-  return { moved: { x: m.x, y: m.y, z: m.z }, grounded: physics.controller.computedGrounded() };
+  const m = controller.computedMovement();
+
+  const obstacleNormals: Vec3[] = [];
+  for (let i = 0; i < controller.numComputedCollisions(); i++) {
+    const n = controller.computedCollision(i)?.normal1;
+    if (!n || Math.abs(n.y) >= WALL_NORMAL_Y) continue;
+    const len = Math.hypot(n.x, n.z);
+    obstacleNormals.push({ x: n.x / len, y: 0, z: n.z / len });
+  }
+
+  return {
+    moved: { x: m.x, y: m.y, z: m.z },
+    grounded: controller.computedGrounded(),
+    obstacleNormals,
+  };
 }
 
 export interface RayHit {

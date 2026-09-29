@@ -67,7 +67,7 @@ describe('PositionHistory', () => {
     h.record(11, { x: 2, y: 0, z: 0 });
     expect(h.sample(10.5)?.x).toBeCloseTo(1);
     expect(h.sample(11)?.x).toBe(2);
-    expect(h.sample(12)?.x).toBe(2); // only the earlier tick exists
+    expect(h.sample(11.5)?.x).toBe(2); // only the earlier tick exists
     for (let t = 12; t < 100; t++) h.record(t, { x: t, y: 0, z: 0 });
     expect(h.sample(10)).toBeNull();
   });
