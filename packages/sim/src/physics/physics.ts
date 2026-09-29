@@ -24,6 +24,9 @@ const PLAYER_GROUPS = interactionGroups(GROUP_PLAYER, GROUP_STATIC);
 /** Scene queries that should only see level geometry. */
 const STATIC_QUERY = interactionGroups(0xffff, GROUP_STATIC);
 
+/** A player's capsule collider (opaque outside the physics module). */
+export type CharacterCollider = Collider;
+
 export interface LevelPhysics {
   readonly world: World;
   readonly controller: KinematicCharacterController;

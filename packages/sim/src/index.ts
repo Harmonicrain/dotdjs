@@ -19,7 +19,7 @@ export {
   removeCharacterCollider,
   raycastLevel,
 } from './physics/physics';
-export type { LevelPhysics, RayHit } from './physics/physics';
+export type { CharacterCollider, LevelPhysics, RayHit } from './physics/physics';
 
 // Players
 export * from './player/input';
