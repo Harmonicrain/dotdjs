@@ -28,7 +28,15 @@ function Slider({ label, value, min, max, step, format, onChange }: SliderProps)
   );
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label className="setting toggle">
       <span>{label}</span>
@@ -47,11 +55,51 @@ export function SettingsPanel() {
 
   return (
     <div className="settings">
-      <Slider label="Mouse sensitivity" value={settings.mouseSensitivity} min={0.2} max={3} step={0.05} format={(v) => v.toFixed(2)} onChange={set('mouseSensitivity')} />
-      <Slider label="Gamepad sensitivity" value={settings.gamepadSensitivity} min={0.3} max={3} step={0.05} format={(v) => v.toFixed(2)} onChange={set('gamepadSensitivity')} />
-      <Slider label="Field of view" value={settings.fov} min={55} max={95} step={1} format={(v) => `${v}°`} onChange={set('fov')} />
-      <Slider label="Volume" value={settings.volume} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={set('volume')} />
-      <Slider label="Resolution" value={settings.resolutionScale} min={0.5} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={set('resolutionScale')} />
+      <Slider
+        label="Mouse sensitivity"
+        value={settings.mouseSensitivity}
+        min={0.2}
+        max={3}
+        step={0.05}
+        format={(v) => v.toFixed(2)}
+        onChange={set('mouseSensitivity')}
+      />
+      <Slider
+        label="Gamepad sensitivity"
+        value={settings.gamepadSensitivity}
+        min={0.3}
+        max={3}
+        step={0.05}
+        format={(v) => v.toFixed(2)}
+        onChange={set('gamepadSensitivity')}
+      />
+      <Slider
+        label="Field of view"
+        value={settings.fov}
+        min={55}
+        max={95}
+        step={1}
+        format={(v) => `${v}°`}
+        onChange={set('fov')}
+      />
+      <Slider
+        label="Volume"
+        value={settings.volume}
+        min={0}
+        max={1}
+        step={0.05}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onChange={set('volume')}
+      />
+      <Slider
+        label="Resolution"
+        value={settings.resolutionScale}
+        min={0.5}
+        max={1}
+        step={0.05}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onChange={set('resolutionScale')}
+      />
       <Toggle label="Shadows" value={settings.shadows} onChange={set('shadows')} />
       <Toggle label="Invert look" value={settings.invertY} onChange={set('invertY')} />
       <Toggle label="Show FPS / ping" value={settings.showStats} onChange={set('showStats')} />

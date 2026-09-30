@@ -7,7 +7,10 @@ import { createGlowTexture, createSurfaceMaterials, METRES_PER_TEXTURE } from '.
  * Scales a BoxGeometry's UVs so textures tile at a constant world size on every face,
  * whatever the box's dimensions.
  */
-function worldScaleUVs(geometry: THREE.BoxGeometry, [w, h, d]: readonly [number, number, number]): void {
+function worldScaleUVs(
+  geometry: THREE.BoxGeometry,
+  [w, h, d]: readonly [number, number, number],
+): void {
   const uv = geometry.getAttribute('uv') as THREE.BufferAttribute;
   // BoxGeometry faces, 4 vertices each: +x, -x, +y, -y, +z, -z.
   const faceSizes: [number, number][] = [
@@ -96,6 +99,7 @@ export function buildLevel(level: LevelDef, scene: THREE.Scene, maxAnisotropy: n
       light.castShadow = true;
       light.shadow.mapSize.set(512, 512);
       light.shadow.bias = -0.002;
+      light.shadow.camera.near = 0.05; // lamps hang close to ceilings
     }
     const bulb = new THREE.Mesh(
       bulbGeometry,
@@ -149,7 +153,7 @@ export function buildLevel(level: LevelDef, scene: THREE.Scene, maxAnisotropy: n
 
   const starPositions: number[] = [];
   let s = 7;
-  const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
   for (let i = 0; i < 1400; i++) {
     const theta = rand() * Math.PI * 2;
     const y = 0.08 + rand() * 0.92;
@@ -195,7 +199,11 @@ export function buildLevel(level: LevelDef, scene: THREE.Scene, maxAnisotropy: n
     dispose() {
       scene.remove(group);
       group.traverse((object) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite) {
+        if (
+          object instanceof THREE.Mesh ||
+          object instanceof THREE.Points ||
+          object instanceof THREE.Sprite
+        ) {
           object.geometry.dispose();
           const material = object.material as THREE.Material & { map?: THREE.Texture | null };
           material.map?.dispose();

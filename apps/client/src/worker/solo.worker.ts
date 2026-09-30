@@ -16,12 +16,15 @@ const PLAYER_ID_UNSET = -1;
 
 let room: Room | null = null;
 let playerId = PLAYER_ID_UNSET;
+/** Solo games start paused until the player clicks in; this may arrive before the room exists. */
+let paused = true;
 
 const post = (message: FromWorker, transfer: Transferable[] = []) =>
   scope.postMessage(message, transfer);
 
 async function start(name: string): Promise<void> {
   room = await Room.create({ code: 'SOLO', seed: Math.floor(Math.random() * 2 ** 31) });
+  room.paused = paused;
   const joined = room.join(
     {
       send: (bytes) => post({ kind: 'data', bytes }, [bytes.buffer]),
@@ -46,7 +49,8 @@ scope.onmessage = (event) => {
       if (room && playerId !== PLAYER_ID_UNSET) room.receive(playerId, message.bytes);
       return;
     case 'pause':
-      if (room) room.paused = message.paused;
+      paused = message.paused;
+      if (room) room.paused = paused;
       return;
   }
 };

@@ -51,6 +51,8 @@ export class InputController {
   private recoilYaw = 0;
   private readonly keys = new Set<string>();
   private mouseButtons = 0;
+  /** Buttons pressed since the last sample, so taps shorter than a tick still register. */
+  private latched = 0;
   private weaponSlot = 0;
   private slotStep = 0;
   private previousPadButtons: boolean[] = [];
@@ -90,8 +92,7 @@ export class InputController {
   /** Pointer lock needs a user gesture; call from a click handler. */
   requestLock(): void {
     const request = this.canvas.requestPointerLock({ unadjustedMovement: true }) as
-      | Promise<void>
-      | undefined;
+      Promise<void> | undefined;
     // Some browsers reject unadjustedMovement; fall back to a plain lock.
     request?.catch(() => this.canvas.requestPointerLock());
   }
@@ -140,7 +141,8 @@ export class InputController {
 
     let moveX = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
     let moveY = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0);
-    let buttons = this.mouseButtons;
+    let buttons = this.mouseButtons | this.latched;
+    this.latched = 0;
     for (const [code, button] of Object.entries(KEY_BUTTONS)) {
       if (this.keys.has(code)) buttons |= button;
     }
@@ -164,7 +166,8 @@ export class InputController {
     }
 
     if (this.slotStep !== 0 && weaponCount > 1) {
-      this.weaponSlot = (((this.weaponSlot + this.slotStep) % weaponCount) + weaponCount) % weaponCount;
+      this.weaponSlot =
+        (((this.weaponSlot + this.slotStep) % weaponCount) + weaponCount) % weaponCount;
     }
     this.slotStep = 0;
     this.weaponSlot = Math.min(this.weaponSlot, Math.max(0, weaponCount - 1));
@@ -194,8 +197,12 @@ export class InputController {
       const slot = Number(event.code.slice(5)) - 1;
       if (slot >= 0 && slot < 9) this.weaponSlot = slot;
     }
-    if (down) this.keys.add(event.code);
-    else this.keys.delete(event.code);
+    if (down) {
+      this.keys.add(event.code);
+      this.latched |= KEY_BUTTONS[event.code] ?? 0;
+    } else {
+      this.keys.delete(event.code);
+    }
   }
 
   private onMouseMove(event: MouseEvent): void {
@@ -210,6 +217,7 @@ export class InputController {
     const button = event.button === 0 ? Button.Fire : event.button === 2 ? Button.Aim : 0;
     if (!button) return;
     if (down && !this.locked) return; // the click that grabs the pointer should not fire
+    if (down) this.latched |= button;
     this.mouseButtons = down ? this.mouseButtons | button : this.mouseButtons & ~button;
   }
 
@@ -220,6 +228,7 @@ export class InputController {
   private releaseAll(): void {
     this.keys.clear();
     this.mouseButtons = 0;
+    this.latched = 0;
   }
 
   private gamepad(): Gamepad | null {

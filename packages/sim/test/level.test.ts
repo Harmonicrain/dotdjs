@@ -29,7 +29,9 @@ describe('levelTriangles', () => {
       ];
       const centroid = [0, 1, 2].map((k) => (a[k]! + b[k]! + c[k]!) / 3);
       // Outward: the normal points away from the box centre (the origin).
-      expect(normal[0]! * centroid[0]! + normal[1]! * centroid[1]! + normal[2]! * centroid[2]!).toBeGreaterThan(0);
+      expect(
+        normal[0]! * centroid[0]! + normal[1]! * centroid[1]! + normal[2]! * centroid[2]!,
+      ).toBeGreaterThan(0);
       if (normal[1]! > 0 && Math.abs(normal[0]!) < 1e-6 && Math.abs(normal[2]!) < 1e-6) upward++;
     }
     expect(upward).toBe(2);

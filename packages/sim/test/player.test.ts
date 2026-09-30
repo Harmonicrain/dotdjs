@@ -2,11 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Collider } from '@dimforge/rapier3d-compat';
 import { TICK_DT, TICK_RATE } from '../src/config';
 import { getLevel, DEFAULT_LEVEL_ID } from '../src/level';
-import {
-  createCharacterCollider,
-  createLevelPhysics,
-  initPhysics,
-} from '../src/physics/physics';
+import { createCharacterCollider, createLevelPhysics, initPhysics } from '../src/physics/physics';
 import type { LevelPhysics } from '../src/physics/physics';
 import { Button } from '../src/player/input';
 import type { PlayerInput } from '../src/player/input';

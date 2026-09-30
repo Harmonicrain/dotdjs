@@ -38,10 +38,22 @@ class ParticlePool {
 
   constructor(blending: THREE.Blending, texture: THREE.Texture) {
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(this.position, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('color', new THREE.BufferAttribute(this.color, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(this.position, 3).setUsage(THREE.DynamicDrawUsage),
+    );
+    geometry.setAttribute(
+      'color',
+      new THREE.BufferAttribute(this.color, 3).setUsage(THREE.DynamicDrawUsage),
+    );
+    geometry.setAttribute(
+      'alpha',
+      new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage),
+    );
+    geometry.setAttribute(
+      'size',
+      new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage),
+    );
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4);
 
     const material = new THREE.ShaderMaterial({

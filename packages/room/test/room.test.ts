@@ -43,17 +43,22 @@ describe('Room membership', () => {
     expect(ids).toEqual([1, 2, 3, 4, null]);
 
     expect(clients[0]!.ofType('welcome')[0]).toMatchObject({ playerId: 1, roomCode: 'TEST' });
-    expect(clients[0]!.ofType('roster').at(-1)?.players.map((p) => p.name)).toEqual([
-      'P0',
-      'P1',
-      'P2',
-      'P3',
-    ]);
+    expect(
+      clients[0]!
+        .ofType('roster')
+        .at(-1)
+        ?.players.map((p) => p.name),
+    ).toEqual(['P0', 'P1', 'P2', 'P3']);
     expect(clients[4]!.ofType('error')[0]?.reason).toBe('Room is full');
     expect(clients[4]!.closed).toBe(true);
 
     r.leave(2);
-    expect(clients[0]!.ofType('roster').at(-1)?.players.map((p) => p.id)).toEqual([1, 3, 4]);
+    expect(
+      clients[0]!
+        .ofType('roster')
+        .at(-1)
+        ?.players.map((p) => p.id),
+    ).toEqual([1, 3, 4]);
     expect(r.join(new TestClient(), 'late')).toBe(2);
   });
 
@@ -103,7 +108,16 @@ describe('Room ticking', () => {
     const r = await newRoom();
     const id = r.join(new TestClient(), 'speedy')!;
     const burst = Array.from({ length: 30 }, (_, i) =>
-      quantizeInput({ seq: i + 1, moveX: 0, moveY: 1, yaw: 0, pitch: 0, buttons: 0, weaponSlot: 0, viewTick: 0 }),
+      quantizeInput({
+        seq: i + 1,
+        moveX: 0,
+        moveY: 1,
+        yaw: 0,
+        pitch: 0,
+        buttons: 0,
+        weaponSlot: 0,
+        viewTick: 0,
+      }),
     );
     sendInputs(r, id, burst);
     r.step();
@@ -187,7 +201,16 @@ describe('four bots over the protocol', () => {
         }
         bot.seq++;
         sendInputs(r, bot.id, [
-          quantizeInput({ seq: bot.seq, moveX: 0, moveY: 0, yaw, pitch, buttons, weaponSlot: 0, viewTick: snapshot.tick }),
+          quantizeInput({
+            seq: bot.seq,
+            moveX: 0,
+            moveY: 0,
+            yaw,
+            pitch,
+            buttons,
+            weaponSlot: 0,
+            viewTick: snapshot.tick,
+          }),
         ]);
       }
       r.step();
@@ -204,7 +227,10 @@ describe('four bots over the protocol', () => {
 describe('room codes', () => {
   it('generates unambiguous four-letter codes and normalises user input', () => {
     let n = 0;
-    const code = generateRoomCode(() => (n++ * 0.37) % 1, () => false);
+    const code = generateRoomCode(
+      () => (n++ * 0.37) % 1,
+      () => false,
+    );
     expect(code).toMatch(/^[A-Z]{4}$/);
     expect(code).not.toMatch(/[ILO]/);
     expect(normalizeRoomCode(' kx-qt ')).toBe('KXQT');

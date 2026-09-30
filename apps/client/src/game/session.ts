@@ -125,7 +125,10 @@ export class GameSession {
   applySettings(settings: Settings): void {
     this.input.updateSettings(settings);
     this.audio.setVolume(settings.volume);
-    this.renderer?.updateSettings({ resolutionScale: settings.resolutionScale, shadows: settings.shadows });
+    this.renderer?.updateSettings({
+      resolutionScale: settings.resolutionScale,
+      shadows: settings.shadows,
+    });
   }
 
   dispose(): void {
@@ -156,7 +159,9 @@ export class GameSession {
     switch (message.type) {
       case 'welcome':
         this.playerId = message.playerId;
-        useAppStore.getState().patchHud({ roomCode: this.options.mode === 'solo' ? null : message.roomCode });
+        useAppStore
+          .getState()
+          .patchHud({ roomCode: this.options.mode === 'solo' ? null : message.roomCode });
         void this.loadLevel(message.levelId);
         return;
       case 'roster':
@@ -313,16 +318,18 @@ export class GameSession {
     if (!renderer || !physics) return;
     const def = WEAPONS[shot.weaponId];
     const adsScale = 1 - (1 - def.recoil.adsMultiplier) * renderer.viewModel.aimAmount;
-    this.input.addRecoil(rand(...def.recoil.pitch) * adsScale, rand(-def.recoil.yaw, def.recoil.yaw) * adsScale);
+    const [kickMin, kickMax] = def.recoil.pitch;
+    this.input.addRecoil(
+      rand(kickMin, kickMax) * adsScale,
+      rand(-def.recoil.yaw, def.recoil.yaw) * adsScale,
+    );
     renderer.viewModel.fire(shot.weaponId);
     this.audio.gunshot(shot.weaponId, null);
 
     const muzzle = renderer.viewModel.muzzleWorldPosition(renderer.camera, new THREE.Vector3());
     renderer.effects.gunFlash(muzzle);
 
-    const zombies = this.buffer
-      .zombiesAt(this.clock.renderTick)
-      .filter((z) => z.mode !== 'dead');
+    const zombies = this.buffer.zombiesAt(this.clock.renderTick).filter((z) => z.mode !== 'dead');
     for (const dir of shot.dirs) {
       const wall = raycastLevel(physics, shot.origin, dir, shot.range);
       let distance = wall?.distance ?? shot.range;
@@ -393,32 +400,47 @@ export class GameSession {
         if (event.playerId === me) {
           const kind = event.killed ? (event.headshot ? 'headshot' : 'kill') : 'hit';
           this.audio.hitmarker(kind);
-          useAppStore.setState((s) => ({ feedback: { ...s.feedback, hitmarker: { key: nextFeedbackKey(), kind } } }));
+          useAppStore.setState((s) => ({
+            feedback: { ...s.feedback, hitmarker: { key: nextFeedbackKey(), kind } },
+          }));
         } else if (renderer) {
           renderer.effects.blood(event.point, { x: 0, y: 1, z: 0 }, event.headshot);
         }
         return;
       }
       case 'zombieAttack': {
-        const zombie = this.buffer.zombiesAt(this.clock.renderTick).find((z) => z.id === event.zombieId);
+        const zombie = this.buffer
+          .zombiesAt(this.clock.renderTick)
+          .find((z) => z.id === event.zombieId);
         if (zombie) this.audio.zombieSwipe(zombie.pos);
         return;
       }
       case 'playerHurt': {
         if (event.playerId !== me || !this.predictor) return;
         const p = this.predictor.player.pos;
-        const angle = Math.atan2(event.from.x - p.x, event.from.z - p.z) - (this.input.yaw + Math.PI);
+        const angle =
+          Math.atan2(event.from.x - p.x, event.from.z - p.z) - (this.input.yaw + Math.PI);
         this.shake = Math.min(1, this.shake + 0.6);
         this.audio.hurt();
-        useAppStore.setState((s) => ({ feedback: { ...s.feedback, damage: { key: nextFeedbackKey(), angle } } }));
+        useAppStore.setState((s) => ({
+          feedback: { ...s.feedback, damage: { key: nextFeedbackKey(), angle } },
+        }));
         return;
       }
       case 'points':
         if (event.playerId === me) this.popup(event.amount);
         return;
-      case 'playerDied':
-        this.message(event.playerId === me ? 'You are down! You will respawn next round.' : `${this.nameOf(event.playerId)} is down!`);
+      case 'playerDied': {
+        if (event.playerId !== me) {
+          this.message(`${this.nameOf(event.playerId)} is down!`);
+          return;
+        }
+        const teammateAlive = this.buffer.latest?.players.some(
+          (p) => p.id !== me && p.life === 'alive',
+        );
+        if (teammateAlive) this.message('You are down! You will respawn next round.');
         return;
+      }
       case 'playerRespawned':
         if (event.playerId === me) this.message('Back in the fight');
         return;
@@ -440,17 +462,25 @@ export class GameSession {
 
   private popup(amount: number): void {
     const key = nextFeedbackKey();
-    useAppStore.setState((s) => ({ feedback: { ...s.feedback, popups: [...s.feedback.popups.slice(-6), { key, amount }] } }));
+    useAppStore.setState((s) => ({
+      feedback: { ...s.feedback, popups: [...s.feedback.popups.slice(-6), { key, amount }] },
+    }));
     setTimeout(() => {
-      useAppStore.setState((s) => ({ feedback: { ...s.feedback, popups: s.feedback.popups.filter((p) => p.key !== key) } }));
+      useAppStore.setState((s) => ({
+        feedback: { ...s.feedback, popups: s.feedback.popups.filter((p) => p.key !== key) },
+      }));
     }, POPUP_MS);
   }
 
   private message(text: string): void {
     const key = nextFeedbackKey();
-    useAppStore.setState((s) => ({ feedback: { ...s.feedback, messages: [...s.feedback.messages.slice(-3), { key, text }] } }));
+    useAppStore.setState((s) => ({
+      feedback: { ...s.feedback, messages: [...s.feedback.messages.slice(-3), { key, text }] },
+    }));
     setTimeout(() => {
-      useAppStore.setState((s) => ({ feedback: { ...s.feedback, messages: s.feedback.messages.filter((m) => m.key !== key) } }));
+      useAppStore.setState((s) => ({
+        feedback: { ...s.feedback, messages: s.feedback.messages.filter((m) => m.key !== key) },
+      }));
     }, MESSAGE_MS);
   }
 
@@ -493,12 +523,20 @@ export class GameSession {
     this.lastLook = { yaw, pitch };
 
     const zoom = 1 - 0.22 * renderer.viewModel.aimAmount;
-    renderer.render({ position: eye, yaw, pitch, roll: dead ? 0.45 : 0, fov: this.settings.fov * zoom }, this.time, dt);
+    renderer.render(
+      { position: eye, yaw, pitch, roll: dead ? 0.45 : 0, fov: this.settings.fov * zoom },
+      this.time,
+      dt,
+    );
     this.audio.setListener(eye, yaw);
     this.maybeGroan(zombies, eye, dt);
   }
 
-  private maybeGroan(zombies: { pos: Vec3; mode: string }[], listener: THREE.Vector3, dt: number): void {
+  private maybeGroan(
+    zombies: { pos: Vec3; mode: string }[],
+    listener: THREE.Vector3,
+    dt: number,
+  ): void {
     this.groanTimer -= dt;
     if (this.groanTimer > 0) return;
     const nearby = zombies.filter(

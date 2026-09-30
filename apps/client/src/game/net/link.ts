@@ -1,8 +1,4 @@
-import {
-  decodeServerMessage,
-  encodeClientMessage,
-  PROTOCOL_VERSION,
-} from '@dotd/protocol';
+import { decodeServerMessage, encodeClientMessage, PROTOCOL_VERSION } from '@dotd/protocol';
 import type { ClientMessage, ServerMessage } from '@dotd/protocol';
 
 /** A connection to an authoritative room, wherever it runs. */
@@ -48,8 +44,7 @@ abstract class BaseLink implements ServerLink {
 export function serverUrl(params: { name: string; room?: string }): string {
   const configured = import.meta.env.VITE_SERVER_URL as string | undefined;
   const base =
-    configured ??
-    `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
+    configured ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
   const query = new URLSearchParams({ v: String(PROTOCOL_VERSION), name: params.name });
   if (params.room) query.set('room', params.room);
   return `${base}?${query}`;
@@ -111,7 +106,7 @@ export class WorkerLink extends BaseLink {
     this.post({ kind: 'data', bytes }, [bytes.buffer]);
   }
 
-  setPaused(paused: boolean): void {
+  override setPaused(paused: boolean): void {
     this.post({ kind: 'pause', paused });
   }
 

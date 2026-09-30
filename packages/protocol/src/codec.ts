@@ -73,7 +73,8 @@ const writeVec3f = (w: Writer, v: Vec3) => w.f32(v.x).f32(v.y).f32(v.z);
 const readVec3f = (r: Reader): Vec3 => ({ x: r.f32(), y: r.f32(), z: r.f32() });
 
 /** Centimetre precision; used for things that are only displayed. */
-const writeVec3q = (w: Writer, v: Vec3) => w.i16(posToWire(v.x)).i16(posToWire(v.y)).i16(posToWire(v.z));
+const writeVec3q = (w: Writer, v: Vec3) =>
+  w.i16(posToWire(v.x)).i16(posToWire(v.y)).i16(posToWire(v.z));
 const readVec3q = (r: Reader): Vec3 => ({
   x: posFromWire(r.i16()),
   y: posFromWire(r.i16()),
@@ -107,7 +108,7 @@ function readInput(r: Reader): PlayerInput {
   });
 }
 
-export function encodeClientMessage(msg: ClientMessage): Uint8Array {
+export function encodeClientMessage(msg: ClientMessage): Uint8Array<ArrayBuffer> {
   const w = new Writer();
   switch (msg.type) {
     case 'input': {
@@ -282,7 +283,9 @@ function writeEvent(w: Writer, e: TickedEvent, snapshotTick: number): void {
       w.u8((e.headshot ? 1 : 0) | (e.killed ? 2 : 0));
       return;
     case 'zombieAttack':
-      w.u16(e.zombieId).u8(e.targetId).u8(e.hit ? 1 : 0);
+      w.u16(e.zombieId)
+        .u8(e.targetId)
+        .u8(e.hit ? 1 : 0);
       return;
     case 'playerHurt':
       w.u8(e.playerId).u16(Math.round(e.amount));
@@ -322,7 +325,14 @@ function readEvent(r: Reader, snapshotTick: number): TickedEvent {
         const playerId = r.u8();
         const point = readVec3q(r);
         const flags = r.u8();
-        return { type, zombieId, playerId, point, headshot: (flags & 1) !== 0, killed: (flags & 2) !== 0 };
+        return {
+          type,
+          zombieId,
+          playerId,
+          point,
+          headshot: (flags & 1) !== 0,
+          killed: (flags & 2) !== 0,
+        };
       }
       case 'zombieAttack':
         return { type, zombieId: r.u16(), targetId: r.u8(), hit: r.u8() !== 0 };
@@ -343,7 +353,9 @@ function readEvent(r: Reader, snapshotTick: number): TickedEvent {
 }
 
 function writeSnapshot(w: Writer, s: Snapshot): void {
-  w.u32(s.tick).u32(s.ackSeq).u8(s.self ? 1 : 0);
+  w.u32(s.tick)
+    .u32(s.ackSeq)
+    .u8(s.self ? 1 : 0);
   if (s.self) writePredicted(w, s.self);
   writeGame(w, s.game);
   w.u8(s.players.length);
@@ -370,11 +382,15 @@ function readSnapshot(r: Reader): Snapshot {
 
 // ── Server messages ────────────────────────────────────────────────────────
 
-export function encodeServerMessage(msg: ServerMessage): Uint8Array {
+export function encodeServerMessage(msg: ServerMessage): Uint8Array<ArrayBuffer> {
   const w = new Writer();
   switch (msg.type) {
     case 'welcome':
-      w.u8(ServerType.Welcome).u8(msg.playerId).string(msg.roomCode).string(msg.levelId).u32(msg.tick);
+      w.u8(ServerType.Welcome)
+        .u8(msg.playerId)
+        .string(msg.roomCode)
+        .string(msg.levelId)
+        .u32(msg.tick);
       break;
     case 'roster':
       w.u8(ServerType.Roster).u8(msg.players.length);

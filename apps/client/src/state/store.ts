@@ -103,7 +103,8 @@ let feedbackKey = 0;
 export const nextFeedbackKey = (): number => ++feedbackKey;
 
 const sameValue = (a: unknown, b: unknown): boolean =>
-  Object.is(a, b) || (Array.isArray(a) && Array.isArray(b) && JSON.stringify(a) === JSON.stringify(b));
+  Object.is(a, b) ||
+  (Array.isArray(a) && Array.isArray(b) && JSON.stringify(a) === JSON.stringify(b));
 
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'menu',
@@ -144,7 +145,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   patchHud(patch) {
     const hud = get().hud;
-    const changed = (Object.keys(patch) as (keyof Hud)[]).some((key) => !sameValue(hud[key], patch[key]));
+    const changed = (Object.keys(patch) as (keyof Hud)[]).some(
+      (key) => !sameValue(hud[key], patch[key]),
+    );
     if (changed) set({ hud: { ...hud, ...patch } });
   },
 }));

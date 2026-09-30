@@ -108,7 +108,16 @@ describe('Predictor', () => {
   };
 
   const walk = (seq: number) =>
-    quantizeInput({ seq, moveX: 0, moveY: 1, yaw: 0, pitch: 0, buttons: 0, weaponSlot: 0, viewTick: 0 });
+    quantizeInput({
+      seq,
+      moveX: 0,
+      moveY: 1,
+      yaw: 0,
+      pitch: 0,
+      buttons: 0,
+      weaponSlot: 0,
+      viewTick: 0,
+    });
 
   it('moves instantly and replays unacknowledged inputs on reconcile', () => {
     const predictor = new Predictor(physics, collider, 1, start());

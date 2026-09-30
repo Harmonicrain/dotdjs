@@ -55,8 +55,14 @@ function part(
 
 function buildZombie(quirk: number): ZombieView {
   const tint = 0.85 + quirk * 0.3;
-  const skin = new THREE.MeshStandardMaterial({ color: new THREE.Color(SKIN).multiplyScalar(tint), roughness: 0.9 });
-  const shirt = new THREE.MeshStandardMaterial({ color: new THREE.Color(SHIRT).multiplyScalar(tint), roughness: 0.95 });
+  const skin = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(SKIN).multiplyScalar(tint),
+    roughness: 0.9,
+  });
+  const shirt = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(SHIRT).multiplyScalar(tint),
+    roughness: 0.95,
+  });
   const pants = new THREE.MeshStandardMaterial({ color: PANTS, roughness: 0.95 });
 
   const root = new THREE.Group();
@@ -131,7 +137,7 @@ export class ZombieRenderer {
       seen.add(z.id);
       let view = this.views.get(z.id);
       if (!view) {
-        view = buildZombie(((z.id * 0.618) % 1 + 1) % 1);
+        view = buildZombie((((z.id * 0.618) % 1) + 1) % 1);
         this.views.set(z.id, view);
         this.group.add(view.root);
         if (z.mode === 'rising') this.onEmerge(new THREE.Vector3(z.pos.x, 0, z.pos.z));
@@ -177,7 +183,11 @@ export class ZombieRenderer {
     const reach = 1.35 + Math.sin(time * 2 + view.quirk * 6) * 0.08;
     view.armL.rotation.set(reach + swing * 0.12, 0, 0.08);
     view.armR.rotation.set(reach - swing * 0.12 + 0.15 * view.quirk, 0, -0.08);
-    view.head.rotation.set(-0.1 + Math.sin(view.phase * 0.5) * 0.08, 0, Math.sin(time * 1.3 + view.quirk) * 0.15);
+    view.head.rotation.set(
+      -0.1 + Math.sin(view.phase * 0.5) * 0.08,
+      0,
+      Math.sin(time * 1.3 + view.quirk) * 0.15,
+    );
 
     switch (z.mode) {
       case 'rising': {

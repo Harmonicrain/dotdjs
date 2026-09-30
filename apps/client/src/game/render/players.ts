@@ -16,7 +16,11 @@ const geometry = {
 const skin = new THREE.MeshStandardMaterial({ color: 0xc89878, roughness: 0.8 });
 const olive = new THREE.MeshStandardMaterial({ color: 0x4a5236, roughness: 0.9 });
 const trousers = new THREE.MeshStandardMaterial({ color: 0x353a2c, roughness: 0.95 });
-const gunMetal = new THREE.MeshStandardMaterial({ color: 0x24262a, roughness: 0.5, metalness: 0.6 });
+const gunMetal = new THREE.MeshStandardMaterial({
+  color: 0x24262a,
+  roughness: 0.5,
+  metalness: 0.6,
+});
 
 interface PlayerView {
   root: THREE.Group;
@@ -63,7 +67,10 @@ function mesh(geo: THREE.BufferGeometry, material: THREE.Material): THREE.Mesh {
 
 function buildPlayer(id: number, name: string): PlayerView {
   const color = playerColor(id);
-  const jacket = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x4a5236), 0.55), roughness: 0.85 });
+  const jacket = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color).lerp(new THREE.Color(0x4a5236), 0.55),
+    roughness: 0.85,
+  });
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
@@ -103,7 +110,18 @@ function buildPlayer(id: number, name: string): PlayerView {
   const label = nameLabel(name, color);
   root.add(label);
 
-  return { root, body, legL, legR, armPivot, label, jacket, phase: 0, lastPos: new THREE.Vector3(), name };
+  return {
+    root,
+    body,
+    legL,
+    legR,
+    armPivot,
+    label,
+    jacket,
+    phase: 0,
+    lastPos: new THREE.Vector3(),
+    name,
+  };
 }
 
 function disposePlayer(view: PlayerView): void {
@@ -122,7 +140,12 @@ export class PlayerRenderer {
     scene.add(this.group);
   }
 
-  sync(players: PlayerSnapshot[], names: ReadonlyMap<number, string>, localId: number, dt: number): void {
+  sync(
+    players: PlayerSnapshot[],
+    names: ReadonlyMap<number, string>,
+    localId: number,
+    dt: number,
+  ): void {
     const seen = new Set<number>();
     for (const p of players) {
       if (p.id === localId) continue;

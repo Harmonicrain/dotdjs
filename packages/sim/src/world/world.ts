@@ -4,11 +4,7 @@ import type { SimEvent } from '../events';
 import { stepRounds } from '../game/rounds';
 import { getLevel } from '../level';
 import { createRng } from '../math/rng';
-import {
-  createLevelPhysics,
-  disposeLevelPhysics,
-  initPhysics,
-} from '../physics/physics';
+import { createLevelPhysics, disposeLevelPhysics, initPhysics } from '../physics/physics';
 import type { PlayerInput } from '../player/input';
 import { stepPlayer } from '../player/step';
 import { stepZombies } from '../zombies/ai';

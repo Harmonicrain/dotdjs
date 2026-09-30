@@ -68,7 +68,8 @@ export function stepWeapon(
 
   // Cooldown carries over while the trigger is held so automatic fire keeps an exact cadence.
   state.fireCooldown -= dt;
-  const fires = wantsToFire && ready && !state.sprinting && weapon.clip > 0 && state.fireCooldown <= 0;
+  const fires =
+    wantsToFire && ready && !state.sprinting && weapon.clip > 0 && state.fireCooldown <= 0;
   if (!fires) {
     state.fireCooldown = Math.max(0, state.fireCooldown);
     return null;
@@ -85,7 +86,14 @@ export function stepWeapon(
   return {
     weaponId: weapon.id,
     origin: eyePosition(state),
-    dirs: pelletDirections(input.yaw, input.pitch, spread, def.pellets, playerId, state.shotCounter),
+    dirs: pelletDirections(
+      input.yaw,
+      input.pitch,
+      spread,
+      def.pellets,
+      playerId,
+      state.shotCounter,
+    ),
     damage: def.damage,
     headshotMultiplier: def.headshotMultiplier,
     range: def.range,

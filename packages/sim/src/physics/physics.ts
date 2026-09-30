@@ -140,5 +140,8 @@ export function raycastLevel(
     STATIC_QUERY,
   );
   if (!hit) return null;
-  return { distance: hit.timeOfImpact, normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z } };
+  return {
+    distance: hit.timeOfImpact,
+    normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z },
+  };
 }

@@ -91,7 +91,10 @@ export class GameAudio {
     const high = this.ctx.createBiquadFilter();
     high.type = 'highpass';
     high.frequency.value = 3000;
-    crack.connect(high).connect(this.envelope(t, 0.0005, 0.035, 0.8)).connect(out);
+    crack
+      .connect(high)
+      .connect(this.envelope(t, 0.0005, 0.035, 0.8))
+      .connect(out);
     crack.start(t, Math.random());
     crack.stop(t + 0.06);
 
@@ -150,14 +153,20 @@ export class GameAudio {
     formant.frequency.setValueAtTime(450 + Math.random() * 300, t);
     formant.frequency.linearRampToValueAtTime(300, t + duration);
     formant.Q.value = 3;
-    voice.connect(formant).connect(this.envelope(t, 0.12, duration, 0.9)).connect(out);
+    voice
+      .connect(formant)
+      .connect(this.envelope(t, 0.12, duration, 0.9))
+      .connect(out);
 
     const breath = this.noiseSource();
     const breathFilter = this.ctx.createBiquadFilter();
     breathFilter.type = 'bandpass';
     breathFilter.frequency.value = 900;
     breathFilter.Q.value = 1.2;
-    breath.connect(breathFilter).connect(this.envelope(t, 0.1, duration, 0.25)).connect(out);
+    breath
+      .connect(breathFilter)
+      .connect(this.envelope(t, 0.1, duration, 0.25))
+      .connect(out);
 
     for (const node of [voice, vibrato]) {
       node.start(t);
@@ -174,7 +183,10 @@ export class GameAudio {
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(400, t);
     filter.frequency.exponentialRampToValueAtTime(2200, t + 0.18);
-    whoosh.connect(filter).connect(this.envelope(t, 0.05, 0.2, 0.6)).connect(this.output(at, 0.6));
+    whoosh
+      .connect(filter)
+      .connect(this.envelope(t, 0.05, 0.2, 0.6))
+      .connect(this.output(at, 0.6));
     whoosh.start(t, Math.random());
     whoosh.stop(t + 0.3);
   }
@@ -185,7 +197,10 @@ export class GameAudio {
     const low = this.ctx.createBiquadFilter();
     low.type = 'lowpass';
     low.frequency.value = 350;
-    hit.connect(low).connect(this.envelope(t, 0.002, 0.2, 1.4)).connect(this.master);
+    hit
+      .connect(low)
+      .connect(this.envelope(t, 0.002, 0.2, 1.4))
+      .connect(this.master);
     hit.start(t, Math.random());
     hit.stop(t + 0.25);
     const thud = this.ctx.createOscillator();
@@ -202,7 +217,10 @@ export class GameAudio {
     const low = this.ctx.createBiquadFilter();
     low.type = 'lowpass';
     low.frequency.value = 500 + Math.random() * 250;
-    step.connect(low).connect(this.envelope(t, 0.004, 0.09, 0.22)).connect(this.master);
+    step
+      .connect(low)
+      .connect(this.envelope(t, 0.004, 0.09, 0.22))
+      .connect(this.master);
     step.start(t, Math.random());
     step.stop(t + 0.12);
   }
@@ -259,7 +277,10 @@ export class GameAudio {
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.value = 700;
-      osc.connect(filter).connect(this.envelope(t + i * 0.45, 0.05, 1.4, 0.2)).connect(this.master);
+      osc
+        .connect(filter)
+        .connect(this.envelope(t + i * 0.45, 0.05, 1.4, 0.2))
+        .connect(this.master);
       osc.start(t + i * 0.45);
       osc.stop(t + i * 0.45 + 1.5);
     });
@@ -280,7 +301,10 @@ export class GameAudio {
     band.type = 'bandpass';
     band.frequency.value = frequency;
     band.Q.value = 4;
-    src.connect(band).connect(this.envelope(t, 0.001, 0.04, level)).connect(this.master);
+    src
+      .connect(band)
+      .connect(this.envelope(t, 0.001, 0.04, level))
+      .connect(this.master);
     src.start(t, Math.random());
     src.stop(t + 0.06);
   }

@@ -42,7 +42,8 @@ export function createNavigation(level: LevelDef): Navigation {
     detailSampleDist: CELL_SIZE * 6,
     detailSampleMaxError: CELL_HEIGHT,
   });
-  if (!result.success) throw new Error(`Navmesh generation failed for ${level.id}: ${result.error}`);
+  if (!result.success)
+    throw new Error(`Navmesh generation failed for ${level.id}: ${result.error}`);
 
   const navMesh = result.navMesh;
   const query = new NavMeshQuery(navMesh);

@@ -168,7 +168,12 @@ function updateIntent(world: World, zombie: ZombieState, dt: number): void {
         const hit =
           !!target && target.life === 'alive' && inAttackRange(zombie, target, ZOMBIE.attackReach);
         if (target) {
-          world.events.push({ type: 'zombieAttack', zombieId: zombie.id, targetId: target.id, hit });
+          world.events.push({
+            type: 'zombieAttack',
+            zombieId: zombie.id,
+            targetId: target.id,
+            hit,
+          });
         }
         if (hit) damagePlayer(world, target, ZOMBIE.attackDamage, zombie.pos);
       }

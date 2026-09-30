@@ -58,7 +58,11 @@ export class Predictor {
   }
 
   /** Applies an authoritative snapshot of the local player and replays unacknowledged inputs. */
-  reconcile(ackSeq: number, authoritative: PredictedState, vitals: PlayerSnapshot | undefined): void {
+  reconcile(
+    ackSeq: number,
+    authoritative: PredictedState,
+    vitals: PlayerSnapshot | undefined,
+  ): void {
     this.pending = this.pending.filter((input) => input.seq > ackSeq);
     const before = clone(this.player.pos);
 

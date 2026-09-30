@@ -56,7 +56,10 @@ function Scores() {
   return (
     <div className="scores">
       {scores.map((p) => (
-        <div key={p.id} className={`score ${p.isLocal ? 'local' : ''} ${p.life === 'dead' ? 'dead' : ''}`}>
+        <div
+          key={p.id}
+          className={`score ${p.isLocal ? 'local' : ''} ${p.life === 'dead' ? 'dead' : ''}`}
+        >
           <span className="swatch" style={{ background: playerColor(p.id) }} />
           <span className="points">{p.points.toLocaleString()}</span>
           {p.isLocal &&
@@ -95,6 +98,7 @@ function DamageLayer() {
   const maxHealth = useAppStore((s) => s.hud.maxHealth);
   const damage = useAppStore((s) => s.feedback.damage);
   const alive = useAppStore((s) => s.hud.alive);
+  const gameOver = useAppStore((s) => s.gameOver !== null);
   const hurt = 1 - health / Math.max(1, maxHealth);
   return (
     <>
@@ -106,7 +110,7 @@ function DamageLayer() {
           style={{ transform: `translate(-50%, -50%) rotate(${damage.angle}rad)` }}
         />
       )}
-      {!alive && <div className="downed">You are down</div>}
+      {!alive && !gameOver && <div className="downed">You are down</div>}
     </>
   );
 }

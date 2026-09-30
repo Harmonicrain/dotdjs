@@ -30,7 +30,11 @@ function newWorld(): World {
 }
 
 /** Steps the world, feeding every player an idle input each tick. Returns all events. */
-function simulate(w: World, seconds: number, stopWhen?: (events: SimEvent[]) => boolean): SimEvent[] {
+function simulate(
+  w: World,
+  seconds: number,
+  stopWhen?: (events: SimEvent[]) => boolean,
+): SimEvent[] {
   const all: SimEvent[] = [];
   for (let i = 0; i < Math.round(seconds * TICK_RATE); i++) {
     for (const id of w.players.keys()) applyPlayerInput(w, id, input({ viewTick: w.tick }));
@@ -115,7 +119,11 @@ describe('world', () => {
     const aim = aimAt(eye, { x: 0, y: ZOMBIE.headHeight, z: -20 });
     const pointsBefore = player.points;
     const shoot = () => {
-      applyPlayerInput(w, player.id, input({ ...aim, buttons: Button.Fire | Button.Aim, viewTick: w.tick }));
+      applyPlayerInput(
+        w,
+        player.id,
+        input({ ...aim, buttons: Button.Fire | Button.Aim, viewTick: w.tick }),
+      );
       stepWorld(w);
       const events = drainEvents(w);
       for (let i = 0; i < 20; i++) {
@@ -126,11 +134,17 @@ describe('world', () => {
     };
 
     const first = shoot();
-    expect(first.find((e) => e.type === 'zombieHit')).toMatchObject({ headshot: true, killed: false });
+    expect(first.find((e) => e.type === 'zombieHit')).toMatchObject({
+      headshot: true,
+      killed: false,
+    });
     expect(player.points).toBe(pointsBefore + POINTS.hit);
 
     const second = shoot();
-    expect(second.find((e) => e.type === 'zombieHit')).toMatchObject({ headshot: true, killed: true });
+    expect(second.find((e) => e.type === 'zombieHit')).toMatchObject({
+      headshot: true,
+      killed: true,
+    });
     expect(player.points).toBe(pointsBefore + POINTS.hit + POINTS.kill + POINTS.headshotBonus);
     expect(player.kills).toBe(1);
   });
@@ -150,7 +164,11 @@ describe('world', () => {
     applyPlayerInput(
       w,
       player.id,
-      input({ ...aimAt(eye, { x: -3, y: 1.2, z: -12 }), buttons: Button.Fire | Button.Aim, viewTick: w.tick }),
+      input({
+        ...aimAt(eye, { x: -3, y: 1.2, z: -12 }),
+        buttons: Button.Fire | Button.Aim,
+        viewTick: w.tick,
+      }),
     );
     const events = drainEvents(w);
     expect(events.some((e) => e.type === 'shot')).toBe(true);
@@ -174,7 +192,9 @@ describe('world', () => {
     const w = newWorld();
     const player = addPlayer(w, 'p')!;
     simulate(w, 20);
-    const chasers = [...w.zombies.values()].filter((z) => z.mode === 'chasing' || z.mode === 'attacking');
+    const chasers = [...w.zombies.values()].filter(
+      (z) => z.mode === 'chasing' || z.mode === 'attacking',
+    );
     expect(chasers.length).toBeGreaterThan(0);
     for (const z of chasers) {
       expect(z.pos.y).toBeGreaterThan(-0.2);

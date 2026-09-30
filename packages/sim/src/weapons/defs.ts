@@ -205,7 +205,14 @@ export const WEAPONS = {
 export type WeaponId = keyof typeof WEAPONS;
 
 /** Stable ordering used to encode weapon ids on the wire. Append only. */
-export const WEAPON_IDS: readonly WeaponId[] = ['m1911', 'olympia', 'stg44', 'famas', 'fnfal', 'garand'];
+export const WEAPON_IDS: readonly WeaponId[] = [
+  'm1911',
+  'olympia',
+  'stg44',
+  'famas',
+  'fnfal',
+  'garand',
+];
 
 export const STARTING_WEAPON: WeaponId = 'm1911';
 

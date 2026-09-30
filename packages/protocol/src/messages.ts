@@ -16,8 +16,7 @@ export const PROTOCOL_VERSION = 1;
 
 export type ClientMessage =
   /** Inputs not yet sent, oldest first. Usually one per tick. */
-  | { type: 'input'; inputs: PlayerInput[] }
-  | { type: 'ping'; clientTime: number };
+  { type: 'input'; inputs: PlayerInput[] } | { type: 'ping'; clientTime: number };
 
 // ── Server → client ────────────────────────────────────────────────────────
 

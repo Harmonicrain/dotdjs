@@ -23,7 +23,13 @@ export function PauseOverlay({
         <h2>{started ? 'Paused' : 'Ready?'}</h2>
         {mode !== 'solo' && (
           <p className="hint">
-            The game keeps running online.{roomCode && <> Friends can join with code <b>{roomCode}</b>.</>}
+            The game keeps running online.
+            {roomCode && (
+              <>
+                {' '}
+                Friends can join with code <b>{roomCode}</b>.
+              </>
+            )}
           </p>
         )}
         {showSettings ? (

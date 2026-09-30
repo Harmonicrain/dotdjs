@@ -13,7 +13,12 @@ import { rayHitsZombie } from './hitscan';
  * Resolves a player's shot on the server. Zombies are rewound to where the shooter saw them
  * (`viewTick`), so a shot that looked like a hit on screen counts as a hit.
  */
-export function resolveShot(world: World, shooter: PlayerState, shot: Shot, viewTick: number): void {
+export function resolveShot(
+  world: World,
+  shooter: PlayerState,
+  shot: Shot,
+  viewTick: number,
+): void {
   const rewindTick = Math.min(
     world.tick,
     Math.max(world.tick - LAG_COMPENSATION.maxRewindTicks, viewTick),

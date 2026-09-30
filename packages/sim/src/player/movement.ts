@@ -68,12 +68,7 @@ export function stepMovement(
   }
 
   const desired = { x: state.vel.x * dt, y: state.vel.y * dt, z: state.vel.z * dt };
-  const { moved, grounded, obstacleNormals } = moveCharacter(
-    physics,
-    collider,
-    state.pos,
-    desired,
-  );
+  const { moved, grounded, obstacleNormals } = moveCharacter(physics, collider, state.pos, desired);
 
   state.pos.x += moved.x;
   state.pos.y += moved.y;

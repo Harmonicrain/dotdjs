@@ -87,7 +87,10 @@ export function MainMenu() {
       </section>
 
       <footer className="menu-footer">
-        <span>WASD move · Mouse aim · LMB fire · RMB aim · R reload · Shift sprint · Space jump · 1–3 weapons · Tab scores</span>
+        <span>
+          WASD move · Mouse aim · LMB fire · RMB aim · R reload · Shift sprint · Space jump · 1–3
+          weapons · Tab scores
+        </span>
         <span>Gamepad supported</span>
       </footer>
     </main>

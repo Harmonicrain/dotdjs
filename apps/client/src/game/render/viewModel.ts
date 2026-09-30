@@ -42,8 +42,8 @@ export class ViewModel {
   private flashTimer = 0;
 
   constructor() {
-    this.scene.add(new THREE.HemisphereLight(0x8899bb, 0x1a1410, 1.6));
-    const key = new THREE.DirectionalLight(0xffe0c0, 1.6);
+    this.scene.add(new THREE.HemisphereLight(0x9aaacc, 0x2a2018, 2.4));
+    const key = new THREE.DirectionalLight(0xffe0c0, 2.6);
     key.position.set(1, 2, 1);
     this.scene.add(key, this.rig, this.flashLight);
 

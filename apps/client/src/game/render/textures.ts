@@ -16,12 +16,33 @@ interface SurfaceStyle {
 }
 
 const STYLES: Record<SurfaceKind, SurfaceStyle> = {
-  ground: { base: '#2c2f2a', grid: '#3a3f37', noise: 26, roughness: 0.95, metalness: 0 },
-  wall: { base: '#4a4642', grid: '#57524d', noise: 18, roughness: 0.9, metalness: 0 },
+  ground: { base: '#3a3d36', grid: '#474c43', noise: 26, roughness: 0.95, metalness: 0 },
+  wall: { base: '#5d5852', grid: '#6b655e', noise: 18, roughness: 0.9, metalness: 0 },
   concrete: { base: '#6b6862', grid: '#7a7771', noise: 16, roughness: 0.85, metalness: 0 },
-  trim: { base: '#b8662a', grid: '#c9793b', noise: 10, roughness: 0.7, metalness: 0, pattern: 'hazard' },
-  crate: { base: '#6e4a2b', grid: '#5a3a20', noise: 14, roughness: 0.8, metalness: 0, pattern: 'planks' },
-  metal: { base: '#44505c', grid: '#56636f', noise: 8, roughness: 0.45, metalness: 0.6, pattern: 'plates' },
+  trim: {
+    base: '#b8662a',
+    grid: '#c9793b',
+    noise: 10,
+    roughness: 0.7,
+    metalness: 0,
+    pattern: 'hazard',
+  },
+  crate: {
+    base: '#6e4a2b',
+    grid: '#5a3a20',
+    noise: 14,
+    roughness: 0.8,
+    metalness: 0,
+    pattern: 'planks',
+  },
+  metal: {
+    base: '#44505c',
+    grid: '#56636f',
+    noise: 8,
+    roughness: 0.45,
+    metalness: 0.6,
+    pattern: 'plates',
+  },
 };
 
 /** Small deterministic PRNG so textures look the same every load. */
@@ -122,7 +143,10 @@ export function createSurfaceMaterials(
 }
 
 /** Soft radial gradient used for glows, flashes and particles. */
-export function createGlowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)'): THREE.Texture {
+export function createGlowTexture(
+  inner = 'rgba(255,255,255,1)',
+  outer = 'rgba(255,255,255,0)',
+): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
